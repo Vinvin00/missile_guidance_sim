@@ -1,5 +1,32 @@
 # NOTES
 
+## 2026-09-09 — Observation-v2 RL checkpoint 3 (review gate)
+
+- Resumed only the ten-value checkpoint-2 model for **20,480 additional
+  timesteps**: **61,440 cumulative / 48 episodes**. Training return regressed
+  within checkpoint 3, **-78.718274 → -85.372698** (-6.654424), with a late
+  mean **10.443611** below checkpoint 2.
+- Fixed evaluation moved in the opposite direction: still **0/9 hits**, but
+  mean/median minimum separation improved from
+  **1786.639 / 1423.028 m** to **1238.474 / 1215.545 m**
+  (-30.7% / -14.6%), and mean eval return improved
+  **-58.671985 → -53.504263**.
+- Mean control effort rose sharply from **19305.963** to
+  **131902.118 m²/s³** (**6.83×, +583%**), so effort growth is accelerating,
+  not leveling off. Its mean normalized reward penalty was **-2.194474**
+  versus **+48.690211** progress; it remains secondary but is no longer
+  negligible.
+- Eval outcomes remained **0 ground impacts / 9 timeouts / 0 hits**.
+  Altitude observability continues to suppress the old crash pattern.
+- The old eight-value run regressed in both reward and fixed-eval miss at
+  this transition. That exact regression did **not** repeat: fixed-eval miss
+  improved materially here. However, worsening sampled training return plus
+  a 6.83× effort jump is a distinct possible recurrent-PPO/LSTM optimization
+  instability, not evidence for the former observability root cause. The
+  automated convergence warning is therefore retained.
+- Saved-model reload reproduced all metrics; full suite **47 passed**.
+  **Checkpoint 4 was not started.**
+
 ## 2026-09-09 — Observation-v2 RL checkpoint 2 (review gate)
 
 - Resumed only the ten-value checkpoint-1 model for **20,480 additional

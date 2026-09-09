@@ -42,3 +42,21 @@
 - Model: `outputs/checkpoints/rl_checkpoint_02.zip`
 - Evaluation details: `outputs/rl_checkpoint_02_eval.json`
 - Training curve: `outputs/training_curve.png`
+
+## Checkpoint 3
+
+- Cumulative timesteps: 61,440
+- Episodes completed this checkpoint: 16
+- Episodes completed total: 48
+- First/last quintile mean reward: -78.718274 / -85.372698
+- Within-checkpoint reward change: -6.654424
+- Fixed-eval hit rate: 0/9 (0.0%)
+- Fixed-eval mean/median miss distance: 1238.474 / 1215.545 m
+- Fixed-eval mean episode reward: -53.504263
+- Fixed-eval mean reward components (progress/effort/terminal): 48.690211 / -2.194474 / -100.000000
+- Fixed-eval mean control effort: 131902.118295 m²/s³
+- Fixed-eval outcomes (ground impact/timeout/hit): 0/9/0
+- Possible convergence warning: True
+- Model: `outputs/checkpoints/rl_checkpoint_03.zip`
+- Evaluation details: `outputs/rl_checkpoint_03_eval.json`
+- Training curve: `outputs/training_curve.png`
