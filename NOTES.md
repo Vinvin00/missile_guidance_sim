@@ -1,5 +1,23 @@
 # NOTES
 
+## 2026-09-09 — Observation-v2 RL checkpoint 1 (review gate)
+
+- Started the replacement run from scratch with the ten-value observation
+  and unchanged reward. Completed **20,480 timesteps / 16 episodes**;
+  checkpoint first-to-last reward-quintile mean changed
+  **-72.083842 → -90.421188** (-18.337346).
+- Fixed nine-case evaluation: **0/9 hits**, mean/median minimum separation
+  **2638.656 / 2618.771 m**, and mean command effort
+  **8716.993 m²/s³**. Mean reward components were
+  **+30.559362 progress / -0.145026 effort / -100 terminal**.
+- Eval outcome breakdown: **0 ground-impact misses / 9 timeouts / 0 hits**.
+  The prior six-case post-flyby crash pattern is absent at this checkpoint,
+  though one checkpoint cannot establish that altitude visibility caused
+  the change and intercept performance remains poor. Training episodes
+  contained one ground impact and fifteen timeouts.
+- Saved and reload-verified `outputs/checkpoints/rl_checkpoint_01.zip`;
+  full suite **47 passed**. **Checkpoint 2 was not started.**
+
 ## 2026-09-09 — Phase 2 restart prep: observability v2
 
 - Diagnosed checkpoint 3 on the unchanged nine-case fixed set before editing

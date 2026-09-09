@@ -145,7 +145,9 @@ def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
         + report.evaluation.mean_terminal_reward
     )
     assert not report.convergence_warning
-    assert "Checkpoint 1" in report.progress_path.read_text(encoding="utf-8")
+    progress_text = report.progress_path.read_text(encoding="utf-8")
+    assert "Checkpoint 1" in progress_text
+    assert not progress_text.endswith("\n\n")
     metadata = json.loads(
         (tmp_path / "rl_checkpoint_01.json").read_text(encoding="utf-8")
     )

@@ -613,7 +613,8 @@ def _append_progress(
     config: PPOTrainingConfig,
     report: CheckpointReport,
 ) -> None:
-    if not path.exists():
+    new_file = not path.exists()
+    if new_file:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             "# Phase 2 training progress\n\n"
@@ -667,8 +668,9 @@ def _append_progress(
         f"- Evaluation details: "
         f"`{report.evaluation_path.relative_to(path.parent.parent)}`",
         f"- Training curve: `{report.curve_path.relative_to(path.parent.parent)}`",
-        "",
     ]
+    if not new_file:
+        lines.insert(0, "")
     with path.open("a", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
 
