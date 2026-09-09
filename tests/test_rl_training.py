@@ -84,6 +84,8 @@ def test_fixed_evaluation_is_deterministic_and_resets_recurrent_state():
     assert asdict(summary_a) == asdict(summary_b)
     assert summary_a.n_cases == 3
     assert summary_a.n_hits == 0
+    assert summary_a.n_ground_impacts == 0
+    assert summary_a.n_timeouts == 3
     for case in summary_a.cases:
         assert case.episode_reward == pytest.approx(
             case.progress_reward + case.effort_penalty + case.terminal_reward
@@ -147,6 +149,8 @@ def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
     assert not report.convergence_warning
     progress_text = report.progress_path.read_text(encoding="utf-8")
     assert "Checkpoint 1" in progress_text
+    assert "mean control effort" in progress_text
+    assert "ground impact/timeout/hit" in progress_text
     assert not progress_text.endswith("\n\n")
     metadata = json.loads(
         (tmp_path / "rl_checkpoint_01.json").read_text(encoding="utf-8")

@@ -1,5 +1,26 @@
 # NOTES
 
+## 2026-09-09 — Observation-v2 RL checkpoint 2 (review gate)
+
+- Resumed only the ten-value checkpoint-1 model for **20,480 additional
+  timesteps**: **40,960 cumulative / 32 episodes**. Reward improved within
+  checkpoint 2, **-78.815875 → -74.929087** (+3.886787), and its late
+  quintile mean was **15.492101** better than checkpoint 1's late mean.
+- Fixed evaluation remained **0/9 hits**, but mean/median minimum separation
+  improved from **2638.656 / 2618.771 m** to
+  **1786.639 / 1423.028 m** (-32.3% / -45.7%). Mean eval return improved
+  **-69.585664 → -58.671985**.
+- Mean command effort increased from **8716.993** to
+  **19305.963 m²/s³** (+121.5%) as the policy became more active; its
+  normalized reward penalty remained small (**-0.321196** mean).
+- Eval outcomes were again **0 ground impacts / 9 timeouts / 0 hits**.
+  Ground-impact cases therefore remain at zero for both observation-v2
+  checkpoints, while hit rate is unchanged.
+- Updated `outputs/training_progress.md` to persist control effort and
+  ground-impact/timeout/hit counts at every checkpoint. Saved-model reload
+  reproduced all checkpoint-2 metrics; full suite **47 passed**.
+  **Checkpoint 3 was not started.**
+
 ## 2026-09-09 — Observation-v2 RL checkpoint 1 (review gate)
 
 - Started the replacement run from scratch with the ten-value observation

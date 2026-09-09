@@ -191,6 +191,8 @@ class CaseEvaluation:
 class EvaluationSummary:
     n_cases: int
     n_hits: int
+    n_ground_impacts: int
+    n_timeouts: int
     hit_rate: float
     mean_miss_distance_m: float
     median_miss_distance_m: float
@@ -482,9 +484,13 @@ def evaluate_policy(
     terminal_rewards = np.array([result.terminal_reward for result in results])
     efforts = np.array([result.control_effort_m2_s3 for result in results])
     n_hits = sum(result.hit for result in results)
+    n_ground_impacts = sum(result.outcome == "miss" for result in results)
+    n_timeouts = sum(result.outcome == "timeout" for result in results)
     return EvaluationSummary(
         n_cases=len(results),
         n_hits=n_hits,
+        n_ground_impacts=n_ground_impacts,
+        n_timeouts=n_timeouts,
         hit_rate=float(n_hits / len(results)),
         mean_miss_distance_m=float(np.mean(miss_distances)),
         median_miss_distance_m=float(np.median(miss_distances)),
@@ -663,6 +669,11 @@ def _append_progress(
         f"(progress/effort/terminal): {evaluation.mean_progress_reward:.6f} / "
         f"{evaluation.mean_effort_penalty:.6f} / "
         f"{evaluation.mean_terminal_reward:.6f}",
+        "- Fixed-eval mean control effort: "
+        f"{evaluation.mean_control_effort_m2_s3:.6f} m²/s³",
+        "- Fixed-eval outcomes (ground impact/timeout/hit): "
+        f"{evaluation.n_ground_impacts}/{evaluation.n_timeouts}/"
+        f"{evaluation.n_hits}",
         f"- Possible convergence warning: {report.convergence_warning}",
         f"- Model: `{report.checkpoint_path.relative_to(path.parent.parent)}`",
         f"- Evaluation details: "
