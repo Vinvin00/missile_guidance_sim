@@ -1,5 +1,31 @@
 # NOTES
 
+## 2026-09-09 — Phase 2 RL checkpoint 3 (convergence stop)
+
+- Pre-checkpoint diagnosis confirmed ground-impact misses and timeouts both
+  receive a **-100 terminal term**, but remain distinguishable in Gymnasium
+  outcome metadata. All six checkpoint-2 impacts were pursuer impacts in the
+  three no-maneuver and three weave cases; every pursuer had already passed
+  closest approach and was opening before impact. Constant-turn cases were
+  still closing at timeout. This is a structured post-flyby/altitude-control
+  pattern, not randomly distributed exploration. Absolute altitude is not in
+  the current observation, so reward-only crash tuning may be insufficient.
+- Resumed checkpoint 2 for **20,480 timesteps**: **61,440 cumulative /
+  48 completed episodes**. Checkpoint 3's first-to-last reward-quintile mean
+  was essentially flat/down, **-77.648933 → -78.043640** (-0.394707), and
+  its late mean regressed **9.248909** from checkpoint 2.
+- Fixed evaluation remained **0/9 hits**. Mean/median minimum separation
+  regressed from **1471.504 / 1235.874 m** to
+  **1984.544 / 2223.822 m** (+34.9% / +79.9%); mean return worsened from
+  **-48.253773** to **-54.707939**.
+- Mean command effort did improve again, **47082.088 → 22828.181 m²/s³**
+  (-51.5%), and all nine cases now timed out instead of ground-impacting.
+  That narrower positive does not offset the reward and miss-distance
+  regressions.
+- The checkpoint gate therefore flags a **possible convergence problem**.
+  Saved and reload-verified `outputs/checkpoints/rl_checkpoint_03.zip`;
+  full suite **47 passed**. **Checkpoint 4 was not started.**
+
 ## 2026-09-09 — Phase 2 RL checkpoint 2 (review gate)
 
 - Resumed `rl_checkpoint_01.zip` for another **20,480 timesteps**:
