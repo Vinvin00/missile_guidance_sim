@@ -1,4 +1,4 @@
-"""Reinforcement-learning environment interfaces (training not included)."""
+"""Reinforcement-learning environment and checkpoint-training interfaces."""
 
 from guidance_sim.rl.environment import (
     CLOSING_SPEED_SCALE_M_S,

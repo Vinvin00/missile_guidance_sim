@@ -1,0 +1,74 @@
+"""Train and evaluate exactly one Phase-2 recurrent-PPO checkpoint.
+
+Examples:
+    python scripts/train_rl.py --checkpoint 1
+    python scripts/train_rl.py --checkpoint 2
+
+Each invocation refuses to overwrite an existing checkpoint and exits after
+writing the model, cumulative training curve, fixed-set evaluation, and
+``outputs/training_progress.md``.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from guidance_sim.rl.training import run_checkpoint
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--checkpoint",
+        type=int,
+        required=True,
+        choices=range(1, 6),
+        help="one-based checkpoint number; only this checkpoint will run",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "outputs",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    report = run_checkpoint(
+        checkpoint_index=args.checkpoint,
+        output_dir=args.output_dir,
+    )
+    evaluation = report.evaluation
+    curve = report.curve
+    print(f"Checkpoint {report.checkpoint_index} complete; training stopped.")
+    print(f"Cumulative timesteps: {report.cumulative_timesteps:,}")
+    print(f"Episodes this checkpoint: {curve.checkpoint_episodes}")
+    if curve.first_quintile_mean_reward is not None:
+        print(
+            "First/last quintile mean reward: "
+            f"{curve.first_quintile_mean_reward:.6f} / "
+            f"{curve.last_quintile_mean_reward:.6f}"
+        )
+    print(
+        f"Fixed eval: {evaluation.n_hits}/{evaluation.n_cases} hits "
+        f"({100.0 * evaluation.hit_rate:.1f}%)"
+    )
+    print(
+        "Mean/median miss distance: "
+        f"{evaluation.mean_miss_distance_m:.3f} / "
+        f"{evaluation.median_miss_distance_m:.3f} m"
+    )
+    print(f"Model: {report.checkpoint_path}")
+    print(f"Training curve: {report.curve_path}")
+    print(f"Progress log: {report.progress_path}")
+    if report.convergence_warning:
+        print("WARNING: reward has not improved across two checkpoints.")
+
+
+if __name__ == "__main__":
+    main()

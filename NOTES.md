@@ -1,5 +1,36 @@
 # NOTES
 
+## 2026-09-09 — Phase 2 RL checkpoint 1 (review gate)
+
+- Initialized Git from the verified 42-test Phase-1 baseline
+  (`3762d24`), then split work into `feature/rl-training` here and
+  `feature/rl-visualization` at `../missile-sim-viz`. Both worktrees were
+  clean and independently passed **42 tests** before Phase 2 edits.
+- Chose recurrent PPO (`sb3-contrib` 2.9.0, `MlpLstmPolicy`, 64 hidden
+  units) because partial observability makes the engagement history useful.
+  The compute-bound budget is **102,400 timesteps**, split into five review
+  checkpoints of **20,480**. Seed: **20260909**; 4 environments; `dt=0.02 s`.
+- Training uses equal seeded sampling of `NoManeuver`, `ConstantTurn`, and
+  `SinusoidalWeave` around the existing demo/envelope IC family. The public
+  environment remains a physical 25 g action space; PPO uses a standard
+  `[-1,1]^3` wrapper rescaled to that physical command before the unchanged
+  lag/clamp/dynamics pipeline.
+- Checkpoint 1 completed **20,480 timesteps / 16 episodes**. First-to-last
+  reward-quintile mean changed **-73.775322 → -93.423403** (change
+  **-19.648081**); this first checkpoint is not enough to trigger the
+  two-consecutive-checkpoint convergence warning.
+- Fixed nine-case evaluation: **0/9 hits**, mean/median minimum separation
+  **2591.095 / 2451.082 m**, mean return **-69.176999**. All nine cases
+  timed out. This is an honestly poor first checkpoint, not evidence of
+  convergence.
+- Artifacts: `outputs/checkpoints/rl_checkpoint_01.zip`,
+  `outputs/training_curve.png`, `outputs/training_episodes.csv`,
+  `outputs/rl_checkpoint_01_eval.json`, and
+  `outputs/training_progress.md`. Reloading the saved checkpoint reproduced
+  the evaluation exactly.
+- Verification after implementation: focused **5 passed**; full suite
+  **47 passed**. Checkpoint 2 was not started; waiting at the review gate.
+
 ## 2026-09-09 — Step 3: lag + APN + OGL
 
 ### 3a Autopilot lag

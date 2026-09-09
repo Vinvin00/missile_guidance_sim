@@ -1,0 +1,139 @@
+{
+  "checkpoint_index": 1,
+  "config": {
+    "autopilot_tau": 0.2,
+    "batch_size": 256,
+    "dt": 0.02,
+    "ent_coef": 0.001,
+    "gae_lambda": 0.95,
+    "gamma": 0.995,
+    "intercept_radius": 5.0,
+    "learning_rate": 0.0003,
+    "lstm_hidden_size": 64,
+    "max_time": 25.0,
+    "n_envs": 4,
+    "n_epochs": 5,
+    "n_steps": 512,
+    "seed": 20260909,
+    "timesteps_per_checkpoint": 20480,
+    "total_checkpoints": 5
+  },
+  "convergence_warning": false,
+  "cumulative_timesteps": 20480,
+  "curve": {
+    "best_episode_reward": -53.181793212890625,
+    "checkpoint_episodes": 16,
+    "first_quintile_mean_reward": -73.77532196044922,
+    "last_quintile_mean_reward": -93.42340342203777,
+    "reward_change": -19.648081461588546,
+    "total_episodes": 16
+  },
+  "evaluation": {
+    "cases": [
+      {
+        "control_effort_m2_s3": 128614.04452703134,
+        "episode_reward": -76.72322312544006,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 1922.2603087455227,
+        "name": "no_maneuver_center",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 139834.97062015775,
+        "episode_reward": -69.20322771833244,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 2028.8131829052222,
+        "name": "no_maneuver_demo",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 132685.34213274225,
+        "episode_reward": -60.02004759058787,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 2563.7918886791213,
+        "name": "no_maneuver_offset",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 142149.8413552806,
+        "episode_reward": -76.46923899147497,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 3092.5871594402693,
+        "name": "constant_turn_left_3g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 157047.75872950576,
+        "episode_reward": -70.61956506033867,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 3395.676882955879,
+        "name": "constant_turn_right_5g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 157185.864175986,
+        "episode_reward": -65.04175735415538,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 3841.401907019509,
+        "name": "constant_turn_left_7g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 122239.65448094036,
+        "episode_reward": -77.16599522609116,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 2017.2801078416974,
+        "name": "weave_3g_055hz",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 138395.09903343226,
+        "episode_reward": -68.72768033326729,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 2006.9650886299162,
+        "name": "weave_5g_070hz",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 134352.5847055545,
+        "episode_reward": -58.622255724401604,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 2451.0820969543156,
+        "name": "weave_7g_090hz",
+        "outcome": "timeout"
+      }
+    ],
+    "hit_rate": 0.0,
+    "mean_control_effort_m2_s3": 139167.2399734034,
+    "mean_episode_reward": -69.17699901378771,
+    "mean_miss_distance_m": 2591.095402574606,
+    "median_miss_distance_m": 2451.0820969543156,
+    "n_cases": 9,
+    "n_hits": 0
+  },
+  "no_improvement_streak": 0,
+  "versions": {
+    "numpy": "2.5.3",
+    "sb3-contrib": "2.9.0",
+    "stable-baselines3": "2.9.0",
+    "torch": "2.14.0"
+  }
+}
