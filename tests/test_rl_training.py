@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import json
 
 import numpy as np
 import pytest
@@ -83,6 +84,10 @@ def test_fixed_evaluation_is_deterministic_and_resets_recurrent_state():
     assert asdict(summary_a) == asdict(summary_b)
     assert summary_a.n_cases == 3
     assert summary_a.n_hits == 0
+    for case in summary_a.cases:
+        assert case.episode_reward == pytest.approx(
+            case.progress_reward + case.effort_penalty + case.terminal_reward
+        )
     assert sum(policy_a.episode_starts) == len(cases)
     assert all(
         not value
@@ -134,13 +139,32 @@ def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
     assert report.progress_path.exists()
     assert report.curve.checkpoint_episodes == 4
     assert report.evaluation.n_cases == len(FIXED_EVALUATION_CASES)
+    assert report.evaluation.mean_episode_reward == pytest.approx(
+        report.evaluation.mean_progress_reward
+        + report.evaluation.mean_effort_penalty
+        + report.evaluation.mean_terminal_reward
+    )
     assert not report.convergence_warning
     assert "Checkpoint 1" in report.progress_path.read_text(encoding="utf-8")
+    metadata = json.loads(
+        (tmp_path / "rl_checkpoint_01.json").read_text(encoding="utf-8")
+    )
+    assert len(metadata["observation_names"]) == 10
 
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         run_checkpoint(1, output_dir=tmp_path, config=config)
     with pytest.raises(FileNotFoundError, match="preceding checkpoint"):
         run_checkpoint(2, output_dir=tmp_path / "fresh", config=config)
+
+    stale_dir = tmp_path / "stale"
+    (stale_dir / "checkpoints").mkdir(parents=True)
+    (stale_dir / "checkpoints" / "rl_checkpoint_01.zip").write_bytes(b"stale")
+    (stale_dir / "rl_checkpoint_01.json").write_text(
+        json.dumps({"observation_names": ["old_contract"]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="incompatible observation"):
+        run_checkpoint(2, output_dir=stale_dir, config=config)
 
 
 def test_training_budget_is_exactly_five_equal_checkpoints():

@@ -1,0 +1,118 @@
+{
+  "checkpoint": 3,
+  "observation_shape": 8,
+  "cases": [
+    {
+      "name": "no_maneuver_center",
+      "maneuver": "none",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 1354.8210380692028,
+      "progress_reward": 38.98366406421104,
+      "effort_penalty": -0.3104828195989697,
+      "terminal_reward": -100.0,
+      "episode_reward": -61.32681875538787
+    },
+    {
+      "name": "no_maneuver_demo",
+      "maneuver": "none",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 1270.7915592032773,
+      "progress_reward": 48.14992810075317,
+      "effort_penalty": -0.362008138518551,
+      "terminal_reward": -100.0,
+      "episode_reward": -52.212080037765375
+    },
+    {
+      "name": "no_maneuver_offset",
+      "maneuver": "none",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 2373.7469124324934,
+      "progress_reward": 51.241597384077544,
+      "effort_penalty": -0.31188309019732097,
+      "terminal_reward": -100.0,
+      "episode_reward": -49.070285706119776
+    },
+    {
+      "name": "constant_turn_left_3g",
+      "maneuver": "constant_turn",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 2279.322098102593,
+      "progress_reward": 42.30670221401319,
+      "effort_penalty": -0.3859375995301823,
+      "terminal_reward": -100.0,
+      "episode_reward": -58.07923538551706
+    },
+    {
+      "name": "constant_turn_right_5g",
+      "maneuver": "constant_turn",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 2223.821779440939,
+      "progress_reward": 47.92714690204879,
+      "effort_penalty": -0.5437963126937873,
+      "terminal_reward": -100.0,
+      "episode_reward": -52.61664941064496
+    },
+    {
+      "name": "constant_turn_left_7g",
+      "maneuver": "constant_turn",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 3129.5835922603087,
+      "progress_reward": 47.17708934465073,
+      "effort_penalty": -0.5497833308590672,
+      "terminal_reward": -100.0,
+      "episode_reward": -53.37269398620842
+    },
+    {
+      "name": "weave_3g_055hz",
+      "maneuver": "weave",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 1634.6028984884995,
+      "progress_reward": 36.59066711405968,
+      "effort_penalty": -0.28191734556598635,
+      "terminal_reward": -100.0,
+      "episode_reward": -63.691250231506366
+    },
+    {
+      "name": "weave_5g_070hz",
+      "maneuver": "weave",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 1332.2933451283204,
+      "progress_reward": 46.91475503634626,
+      "effort_penalty": -0.354122704853509,
+      "terminal_reward": -100.0,
+      "episode_reward": -53.439367668507245
+    },
+    {
+      "name": "weave_7g_090hz",
+      "maneuver": "weave",
+      "outcome": "timeout",
+      "steps": 1250,
+      "min_range_m": 2261.914584489707,
+      "progress_reward": 51.755162598731125,
+      "effort_penalty": -0.31822919981635517,
+      "terminal_reward": -100.0,
+      "episode_reward": -48.563066601085275
+    }
+  ],
+  "mean": {
+    "progress_reward": 45.67185697321017,
+    "effort_penalty": -0.379795615737081,
+    "terminal_reward": -100.0,
+    "episode_reward": -54.707938642526926
+  },
+  "six_previous_ground_case_mean": {
+    "progress_reward": 45.605962383029805,
+    "effort_penalty": -0.32310721642511536,
+    "terminal_reward": -100.0,
+    "episode_reward": -54.71714483339531
+  },
+  "finding": "Effort is 0.6-1.2% of positive progress per case and does not support the passivity-is-rewarded hypothesis. Reward weights remain unchanged."
+}

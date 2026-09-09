@@ -1,5 +1,41 @@
 # NOTES
 
+## 2026-09-09 — Phase 2 restart prep: observability v2
+
+- Diagnosed checkpoint 3 on the unchanged nine-case fixed set before editing
+  the environment. Mean cumulative reward components were
+  **progress +45.671857, effort -0.379796, terminal -100.0**. Per-case
+  effort was only **0.6–1.2%** of positive progress. For the six geometries
+  that had ground-impacted at checkpoint 2, means were
+  **+45.605962 / -0.323107 / -100.0**.
+- This **contradicts the passivity-is-rewarded hypothesis**: the terminal
+  failure term dominates, while effort is two orders of magnitude smaller
+  than progress. Reward weights were therefore left unchanged. Full
+  breakdown:
+  `outputs/archive/observation_v1/checkpoint_03_reward_breakdown.json`.
+- Broke the observation contract deliberately from 8 to **10 float32
+  values**, preserving the first eight and appending:
+  `height_above_ground_scaled = max(z-ground,0) /
+  (max(z-ground,0)+5000m)` and
+  `altitude_rate_scaled = tanh(pursuer_vz / 200m/s)`.
+  Height above the configurable ground plane is more meaningful than raw
+  world z for ground avoidance.
+- Repository search found no runtime consumer hard-coding the old `(8,)`
+  shape outside the environment tests; the remaining mention is historical
+  documentation below. Updated all six environment tests, training
+  evaluation metadata, per-episode reward-component logging, and an explicit
+  resume guard that rejects incompatible observation contracts.
+- Archived the incompatible 8-value checkpoints 1–3 and their logs under
+  `outputs/archive/observation_v1/`; they are diagnostic provenance only and
+  must not be resumed. The active `outputs/checkpoints/` path is clear for a
+  from-scratch replacement run.
+- Verification: focused environment/training **11 passed**; full suite
+  **47 passed**; Stable-Baselines3 environment checker passed (expected
+  warning for the public physical action space; PPO still uses its normalized
+  wrapper).
+- **New training checkpoint 1 has not started: 0 replacement-run timesteps,
+  0 episodes, no new checkpoint. Waiting at the review gate.**
+
 ## 2026-09-09 — Phase 2 RL checkpoint 3 (convergence stop)
 
 - Pre-checkpoint diagnosis confirmed ground-impact misses and timeouts both
@@ -166,7 +202,7 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   `gymnasium>=1.0,<2.0` dependency. Default ICs/vehicles exactly reuse the
   `scripts/run_demo.py` scenario; seeded IC/maneuver factories construct fresh
   states, entities, autopilot state, and maneuver instances each reset.
-- Observation `(8,) float32`, exact order:
+- Historical/superseded observation `(8,) float32`, exact order:
   `[r_hat_xyz, tanh(omega_los_xyz / 0.1 rad/s),
   range/(range + 10000 m), tanh(closing_velocity / 1000 m/s)]`.
   The 3D LOS unit vector avoids azimuth wrap/elevation-pole singularities.

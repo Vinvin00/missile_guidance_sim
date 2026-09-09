@@ -8,6 +8,8 @@ import pytest
 from guidance_sim.physics.entities import State
 from guidance_sim.physics.maneuvers import SinusoidalWeave
 from guidance_sim.rl.environment import (
+    ALTITUDE_RATE_SCALE_M_S,
+    ALTITUDE_SCALE_M,
     CLOSING_SPEED_SCALE_M_S,
     LOS_RATE_SCALE_RAD_S,
     OBSERVATION_NAMES,
@@ -17,18 +19,25 @@ from guidance_sim.rl.environment import (
 from guidance_sim.simulation.engine import SimulationConfig
 
 
+def _assert_observation_contract(
+    env: InterceptionEnv,
+    observation: np.ndarray,
+) -> None:
+    assert observation.shape == (10,)
+    assert observation.dtype == np.float32
+    assert env.observation_space.contains(observation)
+    assert np.all(np.isfinite(observation))
+
+
 def test_reset_and_step_match_gymnasium_contract():
     env = InterceptionEnv(
         config=SimulationConfig(dt=0.02, max_time=1.0, autopilot_tau=0.2)
     )
 
     observation, info = env.reset(seed=17)
-    assert observation.shape == (8,)
-    assert observation.dtype == np.float32
-    assert env.observation_space.contains(observation)
+    _assert_observation_contract(env, observation)
     assert env.action_space.shape == (3,)
     assert env.action_space.dtype == np.float32
-    assert np.all(np.isfinite(observation))
     assert info["outcome"] == "ongoing"
     assert info["range_m"] > 0.0
     assert OBSERVATION_NAMES == (
@@ -40,6 +49,8 @@ def test_reset_and_step_match_gymnasium_contract():
         "los_rate_z_scaled",
         "range_scaled",
         "closing_velocity_scaled",
+        "height_above_ground_scaled",
+        "altitude_rate_scaled",
     )
     expected = np.concatenate(
         (
@@ -50,6 +61,11 @@ def test_reset_and_step_match_gymnasium_contract():
                 np.tanh(
                     info["closing_velocity_m_s"] / CLOSING_SPEED_SCALE_M_S
                 ),
+                info["height_above_ground_m"]
+                / (info["height_above_ground_m"] + ALTITUDE_SCALE_M),
+                np.tanh(
+                    info["altitude_rate_m_s"] / ALTITUDE_RATE_SCALE_M_S
+                ),
             ],
         )
     ).astype(np.float32)
@@ -58,8 +74,7 @@ def test_reset_and_step_match_gymnasium_contract():
     next_observation, reward, terminated, truncated, next_info = env.step(
         np.zeros(3, dtype=np.float32)
     )
-    assert env.observation_space.contains(next_observation)
-    assert np.all(np.isfinite(next_observation))
+    _assert_observation_contract(env, next_observation)
     assert np.isfinite(reward)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)
@@ -73,12 +88,14 @@ def test_action_flows_through_norm_bound_lag_and_dynamics_clamp():
     env = InterceptionEnv(
         config=SimulationConfig(dt=dt, max_time=1.0, autopilot_tau=tau)
     )
-    env.reset(seed=1)
+    observation, _ = env.reset(seed=1)
+    _assert_observation_contract(env, observation)
     assert env.pursuer is not None
     velocity_at_issue = env.pursuer.state.velocity.copy()
 
     requested = env.action_space.high.astype(float)
-    _, _, terminated, truncated, info = env.step(requested)
+    observation, _, terminated, truncated, info = env.step(requested)
+    _assert_observation_contract(env, observation)
     commanded = info["action_commanded_m_s2"]
     achieved = info["action_achieved_m_s2"]
 
@@ -103,11 +120,13 @@ def _rollout(
     env: InterceptionEnv,
     policy,
 ) -> tuple[float, str, float]:
-    _, info = env.reset(seed=123)
+    observation, info = env.reset(seed=123)
+    _assert_observation_contract(env, observation)
     total_reward = 0.0
     while True:
         action = policy(env, info)
-        _, reward, terminated, truncated, info = env.step(action)
+        observation, reward, terminated, truncated, info = env.step(action)
+        _assert_observation_contract(env, observation)
         total_reward += reward
         if terminated or truncated:
             return total_reward, str(info["outcome"]), float(info["min_range_m"])
@@ -158,7 +177,8 @@ def test_hit_is_terminated_not_truncated():
         initial_condition_sampler=_near_hit_sampler,
     )
     env.reset(seed=0)
-    _, reward, terminated, truncated, info = env.step(np.zeros(3))
+    observation, reward, terminated, truncated, info = env.step(np.zeros(3))
+    _assert_observation_contract(env, observation)
 
     assert terminated
     assert not truncated
@@ -188,20 +208,26 @@ def test_ground_impact_is_physical_miss_and_timeout_is_truncation():
         initial_condition_sampler=_ground_miss_sampler,
     )
     miss_env.reset(seed=0)
-    _, _, terminated, truncated, info = miss_env.step(np.zeros(3))
+    observation, _, terminated, truncated, info = miss_env.step(np.zeros(3))
+    _assert_observation_contract(miss_env, observation)
     assert terminated and not truncated
     assert info["outcome"] == "miss"
     assert info["termination_reason"] == "pursuer_ground_impact"
     assert info["reward_terms"]["terminal"] == pytest.approx(-100.0)
+    assert observation[-2] == pytest.approx(0.0)
+    assert info["height_above_ground_m"] <= 0.0
 
     timeout_env = InterceptionEnv(
         config=SimulationConfig(dt=0.1, max_time=0.2, autopilot_tau=0.0),
         initial_condition_sampler=_timeout_sampler,
     )
-    timeout_env.reset(seed=0)
-    _, _, terminated, truncated, _ = timeout_env.step(np.zeros(3))
+    observation, _ = timeout_env.reset(seed=0)
+    _assert_observation_contract(timeout_env, observation)
+    observation, _, terminated, truncated, _ = timeout_env.step(np.zeros(3))
+    _assert_observation_contract(timeout_env, observation)
     assert not terminated and not truncated
-    _, _, terminated, truncated, info = timeout_env.step(np.zeros(3))
+    observation, _, terminated, truncated, info = timeout_env.step(np.zeros(3))
+    _assert_observation_contract(timeout_env, observation)
     assert not terminated and truncated
     assert info["outcome"] == "timeout"
     assert info["termination_reason"] == "time_limit"
@@ -234,12 +260,14 @@ def test_seeded_reset_is_deterministic_and_constructs_fresh_episode_objects():
         maneuver_factory=seeded_maneuver,
     )
     observation_a, _ = env.reset(seed=99)
+    _assert_observation_contract(env, observation_a)
     pursuer_a = env.pursuer
     target_a = env.target
     maneuver_a = env.target_maneuver
     env.step(np.array([0.0, 20.0, 0.0]))
 
     observation_b, _ = env.reset(seed=99)
+    _assert_observation_contract(env, observation_b)
     np.testing.assert_array_equal(observation_a, observation_b)
     assert env.pursuer is not pursuer_a
     assert env.target is not target_a
@@ -247,4 +275,5 @@ def test_seeded_reset_is_deterministic_and_constructs_fresh_episode_objects():
     assert np.allclose(env.pursuer.last_achieved_lateral_accel, 0.0)
 
     observation_c, _ = env.reset(seed=100)
+    _assert_observation_contract(env, observation_c)
     assert not np.array_equal(observation_b, observation_c)

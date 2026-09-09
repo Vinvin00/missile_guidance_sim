@@ -1,9 +1,9 @@
 """Gymnasium environment for the existing 3D point-mass engagement.
 
-The observation is an eight-element, ``float32`` vector in this exact order:
+The observation is a ten-element, ``float32`` vector in this exact order:
 
 ``[r_hat_x, r_hat_y, r_hat_z, omega_x_s, omega_y_s, omega_z_s,
-range_s, closing_s]``.
+range_s, closing_s, height_agl_s, altitude_rate_s]``.
 
 ``r_hat`` is the world-frame target-from-pursuer LOS unit vector.  A unit
 vector is used instead of azimuth/elevation so the 3D representation has no
@@ -14,7 +14,14 @@ dimensionless transforms of physical quantities:
   ``omega_los = cross(r_rel, v_rel) / range**2``;
 * ``range_s = range / (range + 10_000 m)``;
 * ``closing_s = tanh(closing_velocity / 1_000 m/s)``, where positive means
-  closing.
+  closing;
+* ``height_agl_s = max(height_above_ground, 0) /
+  (max(height_above_ground, 0) + 5_000 m)``;
+* ``altitude_rate_s = tanh(pursuer_vz / 200 m/s)``.
+
+Height above the environment's configurable ground plane is more useful than
+raw world ``z`` when ``ground_altitude_m`` is nonzero.  It and pursuer vertical
+speed make ground proximity observable without changing the physics model.
 
 The action is a world-frame acceleration request in m/s^2 with shape ``(3,)``.
 Its Euclidean norm is radially projected to the pursuer structural limit
@@ -53,6 +60,8 @@ from guidance_sim.simulation.engine import SimulationConfig
 LOS_RATE_SCALE_RAD_S = 0.1
 RANGE_SCALE_M = 10_000.0
 CLOSING_SPEED_SCALE_M_S = 1_000.0
+ALTITUDE_SCALE_M = 5_000.0
+ALTITUDE_RATE_SCALE_M_S = 200.0
 _KINEMATIC_EPS = 1e-9
 
 OBSERVATION_NAMES = (
@@ -64,6 +73,8 @@ OBSERVATION_NAMES = (
     "los_rate_z_scaled",
     "range_scaled",
     "closing_velocity_scaled",
+    "height_above_ground_scaled",
+    "altitude_rate_scaled",
 )
 
 InitialConditionSampler = Callable[[np.random.Generator], tuple[State, State]]
@@ -186,8 +197,11 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             dtype=np.float32,
         )
         self.observation_space = spaces.Box(
-            low=np.array([-1.0] * 6 + [0.0, -1.0], dtype=np.float32),
-            high=np.ones(8, dtype=np.float32),
+            low=np.array(
+                [-1.0] * 6 + [0.0, -1.0, 0.0, -1.0],
+                dtype=np.float32,
+            ),
+            high=np.ones(10, dtype=np.float32),
             dtype=np.float32,
         )
 
@@ -384,7 +398,14 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
     def _observation(
         self,
     ) -> tuple[np.ndarray, dict[str, np.ndarray | float]]:
+        if self.pursuer is None:
+            raise RuntimeError("environment has not been reset")
         los_unit, los_rate, range_m, closing_velocity = self._kinematics()
+        height_above_ground_m = (
+            self.pursuer.state.altitude() - self.ground_altitude_m
+        )
+        nonnegative_height_m = max(height_above_ground_m, 0.0)
+        altitude_rate_m_s = float(self.pursuer.state.velocity[2])
         observation = np.concatenate(
             (
                 los_unit,
@@ -394,6 +415,11 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
                         range_m / (range_m + RANGE_SCALE_M),
                         np.tanh(
                             closing_velocity / CLOSING_SPEED_SCALE_M_S
+                        ),
+                        nonnegative_height_m
+                        / (nonnegative_height_m + ALTITUDE_SCALE_M),
+                        np.tanh(
+                            altitude_rate_m_s / ALTITUDE_RATE_SCALE_M_S
                         ),
                     ]
                 ),
@@ -411,6 +437,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             "los_rate_rad_s": los_rate.copy(),
             "range_m": range_m,
             "closing_velocity_m_s": closing_velocity,
+            "height_above_ground_m": height_above_ground_m,
+            "altitude_rate_m_s": altitude_rate_m_s,
         }
         return observation, physical
 

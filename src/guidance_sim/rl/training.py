@@ -36,7 +36,7 @@ from guidance_sim.physics.maneuvers import (
     NoManeuver,
     SinusoidalWeave,
 )
-from guidance_sim.rl.environment import InterceptionEnv
+from guidance_sim.rl.environment import OBSERVATION_NAMES, InterceptionEnv
 from guidance_sim.simulation.engine import SimulationConfig
 
 
@@ -180,6 +180,9 @@ class CaseEvaluation:
     outcome: str
     miss_distance_m: float
     episode_reward: float
+    progress_reward: float
+    effort_penalty: float
+    terminal_reward: float
     final_time_s: float
     control_effort_m2_s3: float
 
@@ -192,6 +195,9 @@ class EvaluationSummary:
     mean_miss_distance_m: float
     median_miss_distance_m: float
     mean_episode_reward: float
+    mean_progress_reward: float
+    mean_effort_penalty: float
+    mean_terminal_reward: float
     mean_control_effort_m2_s3: float
     cases: tuple[CaseEvaluation, ...]
 
@@ -429,6 +435,11 @@ def evaluate_policy(
         recurrent_state: Any = None
         episode_start = np.array([True], dtype=bool)
         episode_reward = 0.0
+        reward_components = {
+            "progress": 0.0,
+            "effort": 0.0,
+            "terminal": 0.0,
+        }
         control_effort = 0.0
         while True:
             action, recurrent_state = model.predict(
@@ -440,6 +451,8 @@ def evaluate_policy(
             action = np.asarray(action, dtype=float).reshape(-1, 3)[0]
             observation, reward, terminated, truncated, info = env.step(action)
             episode_reward += float(reward)
+            for name in reward_components:
+                reward_components[name] += float(info["reward_terms"][name])
             commanded = np.asarray(info["action_commanded_m_s2"], dtype=float)
             control_effort += float(np.dot(commanded, commanded) * config.dt)
             episode_start[:] = False
@@ -453,6 +466,9 @@ def evaluate_policy(
                 outcome=str(info["outcome"]),
                 miss_distance_m=float(info["min_range_m"]),
                 episode_reward=episode_reward,
+                progress_reward=reward_components["progress"],
+                effort_penalty=reward_components["effort"],
+                terminal_reward=reward_components["terminal"],
                 final_time_s=float(info["time_s"]),
                 control_effort_m2_s3=control_effort,
             )
@@ -461,6 +477,9 @@ def evaluate_policy(
 
     miss_distances = np.array([result.miss_distance_m for result in results])
     rewards = np.array([result.episode_reward for result in results])
+    progress_rewards = np.array([result.progress_reward for result in results])
+    effort_penalties = np.array([result.effort_penalty for result in results])
+    terminal_rewards = np.array([result.terminal_reward for result in results])
     efforts = np.array([result.control_effort_m2_s3 for result in results])
     n_hits = sum(result.hit for result in results)
     return EvaluationSummary(
@@ -470,6 +489,9 @@ def evaluate_policy(
         mean_miss_distance_m=float(np.mean(miss_distances)),
         median_miss_distance_m=float(np.median(miss_distances)),
         mean_episode_reward=float(np.mean(rewards)),
+        mean_progress_reward=float(np.mean(progress_rewards)),
+        mean_effort_penalty=float(np.mean(effort_penalties)),
+        mean_terminal_reward=float(np.mean(terminal_rewards)),
         mean_control_effort_m2_s3=float(np.mean(efforts)),
         cases=tuple(results),
     )
@@ -567,6 +589,24 @@ def _previous_no_improvement_streak(
     return 0 if improved else previous_streak + 1
 
 
+def _validate_previous_observation_contract(
+    output_dir: Path,
+    checkpoint_index: int,
+) -> None:
+    metadata_path = output_dir / f"rl_checkpoint_{checkpoint_index - 1:02d}.json"
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"required preceding checkpoint metadata is missing: {metadata_path}"
+        )
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    previous_names = tuple(metadata.get("observation_names", ()))
+    if previous_names != OBSERVATION_NAMES:
+        raise ValueError(
+            "preceding checkpoint uses an incompatible observation contract; "
+            "restart from checkpoint 1"
+        )
+
+
 def _append_progress(
     path: Path,
     *,
@@ -578,6 +618,8 @@ def _append_progress(
         path.write_text(
             "# Phase 2 training progress\n\n"
             f"- Algorithm: recurrent PPO (`MlpLstmPolicy`, 64 hidden units)\n"
+            f"- Observation: {len(OBSERVATION_NAMES)} values "
+            f"(`{', '.join(OBSERVATION_NAMES)}`)\n"
             "- Policy action: normalized `[-1, 1]^3`, rescaled to the unchanged "
             "physical 25 g environment action before dynamics\n"
             f"- Fixed budget: {config.total_timesteps:,} timesteps in "
@@ -616,6 +658,10 @@ def _append_progress(
         f"{evaluation.mean_miss_distance_m:.3f} / "
         f"{evaluation.median_miss_distance_m:.3f} m",
         f"- Fixed-eval mean episode reward: {evaluation.mean_episode_reward:.6f}",
+        "- Fixed-eval mean reward components "
+        f"(progress/effort/terminal): {evaluation.mean_progress_reward:.6f} / "
+        f"{evaluation.mean_effort_penalty:.6f} / "
+        f"{evaluation.mean_terminal_reward:.6f}",
         f"- Possible convergence warning: {report.convergence_warning}",
         f"- Model: `{report.checkpoint_path.relative_to(path.parent.parent)}`",
         f"- Evaluation details: "
@@ -649,6 +695,8 @@ def run_checkpoint(
         raise FileExistsError(f"refusing to overwrite {checkpoint_path}")
     if checkpoint_index > 1 and not previous_path.exists():
         raise FileNotFoundError(f"required preceding checkpoint is missing: {previous_path}")
+    if checkpoint_index > 1:
+        _validate_previous_observation_contract(output_dir, checkpoint_index)
 
     episode_csv_path = output_dir / "training_episodes.csv"
     curve_path = output_dir / "training_curve.png"
@@ -732,6 +780,7 @@ def run_checkpoint(
         {
             "checkpoint_index": checkpoint_index,
             "cumulative_timesteps": cumulative_timesteps,
+            "observation_names": list(OBSERVATION_NAMES),
             "config": asdict(config),
             "curve": asdict(curve),
             "evaluation": _jsonable_evaluation(evaluation),
