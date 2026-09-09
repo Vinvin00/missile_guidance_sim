@@ -128,6 +128,7 @@ def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
     assert report.cumulative_timesteps == 8
     assert report.checkpoint_path.exists()
     assert report.episode_csv_path.exists()
+    assert b"\r\n" not in report.episode_csv_path.read_bytes()
     assert report.curve_path.exists()
     assert report.evaluation_path.exists()
     assert report.progress_path.exists()

@@ -1,5 +1,27 @@
 # NOTES
 
+## 2026-09-09 — Phase 2 RL checkpoint 2 (review gate)
+
+- Resumed `rl_checkpoint_01.zip` for another **20,480 timesteps**:
+  **40,960 cumulative / 32 completed episodes**. Checkpoint 2's
+  first-to-last reward-quintile mean improved **-81.063848 → -68.794731**
+  (**+12.269117**); its late mean is **+24.628672** above checkpoint 1's
+  late mean.
+- The fixed evaluation still has **0/9 hits**, but it is not flat:
+  mean/median minimum separation improved from **2591.095 / 2451.082 m**
+  to **1471.504 / 1235.874 m** (reductions of **43.2% / 49.6%**), and
+  mean return improved **-69.176999 → -48.253773**.
+- Mean fixed-eval command effort fell from **139167.240** to
+  **47082.088 m²/s³** (**66.2%**). Outcomes were six physical
+  ground-impact misses and three timeouts, so the policy is closer and less
+  wasteful but is not yet producing a sane intercept.
+- The two-consecutive-checkpoint convergence concern is **not triggered**
+  because both reward and fixed-set miss distance improved materially.
+  Checkpoint 3 was not started; the review gate remains in force.
+- Saved `outputs/checkpoints/rl_checkpoint_02.zip` plus JSON evaluation and
+  metadata; saved-model reload reproduced the metrics exactly. Full suite:
+  **47 passed**.
+
 ## 2026-09-09 — Phase 2 RL checkpoint 1 (review gate)
 
 - Initialized Git from the verified 42-test Phase-1 baseline

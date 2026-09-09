@@ -397,7 +397,7 @@ def _append_csv_row(
     path.parent.mkdir(parents=True, exist_ok=True)
     needs_header = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         if needs_header:
             writer.writeheader()
         writer.writerow(row)

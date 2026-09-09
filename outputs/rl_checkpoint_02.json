@@ -1,0 +1,139 @@
+{
+  "checkpoint_index": 2,
+  "config": {
+    "autopilot_tau": 0.2,
+    "batch_size": 256,
+    "dt": 0.02,
+    "ent_coef": 0.001,
+    "gae_lambda": 0.95,
+    "gamma": 0.995,
+    "intercept_radius": 5.0,
+    "learning_rate": 0.0003,
+    "lstm_hidden_size": 64,
+    "max_time": 25.0,
+    "n_envs": 4,
+    "n_epochs": 5,
+    "n_steps": 512,
+    "seed": 20260909,
+    "timesteps_per_checkpoint": 20480,
+    "total_checkpoints": 5
+  },
+  "convergence_warning": false,
+  "cumulative_timesteps": 40960,
+  "curve": {
+    "best_episode_reward": -63.18729782104492,
+    "checkpoint_episodes": 16,
+    "first_quintile_mean_reward": -81.06384785970052,
+    "last_quintile_mean_reward": -68.79473114013672,
+    "reward_change": 12.269116719563797,
+    "total_episodes": 32
+  },
+  "evaluation": {
+    "cases": [
+      {
+        "control_effort_m2_s3": 38758.016135681595,
+        "episode_reward": -54.76535515536726,
+        "final_time_s": 23.279999999999593,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 995.077104113824,
+        "name": "no_maneuver_center",
+        "outcome": "miss"
+      },
+      {
+        "control_effort_m2_s3": 46438.95006961252,
+        "episode_reward": -47.78402499435433,
+        "final_time_s": 23.47999999999959,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 1139.7955033104029,
+        "name": "no_maneuver_demo",
+        "outcome": "miss"
+      },
+      {
+        "control_effort_m2_s3": 40551.50511649348,
+        "episode_reward": -40.360496392777726,
+        "final_time_s": 24.39999999999957,
+        "hit": false,
+        "maneuver": "none",
+        "miss_distance_m": 1595.6381078765762,
+        "name": "no_maneuver_offset",
+        "outcome": "miss"
+      },
+      {
+        "control_effort_m2_s3": 51960.62358777736,
+        "episode_reward": -48.123296039670045,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 1235.8743144563753,
+        "name": "constant_turn_left_3g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 62543.151437719505,
+        "episode_reward": -48.40210222030539,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 1753.9907386941372,
+        "name": "constant_turn_right_5g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 62055.849594394465,
+        "episode_reward": -49.34339791664022,
+        "final_time_s": 24.999999999999556,
+        "hit": false,
+        "maneuver": "constant_turn",
+        "miss_distance_m": 2678.3891420688087,
+        "name": "constant_turn_left_7g",
+        "outcome": "timeout"
+      },
+      {
+        "control_effort_m2_s3": 34904.43458099687,
+        "episode_reward": -56.05805180067676,
+        "final_time_s": 23.499999999999588,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 1101.398310011436,
+        "name": "weave_3g_055hz",
+        "outcome": "miss"
+      },
+      {
+        "control_effort_m2_s3": 45199.052085511204,
+        "episode_reward": -48.59515936926198,
+        "final_time_s": 23.43999999999959,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 1164.3391304684567,
+        "name": "weave_5g_070hz",
+        "outcome": "miss"
+      },
+      {
+        "control_effort_m2_s3": 41327.209036222375,
+        "episode_reward": -40.852071105539686,
+        "final_time_s": 24.219999999999573,
+        "hit": false,
+        "maneuver": "weave",
+        "miss_distance_m": 1579.0321333878612,
+        "name": "weave_7g_090hz",
+        "outcome": "miss"
+      }
+    ],
+    "hit_rate": 0.0,
+    "mean_control_effort_m2_s3": 47082.08796048993,
+    "mean_episode_reward": -48.25377277717704,
+    "mean_miss_distance_m": 1471.5038315986533,
+    "median_miss_distance_m": 1235.8743144563753,
+    "n_cases": 9,
+    "n_hits": 0
+  },
+  "no_improvement_streak": 0,
+  "versions": {
+    "numpy": "2.5.3",
+    "sb3-contrib": "2.9.0",
+    "stable-baselines3": "2.9.0",
+    "torch": "2.14.0"
+  }
+}
