@@ -709,7 +709,9 @@ def run_checkpoint(
         checkpoint_index,
         curve.last_quintile_mean_reward,
     )
-    convergence_warning = no_improvement_streak >= 2
+    # At checkpoint 2, one non-improving transition already represents two
+    # consecutive checkpoint summaries with no reward improvement.
+    convergence_warning = no_improvement_streak >= 1
 
     _write_json(evaluation_path, _jsonable_evaluation(evaluation))
     plot_training_curve(episode_csv_path, curve_path)
