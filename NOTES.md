@@ -1,6 +1,36 @@
 # NOTES
 
-## 2026-09-09 — Observation-v2 RL checkpoint 3 (review gate)
+## 2026-09-09 — Observation-v2 RL checkpoint 4 (stop condition met)
+
+- Resumed only the ten-value checkpoint-3 model for **20,480 additional
+  timesteps**: **81,920 cumulative / 64 episodes**. Training return regressed
+  again within checkpoint 4, **-82.705691 → -86.333433** (-3.627741).
+- Fixed evaluation: still **0/9 hits**; mean/median minimum separation
+  **regressed** from **1238.474 / 1215.545 m** to
+  **1950.092 / 1634.616 m** (+57.5% / +34.5%). Mean eval return worsened
+  **-53.504263 → -61.134602**.
+- Mean control effort grew again, **131902.118 → 150763.023 m²/s³**
+  (+14.3%). Null-space characterization is unchanged and continues to grow:
+  commanded RMS 72.6 → 77.5 m/s², still ~98% along-velocity
+  (parallel 76.4 vs perpendicular 12.6 m/s² RMS), achieved lateral accel
+  flat at ~12.3 m/s², DC-dominated (~90%), no reversals, no saturation.
+  The policy keeps inflating the physically discarded along-track command.
+- Eval outcomes: **0 ground impacts / 9 timeouts / 0 hits** — the
+  altitude-observability crash suppression holds at every v2 checkpoint.
+- **Stop condition (as redefined for this checkpoint): met.** Across
+  checkpoints 3 and 4 jointly: reward shows no improvement (both
+  regressed), hit rate shows no improvement (0/9 throughout), and miss
+  distance shows no net improvement (CP2 1786.639 → CP4 1950.092; CP3's
+  gain was given back). Checkpoint 3's fixed-eval improvement now reads as
+  noise on a drifting policy rather than learning progress.
+- Saved-model reload reproduced all metrics; full suite **47 passed**.
+  **Checkpoint 5 was not started.** Candidate next steps for user decision:
+  penalize the along-track (projected-out) component or use achieved-effort
+  in the reward, add min-range or closest-approach credit so
+  close-then-flyby trajectories are not score-equivalent to loitering, or
+  restart from checkpoint 2 with a lower learning rate.
+
+ ## 2026-09-09 — Observation-v2 RL checkpoint 3 (review gate)
 
 - Resumed only the ten-value checkpoint-2 model for **20,480 additional
   timesteps**: **61,440 cumulative / 48 episodes**. Training return regressed
