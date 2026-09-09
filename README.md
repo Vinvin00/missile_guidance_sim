@@ -22,8 +22,13 @@ paper.
 Built directly in 3D with realistic dynamics from the start (gravity,
 drag, an atmosphere model, and airframe-limited maneuverability),
 rather than as a 2D kinematic scaffold to be retrofitted later. The
-ML component and FastAPI service are scaffolded as empty packages;
-see "Roadmap" below.
+ML checkpoint integration remains deferred.
+
+**Interactive visualization scaffold — done.** A FastAPI WebSocket
+streams explicitly synthetic trajectory frames into a Vite + React Three
+Fiber viewer with orbit controls, scenario/guidance selection, telemetry,
+and local playback controls. The stream contract is ready for a future
+evaluation adapter, but it does not load or evaluate an RL checkpoint.
 
 ## Architecture
 
@@ -39,14 +44,17 @@ src/guidance_sim/
 ├── guidance/
 │   ├── base.py                      # GuidanceLaw abstract interface (returns a 3D vector)
 │   └── proportional_navigation.py   # Classical PN, full 3D vector form
-├── ml/               # LSTM trajectory predictor or RL policy (not yet implemented)
+├── rl/
+│   └── environment.py  # Gymnasium wrapper (training remains on its own branch)
 ├── simulation/
 │   └── engine.py       # Simulation, SimulationConfig, SimulationResult
-├── api/              # FastAPI /simulate service (not yet implemented)
-└── visualization/    # Trajectory plotting / GIF export (not yet implemented)
+├── api/              # FastAPI catalog + synthetic WebSocket stream
+└── visualization/    # Matplotlib trajectory plotting / GIF export
 
 tests/                # Pytest suite: atmosphere, aerodynamics, dynamics/integration, PN baseline
 scripts/run_demo.py   # Manual one-off simulation runner
+frontend/             # Vite + React + R3F/Drei/Zustand interactive viewer
+docs/                 # Scenario parameter source review
 ```
 
 ## Physics model
@@ -110,19 +118,24 @@ pytest
 
 # Run a one-off demo simulation
 python scripts/run_demo.py
+
+# Start the visualization API
+uvicorn --app-dir src guidance_sim.api.main:app --reload
+
+# In a second terminal, start the interactive viewer
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Roadmap
 
 1. ~~3D physics core (gravity + drag + atmosphere + airframe limits) + PN baseline, tested~~ ✅
-2. PyTorch component — LSTM trajectory predictor feeding PN (first
-   milestone) or an RL policy (PPO via stable-baselines3) trained
-   from scratch (stretch goal)
-3. FastAPI `/simulate` endpoint returning full trajectories and
-   intercept outcomes for both PN and the ML approach
+2. RL policy training and frozen checkpoint evaluation
+3. ~~FastAPI trajectory WebSocket contract with synthetic preview~~ ✅
 4. Evaluation harness comparing PN vs. ML across target maneuverability
    levels (intercept rate, average miss distance)
-5. Visualization: matplotlib 3D trajectory animation exported as GIF
+5. ~~Interactive R3F visualization with orbit/playback controls~~ ✅
 6. Results and benchmarks written up in this README
 
 ### Possible later extension (not started)

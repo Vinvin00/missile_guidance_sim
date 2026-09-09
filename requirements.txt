@@ -5,9 +5,12 @@ matplotlib>=3.8
 pytest>=8.0
 gymnasium>=1.0,<2.0
 
+# --- Visualization service ---
+fastapi>=0.116,<1.0
+uvicorn[standard]>=0.35,<1.0
+pydantic>=2.11,<3.0
+httpx2>=2.0,<3.0
+
 # --- Later phases (not yet used) ---
-# fastapi>=0.115
-# uvicorn[standard]>=0.30
-# pydantic>=2.8
 # torch>=2.3
 # stable-baselines3>=2.3  # only if the RL-policy path is chosen over LSTM

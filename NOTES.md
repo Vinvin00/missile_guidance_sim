@@ -1,5 +1,40 @@
 # NOTES
 
+## 2026-09-09 — interactive visualization scaffold
+
+- Added a FastAPI catalog plus `/ws/trajectory` protocol:
+  `stream.start` → `stream.started` → ordered `trajectory.frame` messages →
+  `stream.completed`. Invalid start messages return `stream.error`.
+- The current data source is deliberately and visibly `synthetic`. No
+  checkpoint discovery, loading, model import, or evaluation adapter was
+  added; that work remains gated on a stable observation-v2 format.
+- Added a Vite/React viewer using the portfolio's R3F, Drei, and Zustand
+  stack. It maps simulation `[x,y,z]` metres (z-up) to Three `[x,z,-y]`
+  kilometres (y-up), supports orbit/pan/zoom, local play/pause/restart,
+  scrubbing, playback rate, telemetry, and scenario/guidance selectors.
+- Generic `Interceptor A` / `Target B` catalog values are exposed with
+  source IDs, source ranges, and `synthesized`/`illustrative` labels.
+  Full citations and conventions are in
+  `docs/scenario-parameter-sources.md`; no named system is modeled.
+- Gotcha: constant `Cd` and `Cn_max` values are reduced-order review
+  placeholders. Reference-area conventions differ (interceptor frontal area,
+  target wing area), so these values must not be mixed or presented as
+  class-wide constants.
+- Python 3.14 on this macOS worktree skips the editable install's `.pth`
+  file when that file inherits the hidden flag under `.venv`. The documented
+  Uvicorn command uses `--app-dir src`, which is deterministic and avoids
+  relying on editable-path processing.
+- Verification: baseline **42 passed**; final Python suite **54 passed**;
+  frontend **4 passed**, ESLint clean, production build successful. Browser
+  verification confirmed catalog GET 200, WebSocket acceptance, 101 rendered
+  frames, local playback, a 3.2 m synthetic closest approach, and no app error
+  overlay.
+- Non-blocking build tradeoff: the R3F/Drei vendor chunk is about 1.1 MB
+  minified (307 kB gzip), above Vite's default warning threshold. Route-level
+  lazy loading can be considered when this viewer is embedded in the wider
+  portfolio.
+- Guardrails held: no edits under `physics/`, `rl/`, or `guidance/`.
+
 ## 2026-09-09 — Step 3: lag + APN + OGL
 
 ### 3a Autopilot lag

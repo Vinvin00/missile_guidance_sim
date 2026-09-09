@@ -1,0 +1,214 @@
+"""Generic visualization scenarios backed by public reference ranges.
+
+The labels deliberately avoid real vehicle names.  ``source_ids`` map to the
+review table in ``docs/scenario-parameter-sources.md``.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from guidance_sim.api.schemas import (
+    CatalogResponse,
+    GuidanceOption,
+    ParameterValue,
+    ScenarioOption,
+    VehicleProfile,
+)
+
+
+def _parameter(
+    value: float,
+    unit: str,
+    reference_min: float,
+    reference_max: float,
+    basis: Literal["direct", "synthesized", "illustrative"],
+    *source_ids: str,
+) -> ParameterValue:
+    return ParameterValue(
+        value=value,
+        unit=unit,
+        reference_min=reference_min,
+        reference_max=reference_max,
+        basis=basis,
+        source_ids=list(source_ids),
+    )
+
+
+CATALOG = CatalogResponse(
+    scenarios=[
+        ScenarioOption(
+            id="crossing-intercept",
+            label="Crossing intercept",
+            description="Target B crosses the interceptor line of sight.",
+            initial_range_m=6_000.0,
+            altitude_m=3_300.0,
+            duration_s=10.0,
+        ),
+        ScenarioOption(
+            id="head-on-intercept",
+            label="Head-on intercept",
+            description="Interceptor A and Target B close nearly nose-to-nose.",
+            initial_range_m=6_000.0,
+            altitude_m=3_300.0,
+            duration_s=7.0,
+        ),
+        ScenarioOption(
+            id="evasive-climb",
+            label="Evasive climbing turn",
+            description="Target B adds a bounded climbing weave.",
+            initial_range_m=6_000.0,
+            altitude_m=3_300.0,
+            duration_s=12.0,
+        ),
+    ],
+    guidance_laws=[
+        GuidanceOption(
+            id="pn",
+            label="Proportional Navigation",
+            description="Synthetic trajectory shaped like the classical PN baseline.",
+        ),
+        GuidanceOption(
+            id="apn",
+            label="Augmented PN",
+            description="Synthetic preview only; no live guidance evaluation yet.",
+        ),
+        GuidanceOption(
+            id="ogl",
+            label="Optimal Guidance",
+            description="Synthetic preview only; no live guidance evaluation yet.",
+        ),
+    ],
+    vehicle_profiles=[
+        VehicleProfile(
+            name="Interceptor A",
+            role="interceptor",
+            parameters={
+                "speed": _parameter(
+                    700.0,
+                    "m/s",
+                    600.0,
+                    1_000.0,
+                    "synthesized",
+                    "GENERIC-MISSILE-1994",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                    "PN-TRAJECTORY-2022",
+                ),
+                "mass": _parameter(
+                    200.0,
+                    "kg",
+                    50.0,
+                    300.0,
+                    "synthesized",
+                    "GENERIC-MISSILE-1994",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                ),
+                "reference_area": _parameter(
+                    0.05,
+                    "m^2",
+                    0.04,
+                    0.08,
+                    "synthesized",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                ),
+                "drag_coefficient": _parameter(
+                    0.3,
+                    "dimensionless",
+                    0.2,
+                    0.4,
+                    "synthesized",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                    "ARL-GRID-FIN-2000",
+                ),
+                "max_normal_force_coefficient": _parameter(
+                    5.0,
+                    "dimensionless",
+                    4.0,
+                    6.0,
+                    "illustrative",
+                    "ARL-GRID-FIN-2000",
+                ),
+                "maneuver_limit": _parameter(
+                    25.0,
+                    "g",
+                    20.0,
+                    30.0,
+                    "synthesized",
+                    "GENERIC-MISSILE-1994",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                ),
+            },
+        ),
+        VehicleProfile(
+            name="Target B",
+            role="target",
+            parameters={
+                "speed": _parameter(
+                    240.0,
+                    "m/s",
+                    200.0,
+                    300.0,
+                    "synthesized",
+                    "FOI-ADMIRE-2005",
+                    "AIAA-CLIMB-2024",
+                    "PN-FUZZY-2020",
+                ),
+                "mass": _parameter(
+                    9_100.0,
+                    "kg",
+                    9_000.0,
+                    27_200.0,
+                    "synthesized",
+                    "FOI-ADMIRE-2005",
+                    "AIAA-CLIMB-2024",
+                ),
+                "reference_area": _parameter(
+                    45.0,
+                    "m^2",
+                    45.0,
+                    50.0,
+                    "synthesized",
+                    "FOI-ADMIRE-2005",
+                    "AIAA-CLIMB-2024",
+                ),
+                "drag_coefficient": _parameter(
+                    0.035,
+                    "dimensionless",
+                    0.03,
+                    0.05,
+                    "illustrative",
+                    "AIAA-CLIMB-2024",
+                ),
+                "max_normal_force_coefficient": _parameter(
+                    1.1,
+                    "dimensionless",
+                    1.0,
+                    1.2,
+                    "illustrative",
+                    "GENERIC-TRANSPORT-CN-2017",
+                ),
+                "maneuver_limit": _parameter(
+                    9.0,
+                    "g",
+                    3.0,
+                    9.0,
+                    "synthesized",
+                    "FOI-ADMIRE-2005",
+                    "NPS-GUIDANCE-2000",
+                    "PN-FUZZY-2020",
+                ),
+            },
+        ),
+    ],
+)
+
+
+def get_catalog() -> CatalogResponse:
+    """Return an isolated catalog object for request-safe serialization."""
+
+    return CATALOG.model_copy(deep=True)
