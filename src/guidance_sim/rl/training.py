@@ -201,6 +201,9 @@ class CaseEvaluation:
     legacy_episode_reward: float
     final_time_s: float
     control_effort_m2_s3: float
+    commanded_rms_m_s2: float
+    achieved_rms_m_s2: float
+    commanded_along_track_fraction: float
 
 
 @dataclass(frozen=True)
@@ -218,6 +221,9 @@ class EvaluationSummary:
     mean_terminal_reward: float
     mean_legacy_episode_reward: float
     mean_control_effort_m2_s3: float
+    mean_commanded_rms_m_s2: float
+    mean_achieved_rms_m_s2: float
+    mean_commanded_along_track_fraction: float
     cases: tuple[CaseEvaluation, ...]
 
 
@@ -475,6 +481,10 @@ def evaluate_policy(
             "terminal": 0.0,
         }
         control_effort = 0.0
+        commanded_energy = 0.0
+        achieved_energy = 0.0
+        along_track_energy = 0.0
+        n_accel_samples = 0
         while True:
             action, recurrent_state = model.predict(
                 observation,
@@ -483,15 +493,33 @@ def evaluate_policy(
                 deterministic=True,
             )
             action = np.asarray(action, dtype=float).reshape(-1, n_action)[0]
+            # Velocity at command issue (before the step advances the entity).
+            pursuer_velocity = np.asarray(
+                physical_env.pursuer.state.velocity, dtype=float
+            )
             observation, reward, terminated, truncated, info = env.step(action)
             episode_reward += float(reward)
             for name in reward_components:
                 reward_components[name] += float(info["reward_terms"][name])
             commanded = np.asarray(info["action_commanded_m_s2"], dtype=float)
+            achieved = np.asarray(info["action_achieved_m_s2"], dtype=float)
             control_effort += float(np.dot(commanded, commanded) * config.dt)
+            commanded_energy += float(np.dot(commanded, commanded))
+            achieved_energy += float(np.dot(achieved, achieved))
+            speed = float(np.linalg.norm(pursuer_velocity))
+            if speed > 1e-9:
+                v_hat = pursuer_velocity / speed
+                along = float(np.dot(commanded, v_hat))
+                along_track_energy += along * along
+            n_accel_samples += 1
             episode_start[:] = False
             if terminated or truncated:
                 break
+        commanded_rms = float(np.sqrt(commanded_energy / max(n_accel_samples, 1)))
+        achieved_rms = float(np.sqrt(achieved_energy / max(n_accel_samples, 1)))
+        along_fraction = float(
+            along_track_energy / commanded_energy if commanded_energy > 1e-18 else 0.0
+        )
         results.append(
             CaseEvaluation(
                 name=case.name,
@@ -506,6 +534,9 @@ def evaluate_policy(
                 legacy_episode_reward=float(info.get("legacy_episode_reward", 0.0)),
                 final_time_s=float(info["time_s"]),
                 control_effort_m2_s3=control_effort,
+                commanded_rms_m_s2=commanded_rms,
+                achieved_rms_m_s2=achieved_rms,
+                commanded_along_track_fraction=along_fraction,
             )
         )
         env.close()
@@ -517,6 +548,11 @@ def evaluate_policy(
     terminal_rewards = np.array([result.terminal_reward for result in results])
     legacy_rewards = np.array([result.legacy_episode_reward for result in results])
     efforts = np.array([result.control_effort_m2_s3 for result in results])
+    commanded_rms = np.array([result.commanded_rms_m_s2 for result in results])
+    achieved_rms = np.array([result.achieved_rms_m_s2 for result in results])
+    along_frac = np.array(
+        [result.commanded_along_track_fraction for result in results]
+    )
     n_hits = sum(result.hit for result in results)
     n_ground_impacts = sum(result.outcome == "miss" for result in results)
     n_timeouts = sum(result.outcome == "timeout" for result in results)
@@ -534,6 +570,9 @@ def evaluate_policy(
         mean_terminal_reward=float(np.mean(terminal_rewards)),
         mean_legacy_episode_reward=float(np.mean(legacy_rewards)),
         mean_control_effort_m2_s3=float(np.mean(efforts)),
+        mean_commanded_rms_m_s2=float(np.mean(commanded_rms)),
+        mean_achieved_rms_m_s2=float(np.mean(achieved_rms)),
+        mean_commanded_along_track_fraction=float(np.mean(along_frac)),
         cases=tuple(results),
     )
 
@@ -613,26 +652,41 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 def _previous_no_improvement_streak(
     output_dir: Path,
     checkpoint_index: int,
-    current_reward: float | None,
+    evaluation: EvaluationSummary,
 ) -> int:
-    if checkpoint_index <= 1 or current_reward is None:
+    """Count consecutive checkpoints with no joint improvement.
+
+    Improvement requires at least one of: higher eval return, lower mean miss,
+    or higher hit rate (beyond small tolerances). Two consecutive non-improving
+    transitions raise the convergence flag.
+    """
+
+    if checkpoint_index <= 1:
         return 0
     previous_path = output_dir / f"rl_checkpoint_{checkpoint_index - 1:02d}.json"
     if not previous_path.exists():
         return 0
     previous = json.loads(previous_path.read_text(encoding="utf-8"))
-    previous_reward = previous["curve"]["last_quintile_mean_reward"]
     previous_streak = int(previous.get("no_improvement_streak", 0))
-    if previous_reward is None:
+    prev_eval = previous.get("evaluation", {})
+    prev_reward = prev_eval.get("mean_episode_reward")
+    prev_miss = prev_eval.get("mean_miss_distance_m")
+    prev_hits = prev_eval.get("n_hits")
+    if prev_reward is None or prev_miss is None or prev_hits is None:
         return 0
-    threshold = max(1.0, 0.02 * abs(float(previous_reward)))
-    improved = current_reward > float(previous_reward) + threshold
+    reward_threshold = max(1.0, 0.02 * abs(float(prev_reward)))
+    miss_threshold = max(1.0, 0.02 * abs(float(prev_miss)))
+    reward_improved = evaluation.mean_episode_reward > float(prev_reward) + reward_threshold
+    miss_improved = evaluation.mean_miss_distance_m < float(prev_miss) - miss_threshold
+    hit_improved = evaluation.n_hits > int(prev_hits)
+    improved = reward_improved or miss_improved or hit_improved
     return 0 if improved else previous_streak + 1
 
 
 def _validate_previous_observation_contract(
     output_dir: Path,
     checkpoint_index: int,
+    config: PPOTrainingConfig,
 ) -> None:
     metadata_path = output_dir / f"rl_checkpoint_{checkpoint_index - 1:02d}.json"
     if not metadata_path.exists():
@@ -644,6 +698,12 @@ def _validate_previous_observation_contract(
     if previous_names != OBSERVATION_NAMES:
         raise ValueError(
             "preceding checkpoint uses an incompatible observation contract; "
+            "restart from checkpoint 1"
+        )
+    previous_layout = metadata.get("action_layout")
+    if previous_layout is not None and previous_layout != config.action_layout:
+        raise ValueError(
+            "preceding checkpoint uses an incompatible action layout; "
             "restart from checkpoint 1"
         )
 
@@ -667,7 +727,9 @@ def _append_progress(
             "the physical 25 g environment action before dynamics\n"
             f"- Action layout: `{config.action_layout}`\n"
             f"- Domain randomization: {config.domain_randomization} "
-            "(first retrain after reward redesign must remain false)\n"
+            "(must remain false for this retrain)\n"
+            "- Reward: ZEM PBRS shaping (w=50) + closest-approach terminal "
+            "+ achieved-effort; legacy Phase-1 reward logged in parallel\n"
             f"- Fixed budget: {config.total_timesteps:,} timesteps in "
             f"{config.total_checkpoints} checkpoints of "
             f"{config.timesteps_per_checkpoint:,}\n"
@@ -712,6 +774,11 @@ def _append_progress(
         f"{evaluation.mean_legacy_episode_reward:.6f}",
         "- Fixed-eval mean control effort: "
         f"{evaluation.mean_control_effort_m2_s3:.6f} m²/s³",
+        "- Fixed-eval mean commanded/achieved RMS accel: "
+        f"{evaluation.mean_commanded_rms_m_s2:.3f} / "
+        f"{evaluation.mean_achieved_rms_m_s2:.3f} m/s²",
+        "- Fixed-eval mean commanded along-track energy fraction: "
+        f"{evaluation.mean_commanded_along_track_fraction:.6f}",
         "- Fixed-eval outcomes (ground impact/timeout/hit): "
         f"{evaluation.n_ground_impacts}/{evaluation.n_timeouts}/"
         f"{evaluation.n_hits}",
@@ -750,7 +817,7 @@ def run_checkpoint(
     if checkpoint_index > 1 and not previous_path.exists():
         raise FileNotFoundError(f"required preceding checkpoint is missing: {previous_path}")
     if checkpoint_index > 1:
-        _validate_previous_observation_contract(output_dir, checkpoint_index)
+        _validate_previous_observation_contract(output_dir, checkpoint_index, config)
 
     episode_csv_path = output_dir / "training_episodes.csv"
     curve_path = output_dir / "training_curve.png"
@@ -810,10 +877,11 @@ def run_checkpoint(
     no_improvement_streak = _previous_no_improvement_streak(
         output_dir,
         checkpoint_index,
-        curve.last_quintile_mean_reward,
+        evaluation,
     )
     # At checkpoint 2, one non-improving transition already represents two
-    # consecutive checkpoint summaries with no reward improvement.
+    # consecutive checkpoint summaries with no joint improvement on
+    # reward / miss / hit rate.
     convergence_warning = no_improvement_streak >= 1
 
     _write_json(evaluation_path, _jsonable_evaluation(evaluation))

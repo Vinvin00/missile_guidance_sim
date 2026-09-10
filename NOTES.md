@@ -1,5 +1,41 @@
 # NOTES
 
+## 2026-09-10 — From-scratch retrain CP1 (lateral2 + new reward)
+
+### Annealing clarification (before training)
+
+Frozen `RewardConfig.terminal_weight` is already **1.0**. The earlier
+fallback that raised `0.5 → 1.0` would be a no-op under this freeze, and
+with 0/9 hits for four prior checkpoints the `<10%` band is the expected
+path. Revised fallback (**not applied**; train under current freeze):
+
+- Trigger: two consecutive checkpoints with `hit_rate < 0.10` **and** no
+  mean-miss improvement.
+- Action: keep `terminal_weight=1.0`; **raise `effort_weight` 5 → 15** so
+  wasteful lateral chatter becomes visible; optionally lower
+  `shaping_weight` 50 → 35 only if shaping share exceeds ~40% of
+  `|reward|` while miss stalls. Do not touch the terminal scale.
+
+### Checkpoint 1
+
+- Fresh run (not a resume). Old world3/v2 artifacts archived under
+  `outputs/archive/observation_v2_world3/`.
+- Contract: obs v2 (10), `lateral2`, domain randomization OFF, frozen
+  9-case eval, seed `20260909`.
+- **20,480 steps / 16 episodes.** Train return improved within CP1:
+  **-53.655 → -51.662** (+1.993).
+- Fixed eval: still **0/9 hits**, but mean/median miss
+  **549.644 / 327.484 m** (old v2 CP1 was 2638.7 / 2618.8 m).
+- New return **-14.544** (shaping 25.274 / effort −0.364 / terminal −39.454);
+  legacy diagnostic **-46.323**.
+- Control effort **4429** m²/s³. Commanded/achieved RMS **12.86 / 12.76**
+  m/s²; along-track energy fraction **~0** (null space gone).
+- Outcomes: **0 ground / 9 timeout / 0 hit**.
+- Saved-model reload reproduced metrics; full suite **56 passed**.
+  **Checkpoint 2 not started.**
+
+## 2026-09-10 — t_go continuity at closing/receding boundary (no retrain)
+
 ## 2026-09-10 — t_go continuity at closing/receding boundary (no retrain)
 
 ### Quantification (pre-fix)
