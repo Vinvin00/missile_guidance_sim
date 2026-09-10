@@ -6,10 +6,12 @@ evaluates it on the same nine deterministic engagements, updates the training
 curve, and exits.  A later checkpoint resumes from the preceding model without
 overwriting any artifact.
 
-The public ``InterceptionEnv`` action remains a physical world-frame command
-bounded at 25 g.  PPO sees a standard ``[-1, 1]^3`` wrapper which linearly
-maps each component to that physical bound; the environment still applies its
-radial norm limit and the existing lag/aerodynamic/structural clamps.
+The public ``InterceptionEnv`` action defaults to a two-component lateral
+command in the velocity-normal plane, boxed at 25 g per component and then
+radially clipped in world axes.  PPO sees ``[-1, 1]^2``.  Archived
+three-component policies replay through ``action_layout="world3"``.  Domain
+randomization exists but is off by default so the first retrain stays on
+the frozen training distribution.
 """
 
 from __future__ import annotations
@@ -36,6 +38,15 @@ from guidance_sim.physics.maneuvers import (
     NoManeuver,
     SinusoidalWeave,
 )
+from guidance_sim.rl.actions import (
+    ACTION_LAYOUT_LATERAL2,
+    ActionLayout,
+    action_dimension,
+)
+from guidance_sim.rl.domain_randomization import (
+    randomized_initial_conditions,
+    randomized_maneuver_factory,
+)
 from guidance_sim.rl.environment import OBSERVATION_NAMES, InterceptionEnv
 from guidance_sim.simulation.engine import SimulationConfig
 
@@ -60,10 +71,14 @@ class PPOTrainingConfig:
     gae_lambda: float = 0.95
     ent_coef: float = 1.0e-3
     lstm_hidden_size: int = 64
+    domain_randomization: bool = False
+    action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2
 
     def __post_init__(self) -> None:
         if self.total_checkpoints != 5:
             raise ValueError("Phase 2 requires exactly five checkpoints")
+        if self.action_layout not in ("lateral2", "world3"):
+            raise ValueError("action_layout must be 'lateral2' or 'world3'")
         if self.timesteps_per_checkpoint <= 0 or self.n_envs <= 0:
             raise ValueError("training timesteps and environment count must be positive")
         rollout_size = self.n_steps * self.n_envs
@@ -183,6 +198,7 @@ class CaseEvaluation:
     progress_reward: float
     effort_penalty: float
     terminal_reward: float
+    legacy_episode_reward: float
     final_time_s: float
     control_effort_m2_s3: float
 
@@ -200,6 +216,7 @@ class EvaluationSummary:
     mean_progress_reward: float
     mean_effort_penalty: float
     mean_terminal_reward: float
+    mean_legacy_episode_reward: float
     mean_control_effort_m2_s3: float
     cases: tuple[CaseEvaluation, ...]
 
@@ -328,17 +345,25 @@ def make_training_vec_env(
 
     run_seed = config.seed + 10_000 * (checkpoint_index - 1)
     set_random_seed(run_seed)
+    n_action = action_dimension(config.action_layout)
+    if config.domain_randomization:
+        initial_condition_sampler = randomized_initial_conditions
+        maneuver_factory = randomized_maneuver_factory
+    else:
+        initial_condition_sampler = training_initial_conditions
+        maneuver_factory = training_maneuver_factory
 
     def make_env() -> gym.Env:
         physical_env = InterceptionEnv(
             config=config.simulation_config(),
-            initial_condition_sampler=training_initial_conditions,
-            maneuver_factory=training_maneuver_factory,
+            initial_condition_sampler=initial_condition_sampler,
+            maneuver_factory=maneuver_factory,
+            action_layout=config.action_layout,
         )
         return gym.wrappers.RescaleAction(
             physical_env,
-            min_action=np.full(3, -1.0, dtype=np.float32),
-            max_action=np.full(3, 1.0, dtype=np.float32),
+            min_action=np.full(n_action, -1.0, dtype=np.float32),
+            max_action=np.full(n_action, 1.0, dtype=np.float32),
         )
 
     vec_env = DummyVecEnv([make_env for _ in range(config.n_envs)])
@@ -358,6 +383,7 @@ class EpisodeCSVCallback(BaseCallback):
         "outcome",
         "min_range_m",
         "final_time_s",
+        "legacy_episode_reward",
     )
 
     def __init__(self, path: Path, checkpoint_index: int) -> None:
@@ -384,6 +410,9 @@ class EpisodeCSVCallback(BaseCallback):
                 "outcome": str(info.get("outcome", "unknown")),
                 "min_range_m": float(info.get("min_range_m", np.nan)),
                 "final_time_s": float(info.get("time_s", np.nan)),
+                "legacy_episode_reward": float(
+                    info.get("legacy_episode_reward", np.nan)
+                ),
             }
             self.rows.append(row)
             _append_csv_row(self.path, self.fieldnames, row)
@@ -417,21 +446,24 @@ def evaluate_policy(
     cases: Sequence[EvaluationCase] = FIXED_EVALUATION_CASES,
     simulation_config: SimulationConfig | None = None,
     seed: int = 91_000,
+    action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
 ) -> EvaluationSummary:
     """Evaluate a policy on the immutable, ordered scenario set."""
 
     config = simulation_config or PPOTrainingConfig().simulation_config()
+    n_action = action_dimension(action_layout)
     results: list[CaseEvaluation] = []
     for case_index, case in enumerate(cases):
         physical_env = InterceptionEnv(
             config=config,
             initial_condition_sampler=_case_initial_conditions(case),
             maneuver_factory=_case_maneuver(case),
+            action_layout=action_layout,
         )
         env = gym.wrappers.RescaleAction(
             physical_env,
-            min_action=np.full(3, -1.0, dtype=np.float32),
-            max_action=np.full(3, 1.0, dtype=np.float32),
+            min_action=np.full(n_action, -1.0, dtype=np.float32),
+            max_action=np.full(n_action, 1.0, dtype=np.float32),
         )
         observation, info = env.reset(seed=seed + case_index)
         recurrent_state: Any = None
@@ -450,7 +482,7 @@ def evaluate_policy(
                 episode_start=episode_start,
                 deterministic=True,
             )
-            action = np.asarray(action, dtype=float).reshape(-1, 3)[0]
+            action = np.asarray(action, dtype=float).reshape(-1, n_action)[0]
             observation, reward, terminated, truncated, info = env.step(action)
             episode_reward += float(reward)
             for name in reward_components:
@@ -471,6 +503,7 @@ def evaluate_policy(
                 progress_reward=reward_components["progress"],
                 effort_penalty=reward_components["effort"],
                 terminal_reward=reward_components["terminal"],
+                legacy_episode_reward=float(info.get("legacy_episode_reward", 0.0)),
                 final_time_s=float(info["time_s"]),
                 control_effort_m2_s3=control_effort,
             )
@@ -482,6 +515,7 @@ def evaluate_policy(
     progress_rewards = np.array([result.progress_reward for result in results])
     effort_penalties = np.array([result.effort_penalty for result in results])
     terminal_rewards = np.array([result.terminal_reward for result in results])
+    legacy_rewards = np.array([result.legacy_episode_reward for result in results])
     efforts = np.array([result.control_effort_m2_s3 for result in results])
     n_hits = sum(result.hit for result in results)
     n_ground_impacts = sum(result.outcome == "miss" for result in results)
@@ -498,6 +532,7 @@ def evaluate_policy(
         mean_progress_reward=float(np.mean(progress_rewards)),
         mean_effort_penalty=float(np.mean(effort_penalties)),
         mean_terminal_reward=float(np.mean(terminal_rewards)),
+        mean_legacy_episode_reward=float(np.mean(legacy_rewards)),
         mean_control_effort_m2_s3=float(np.mean(efforts)),
         cases=tuple(results),
     )
@@ -627,8 +662,12 @@ def _append_progress(
             f"- Algorithm: recurrent PPO (`MlpLstmPolicy`, 64 hidden units)\n"
             f"- Observation: {len(OBSERVATION_NAMES)} values "
             f"(`{', '.join(OBSERVATION_NAMES)}`)\n"
-            "- Policy action: normalized `[-1, 1]^3`, rescaled to the unchanged "
-            "physical 25 g environment action before dynamics\n"
+            "- Policy action: normalized "
+            f"`[-1, 1]^{action_dimension(config.action_layout)}`, rescaled to "
+            "the physical 25 g environment action before dynamics\n"
+            f"- Action layout: `{config.action_layout}`\n"
+            f"- Domain randomization: {config.domain_randomization} "
+            "(first retrain after reward redesign must remain false)\n"
             f"- Fixed budget: {config.total_timesteps:,} timesteps in "
             f"{config.total_checkpoints} checkpoints of "
             f"{config.timesteps_per_checkpoint:,}\n"
@@ -666,9 +705,11 @@ def _append_progress(
         f"{evaluation.median_miss_distance_m:.3f} m",
         f"- Fixed-eval mean episode reward: {evaluation.mean_episode_reward:.6f}",
         "- Fixed-eval mean reward components "
-        f"(progress/effort/terminal): {evaluation.mean_progress_reward:.6f} / "
+        f"(shaping/effort/terminal): {evaluation.mean_progress_reward:.6f} / "
         f"{evaluation.mean_effort_penalty:.6f} / "
         f"{evaluation.mean_terminal_reward:.6f}",
+        f"- Fixed-eval mean legacy episode reward: "
+        f"{evaluation.mean_legacy_episode_reward:.6f}",
         "- Fixed-eval mean control effort: "
         f"{evaluation.mean_control_effort_m2_s3:.6f} m²/s³",
         "- Fixed-eval outcomes (ground impact/timeout/hit): "
@@ -762,6 +803,7 @@ def run_checkpoint(
     evaluation = evaluate_policy(
         model,
         simulation_config=config.simulation_config(),
+        action_layout=config.action_layout,
     )
     total_episodes = _count_csv_rows(episode_csv_path)
     curve = _curve_summary(callback.rows, total_episodes)
@@ -794,6 +836,8 @@ def run_checkpoint(
             "checkpoint_index": checkpoint_index,
             "cumulative_timesteps": cumulative_timesteps,
             "observation_names": list(OBSERVATION_NAMES),
+            "action_layout": config.action_layout,
+            "domain_randomization": config.domain_randomization,
             "config": asdict(config),
             "curve": asdict(curve),
             "evaluation": _jsonable_evaluation(evaluation),

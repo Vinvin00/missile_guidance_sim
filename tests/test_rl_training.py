@@ -39,7 +39,7 @@ class _ZeroRecurrentPolicy:
     ):
         del observation, deterministic
         self.episode_starts.append(bool(episode_start[0]))
-        return np.zeros(3, dtype=np.float32), state
+        return np.zeros(2, dtype=np.float32), state
 
 
 def test_training_samplers_are_seeded_and_mix_all_required_profiles():
@@ -109,11 +109,12 @@ def test_ppo_action_wrapper_rescales_to_physical_limit_before_dynamics():
     )
     vec_env = make_training_vec_env(config, checkpoint_index=1)
     try:
-        np.testing.assert_array_equal(vec_env.action_space.low, -np.ones(3))
-        np.testing.assert_array_equal(vec_env.action_space.high, np.ones(3))
+        np.testing.assert_array_equal(vec_env.action_space.low, -np.ones(2))
+        np.testing.assert_array_equal(vec_env.action_space.high, np.ones(2))
         vec_env.reset()
-        _, _, _, infos = vec_env.step(np.ones((1, 3), dtype=np.float32))
+        _, _, _, infos = vec_env.step(np.ones((1, 2), dtype=np.float32))
         commanded = np.asarray(infos[0]["action_commanded_m_s2"])
+        assert commanded.shape == (3,)
         assert np.linalg.norm(commanded) == pytest.approx(25.0 * 9.80665)
     finally:
         vec_env.close()
@@ -178,6 +179,8 @@ def test_training_budget_is_exactly_five_equal_checkpoints():
     assert config.total_checkpoints == 5
     assert config.total_timesteps == 102_400
     assert config.timesteps_per_checkpoint * 5 == config.total_timesteps
+    assert config.domain_randomization is False
+    assert config.action_layout == "lateral2"
 
     with pytest.raises(ValueError, match="exactly five"):
         PPOTrainingConfig(total_checkpoints=4)

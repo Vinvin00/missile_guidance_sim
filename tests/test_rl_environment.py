@@ -7,6 +7,7 @@ import pytest
 
 from guidance_sim.physics.entities import State
 from guidance_sim.physics.maneuvers import SinusoidalWeave
+from guidance_sim.rl.actions import world_to_lateral
 from guidance_sim.rl.environment import (
     ALTITUDE_RATE_SCALE_M_S,
     ALTITUDE_SCALE_M,
@@ -29,6 +30,10 @@ def _assert_observation_contract(
     assert np.all(np.isfinite(observation))
 
 
+def _zero_action(env: InterceptionEnv) -> np.ndarray:
+    return np.zeros(env.action_space.shape, dtype=np.float32)
+
+
 def test_reset_and_step_match_gymnasium_contract():
     env = InterceptionEnv(
         config=SimulationConfig(dt=0.02, max_time=1.0, autopilot_tau=0.2)
@@ -36,10 +41,11 @@ def test_reset_and_step_match_gymnasium_contract():
 
     observation, info = env.reset(seed=17)
     _assert_observation_contract(env, observation)
-    assert env.action_space.shape == (3,)
+    assert env.action_space.shape == (2,)
     assert env.action_space.dtype == np.float32
     assert info["outcome"] == "ongoing"
     assert info["range_m"] > 0.0
+    assert info["action_layout"] == "lateral2"
     assert OBSERVATION_NAMES == (
         "los_unit_x",
         "los_unit_y",
@@ -72,14 +78,17 @@ def test_reset_and_step_match_gymnasium_contract():
     np.testing.assert_array_equal(observation, expected)
 
     next_observation, reward, terminated, truncated, next_info = env.step(
-        np.zeros(3, dtype=np.float32)
+        _zero_action(env)
     )
     _assert_observation_contract(env, next_observation)
     assert np.isfinite(reward)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)
+    assert next_info["action_requested_m_s2"].shape == (2,)
     assert next_info["action_commanded_m_s2"].shape == (3,)
     assert next_info["action_achieved_m_s2"].shape == (3,)
+    assert "legacy_reward" in next_info
+    assert "legacy_episode_reward" in next_info
 
 
 def test_action_flows_through_norm_bound_lag_and_dynamics_clamp():
@@ -104,16 +113,20 @@ def test_action_flows_through_norm_bound_lag_and_dynamics_clamp():
     assert np.linalg.norm(commanded) == pytest.approx(
         env.action_limit_m_s2, rel=1e-12
     )
+    velocity_unit = velocity_at_issue / np.linalg.norm(velocity_at_issue)
+    assert abs(float(np.dot(commanded, velocity_unit))) < 1e-7
     assert np.linalg.norm(achieved) < np.linalg.norm(commanded)
     assert np.linalg.norm(achieved) <= env.action_limit_m_s2 + 1e-9
     assert abs(float(np.dot(velocity_at_issue, achieved))) < 1e-7
     lag_fraction = 1.0 - np.exp(-dt / tau)
-    velocity_unit = velocity_at_issue / np.linalg.norm(velocity_at_issue)
-    expected_achieved = lag_fraction * (
-        commanded - np.dot(commanded, velocity_unit) * velocity_unit
-    )
+    expected_achieved = lag_fraction * commanded
     np.testing.assert_allclose(achieved, expected_achieved, rtol=1e-10, atol=1e-10)
-    assert info["reward_terms"]["effort"] == pytest.approx(-dt)
+    expected_effort = (
+        -env.reward_config.effort_weight
+        * dt
+        * (float(np.linalg.norm(achieved)) / env.action_limit_m_s2) ** 2
+    )
+    assert info["reward_terms"]["effort"] == pytest.approx(expected_effort)
 
 
 def _rollout(
@@ -140,15 +153,17 @@ def test_direct_intercept_scores_above_wandering_wasteful_control():
         autopilot_tau=0.2,
     )
 
-    def pn_policy(_env: InterceptionEnv, info: dict[str, object]) -> np.ndarray:
-        return (
+    def pn_policy(env: InterceptionEnv, info: dict[str, object]) -> np.ndarray:
+        world = (
             4.0
             * float(info["closing_velocity_m_s"])
             * np.cross(info["los_rate_rad_s"], info["los_unit"])
         )
+        assert env.pursuer is not None
+        return world_to_lateral(world, env.pursuer.state.velocity)
 
     def wandering_policy(env: InterceptionEnv, _info: dict[str, object]) -> np.ndarray:
-        return np.array([0.0, env.action_limit_m_s2, 0.0])
+        return np.array([env.action_limit_m_s2, 0.0])
 
     direct = _rollout(InterceptionEnv(config=config), pn_policy)
     wandering = _rollout(InterceptionEnv(config=config), wandering_policy)
@@ -177,7 +192,7 @@ def test_hit_is_terminated_not_truncated():
         initial_condition_sampler=_near_hit_sampler,
     )
     env.reset(seed=0)
-    observation, reward, terminated, truncated, info = env.step(np.zeros(3))
+    observation, reward, terminated, truncated, info = env.step(_zero_action(env))
     _assert_observation_contract(env, observation)
 
     assert terminated
@@ -185,7 +200,10 @@ def test_hit_is_terminated_not_truncated():
     assert info["outcome"] == "hit"
     assert info["termination_reason"] == "intercept"
     assert info["reward_terms"]["terminal"] == pytest.approx(100.0)
-    assert reward > 100.0
+    assert reward > 50.0
+    assert info["legacy_reward"] == pytest.approx(
+        info["reward_terms"]["legacy_total"]
+    )
 
 
 def _ground_miss_sampler(_rng: np.random.Generator) -> tuple[State, State]:
@@ -208,12 +226,16 @@ def test_ground_impact_is_physical_miss_and_timeout_is_truncation():
         initial_condition_sampler=_ground_miss_sampler,
     )
     miss_env.reset(seed=0)
-    observation, _, terminated, truncated, info = miss_env.step(np.zeros(3))
+    observation, _, terminated, truncated, info = miss_env.step(_zero_action(miss_env))
     _assert_observation_contract(miss_env, observation)
     assert terminated and not truncated
     assert info["outcome"] == "miss"
     assert info["termination_reason"] == "pursuer_ground_impact"
-    assert info["reward_terms"]["terminal"] == pytest.approx(-100.0)
+    expected_terminal = -100.0 * np.tanh(
+        float(info["min_range_m"]) / miss_env.reward_config.miss_tanh_scale_m
+    )
+    assert info["reward_terms"]["terminal"] == pytest.approx(expected_terminal)
+    assert info["reward_terms"]["legacy_terminal"] == pytest.approx(-100.0)
     assert observation[-2] == pytest.approx(0.0)
     assert info["height_above_ground_m"] <= 0.0
 
@@ -223,15 +245,21 @@ def test_ground_impact_is_physical_miss_and_timeout_is_truncation():
     )
     observation, _ = timeout_env.reset(seed=0)
     _assert_observation_contract(timeout_env, observation)
-    observation, _, terminated, truncated, _ = timeout_env.step(np.zeros(3))
+    observation, _, terminated, truncated, _ = timeout_env.step(_zero_action(timeout_env))
     _assert_observation_contract(timeout_env, observation)
     assert not terminated and not truncated
-    observation, _, terminated, truncated, info = timeout_env.step(np.zeros(3))
+    observation, _, terminated, truncated, info = timeout_env.step(
+        _zero_action(timeout_env)
+    )
     _assert_observation_contract(timeout_env, observation)
     assert not terminated and truncated
     assert info["outcome"] == "timeout"
     assert info["termination_reason"] == "time_limit"
-    assert info["reward_terms"]["terminal"] == pytest.approx(-100.0)
+    expected_timeout = -100.0 * np.tanh(
+        float(info["min_range_m"]) / timeout_env.reward_config.miss_tanh_scale_m
+    )
+    assert info["reward_terms"]["terminal"] == pytest.approx(expected_timeout)
+    assert info["reward_terms"]["legacy_terminal"] == pytest.approx(-100.0)
 
 
 def test_seeded_reset_is_deterministic_and_constructs_fresh_episode_objects():
@@ -264,7 +292,7 @@ def test_seeded_reset_is_deterministic_and_constructs_fresh_episode_objects():
     pursuer_a = env.pursuer
     target_a = env.target
     maneuver_a = env.target_maneuver
-    env.step(np.array([0.0, 20.0, 0.0]))
+    env.step(np.array([0.0, 20.0]))
 
     observation_b, _ = env.reset(seed=99)
     _assert_observation_contract(env, observation_b)

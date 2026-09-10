@@ -1,5 +1,78 @@
 # NOTES
 
+## 2026-09-10 — Reward redesign + offline validation (no retrain)
+
+Gate **failed**. No retrain. Weights were not retuned after seeing the
+gate.
+
+### 1. Action space (isolated to the RL wrapper)
+
+`GuidanceLaw.compute_command` stays world-frame `(3,)`. `clamp_lateral_command`
+and `PointMassEntity.step` were not edited. Training now uses `lateral2`: a
+2-vector on an orthonormal basis of the velocity-normal plane, radially
+clipped at 25 g, then passed to `entity.step`. Archived 3D policies replay
+through `action_layout="world3"`. Frozen PN/APN/OGL code is untouched.
+
+### 2. Reward
+
+- Dense: PBRS `shaping_weight * (γ Φ(s′) − Φ(s))` with `γ = 1` so logged
+  undiscounted returns telescope. `Φ = −ZEM / (ZEM + 500 m) ∈ (−1, 0]`,
+  identically 0 at hit/miss/timeout/ground. Bounded form is required:
+  unbounded `−ZEM/scale` plus Φ=0 at timeout paid out kilometres of residual
+  miss as a bonus that beat true intercepts.
+- Terminal: `+100` on hit; otherwise
+  `−100 * tanh(closest_approach / 1000 m)` using episode-minimum range.
+- Effort: `−5 * dt * (||a_achieved|| / a_structural)²` (post-clamp). The
+  along-track exploit is removed structurally; this term is intentionally
+  small.
+- Phase-1 reward is logged in parallel as `legacy_*` / `legacy_episode_reward`.
+
+### 3. ZEM safeguards
+
+Kinematic ZEM only (`r + v t_go`, no target accel, no LOS rate). Closing:
+`t_go = min(range/Vc, 25 s)` when `Vc > 1 m/s`. Receding: fixed 5 s horizon.
+Range ≤ intercept radius → ZEM = 0. Episode clock is **not** used as a
+`t_go` cap (that made Φ a function of `max_time` and inflated ZEM near
+timeout). Unit tests: receding target, near-zero range.
+
+### 4. Term shares (representative classical + flyby/loiter set)
+
+| term | mean |abs| | share |
+|---|---|---|
+| shaping | 25.03 | 21.2% |
+| effort | 3.22 | 2.3% |
+| terminal | 93.62 | 76.5% |
+
+Effort is still small. That is the 2D-action design, not a guess after the
+gate. Proposed annealing (not applied): keep `shaping_weight=50` until hit
+rate > 10%, then `terminal_weight` 0.5 → 1.0; after 40% hit rate drop
+`shaping_weight` to 15.
+
+### 5. Domain randomization
+
+Implemented (`randomized_initial_conditions` / `randomized_maneuver_factory`),
+**default off**. `PPOTrainingConfig.domain_randomization is False`. The 9-case
+eval set is unchanged.
+
+### 6. Offline validation
+
+- **Gate 1 PASS.** PN/APN/OGL demo intercepts ~125 vs same-IC forced-timeout
+  misses ~−67 to −80.
+- **Gate 2 FAIL.** 9-case replay of v2 CP2/3/4 (`world3`): CP2 **−65.79**,
+  CP3 **−52.31** (13.48 *better*), CP4 **−68.47** (only 2.68 worse, below the
+  10-point “clearly worse” margin). Shaping is identical across the three
+  (~25.27) because they share ICs and Φ_T=0; the ranking is closest-approach
+  terminal. CP3’s 1238 m mean miss beats CP2’s 1787 m. Achieved-effort is
+  ~−0.3 at all three; along-track command waste is not in the new cost.
+- **Gate 3 PASS.** Same-IC ballistic flyby **−21.85** (min range 509 m) vs
+  max-g turn-away loiter **−95.53** (min range 6070 m).
+
+Stopped here. Do not retrain until the gate is redesigned or explicitly
+waived.
+
+Full suite **55 passed**. Artifact:
+`outputs/reward_redesign_validation.json`.
+
 ## 2026-09-09 — Observation-v2 RL checkpoint 4 (stop condition met)
 
 - Resumed only the ten-value checkpoint-3 model for **20,480 additional

@@ -23,29 +23,28 @@ Height above the environment's configurable ground plane is more useful than
 raw world ``z`` when ``ground_altitude_m`` is nonzero.  It and pursuer vertical
 speed make ground proximity observable without changing the physics model.
 
-The action is a world-frame acceleration request in m/s^2 with shape ``(3,)``.
-Its Euclidean norm is radially projected to the pursuer structural limit
-(``max_load_factor * g0``).  The resulting command is then passed unchanged
-to :meth:`PointMassEntity.step`, which applies the existing first-order
-autopilot lag, velocity-normal projection, aerodynamic limit, structural
-limit, and configured integrator.
+The default action (``lateral2``) is a two-component coefficient vector on an
+orthonormal basis of the velocity-normal plane, in m/s^2.  Each component is
+boxed at the pursuer structural limit; the reconstructed world-frame command
+is then radially clipped to that same limit.  The along-track null space of
+``clamp_lateral_command`` is therefore not representable.  This mapping lives
+only in the RL wrapper: ``GuidanceLaw.compute_command`` is still a world-frame
+``(3,)`` vector, and ``PointMassEntity.step`` is unchanged.
 
-Reward per step is:
+``action_layout="world3"`` restores the Phase-1/2 three-component world-frame
+action so archived 3D policies can be replayed.  The world command is still
+passed to ``PointMassEntity.step``, which applies lag, velocity-normal
+projection, aerodynamic/structural clamps, and the configured integrator.
 
-``(R_before - R_after) / 100 m
-  - 1.0 * dt * (||a_commanded|| / a_structural_max)**2
-  + terminal_term``
-
-where ``terminal_term`` is ``+100`` for intercept and ``-100`` for either a
-physical miss (ground impact) or timeout.  Effort uses the norm-bounded
-command before lag/clamp so a policy cannot avoid cost by demanding control
-that the actuator cannot achieve.  Multiplication by ``dt`` makes this an
-integrated effort cost rather than a control-rate-dependent per-step cost.
+Reward per step is potential-based ZEM shaping plus closest-approach terminal
+plus a small cost on **achieved** (post-clamp) lateral acceleration.  The
+Phase-1 range-progress / commanded-effort / ±100 terminal reward is attached
+as ``legacy_*`` diagnostics and is not part of the env return.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Callable
 
 import gymnasium as gym
@@ -55,6 +54,15 @@ import numpy as np
 from guidance_sim.physics.atmosphere import G0
 from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import ManeuverProfile, NoManeuver
+from guidance_sim.rl.actions import (
+    ACTION_LAYOUT_LATERAL2,
+    ACTION_LAYOUT_WORLD3,
+    ActionLayout,
+    action_dimension,
+    lateral_to_world,
+)
+from guidance_sim.rl.reward import RewardConfig, compute_reward
+from guidance_sim.rl.zem import potential_from_zem, predicted_miss_m
 from guidance_sim.simulation.engine import SimulationConfig
 
 LOS_RATE_SCALE_RAD_S = 0.1
@@ -79,28 +87,6 @@ OBSERVATION_NAMES = (
 
 InitialConditionSampler = Callable[[np.random.Generator], tuple[State, State]]
 ManeuverFactory = Callable[[np.random.Generator], ManeuverProfile]
-
-
-@dataclass(frozen=True)
-class RewardConfig:
-    """Numerically conservative Phase-1 reward scales."""
-
-    progress_scale_m: float = 100.0
-    effort_weight: float = 1.0
-    intercept_bonus: float = 100.0
-    miss_penalty: float = 100.0
-    timeout_penalty: float = 100.0
-
-    def __post_init__(self) -> None:
-        values = (
-            self.progress_scale_m,
-            self.effort_weight,
-            self.intercept_bonus,
-            self.miss_penalty,
-            self.timeout_penalty,
-        )
-        if not all(np.isfinite(value) and value > 0.0 for value in values):
-            raise ValueError("reward scales and weights must be finite and positive")
 
 
 def demo_initial_conditions(
@@ -148,6 +134,21 @@ def _no_maneuver_factory(_rng: np.random.Generator) -> ManeuverProfile:
     return NoManeuver()
 
 
+def _empty_reward_terms() -> dict[str, float]:
+    return {
+        "progress": 0.0,
+        "shaping": 0.0,
+        "effort": 0.0,
+        "terminal": 0.0,
+        "legacy_progress": 0.0,
+        "legacy_effort": 0.0,
+        "legacy_terminal": 0.0,
+        "legacy_total": 0.0,
+        "zem_m": 0.0,
+        "potential": 0.0,
+    }
+
+
 class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
     """Step-wise RL wrapper around the established point-mass dynamics.
 
@@ -170,10 +171,14 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         pursuer_vehicle: VehicleParams | None = None,
         target_vehicle: VehicleParams | None = None,
         ground_altitude_m: float = 0.0,
+        action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
     ) -> None:
         super().__init__()
         self.config = replace(config) if config is not None else SimulationConfig()
         self.reward_config = reward_config or RewardConfig()
+        if action_layout not in (ACTION_LAYOUT_LATERAL2, ACTION_LAYOUT_WORLD3):
+            raise ValueError(f"unsupported action_layout: {action_layout}")
+        self.action_layout: ActionLayout = action_layout
         self._validate_config()
 
         self._initial_condition_sampler = initial_condition_sampler
@@ -190,7 +195,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if not np.isfinite(self.action_limit_m_s2) or self.action_limit_m_s2 <= 0.0:
             raise ValueError("pursuer structural acceleration limit must be positive")
 
-        action_bound = np.full(3, self.action_limit_m_s2, dtype=np.float32)
+        n_action = action_dimension(self.action_layout)
+        action_bound = np.full(n_action, self.action_limit_m_s2, dtype=np.float32)
         self.action_space = spaces.Box(
             low=-action_bound,
             high=action_bound,
@@ -211,6 +217,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self.time_s = 0.0
         self.min_range_m = np.inf
         self._episode_done = True
+        self._phi = 0.0
+        self._episode_legacy_reward = 0.0
 
     def _validate_config(self) -> None:
         cfg = self.config
@@ -259,17 +267,23 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self._ground_impact_reason() is not None:
             raise ValueError("initial states must be above ground_altitude_m")
         self._episode_done = False
+        self._episode_legacy_reward = 0.0
+        zem_m = self._predicted_miss(self._remaining_time_s())
+        self._phi = potential_from_zem(
+            zem_m, self.reward_config.zem_scale_m, terminal=False
+        )
 
         observation, physical = self._observation()
+        n_action = action_dimension(self.action_layout)
         return observation, self._info(
             physical=physical,
             outcome="ongoing",
             termination_reason=None,
-            requested=np.zeros(3),
+            requested=np.zeros(n_action),
             commanded=np.zeros(3),
             achieved=np.zeros(3),
             action_was_clipped=False,
-            reward_terms={"progress": 0.0, "effort": 0.0, "terminal": 0.0},
+            reward_terms=_empty_reward_terms(),
         )
 
     def step(
@@ -283,9 +297,12 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self.target_maneuver is None:
             raise RuntimeError("target maneuver is unavailable; call reset()")
 
-        requested = np.asarray(action, dtype=float)
-        if requested.shape != (3,):
-            raise ValueError(f"action must have shape (3,), got {requested.shape}")
+        requested = np.asarray(action, dtype=float).reshape(-1)
+        expected = action_dimension(self.action_layout)
+        if requested.shape != (expected,):
+            raise ValueError(
+                f"action must have shape ({expected},), got {requested.shape}"
+            )
         if not np.all(np.isfinite(requested)):
             raise ValueError("action must contain only finite values")
         commanded, action_was_clipped = self._project_action(requested)
@@ -334,12 +351,24 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             termination_reason = None
         self._episode_done = terminated or truncated
 
-        reward, reward_terms = self._reward(
-            previous_range=previous_range,
-            current_range=current_range,
-            commanded=commanded,
+        zem_m = self._predicted_miss(self._remaining_time_s())
+        breakdown = compute_reward(
+            previous_potential=self._phi,
+            zem_m=zem_m,
+            previous_range_m=previous_range,
+            current_range_m=current_range,
+            min_range_m=self.min_range_m,
+            achieved_lateral_m_s2=achieved,
+            legacy_commanded_m_s2=commanded,
+            action_limit_m_s2=self.action_limit_m_s2,
+            dt=cfg.dt,
             outcome=outcome,
+            config=self.reward_config,
         )
+        self._phi = breakdown.potential
+        self._episode_legacy_reward += breakdown.legacy_total
+        reward_terms = breakdown.env_terms()
+
         observation, physical = self._observation()
         info = self._info(
             physical=physical,
@@ -351,19 +380,43 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             action_was_clipped=action_was_clipped,
             reward_terms=reward_terms,
         )
+        info["legacy_reward"] = breakdown.legacy_total
+        info["legacy_episode_reward"] = self._episode_legacy_reward
         info["target_action_commanded_m_s2"] = np.asarray(
             target_command, dtype=float
         ).reshape(3).copy()
         info["target_action_achieved_m_s2"] = (
             self.target.last_achieved_lateral_accel.copy()
         )
-        return observation, reward, terminated, truncated, info
+        return observation, breakdown.total, terminated, truncated, info
+
+    def _remaining_time_s(self) -> float:
+        return max(self.config.max_time - self.time_s, 0.0)
+
+    def _predicted_miss(self, remaining_time_s: float) -> float:
+        if self.pursuer is None or self.target is None:
+            raise RuntimeError("environment has not been reset")
+        relative_position = self.target.state.position - self.pursuer.state.position
+        relative_velocity = self.target.state.velocity - self.pursuer.state.velocity
+        return predicted_miss_m(
+            relative_position,
+            relative_velocity,
+            remaining_time_s,
+            self.config.intercept_radius,
+            self.reward_config.zem_safeguards(),
+        )
 
     def _project_action(self, requested: np.ndarray) -> tuple[np.ndarray, bool]:
-        magnitude = float(np.linalg.norm(requested))
+        if self.pursuer is None:
+            raise RuntimeError("environment has not been reset")
+        if self.action_layout == ACTION_LAYOUT_LATERAL2:
+            world = lateral_to_world(requested, self.pursuer.state.velocity)
+        else:
+            world = requested.copy()
+        magnitude = float(np.linalg.norm(world))
         if magnitude <= self.action_limit_m_s2:
-            return requested.copy(), False
-        return requested * (self.action_limit_m_s2 / magnitude), True
+            return world, False
+        return world * (self.action_limit_m_s2 / magnitude), True
 
     def _range(self) -> float:
         if self.pursuer is None or self.target is None:
@@ -451,34 +504,6 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             return "target_ground_impact"
         return None
 
-    def _reward(
-        self,
-        *,
-        previous_range: float,
-        current_range: float,
-        commanded: np.ndarray,
-        outcome: str,
-    ) -> tuple[float, dict[str, float]]:
-        reward_cfg = self.reward_config
-        progress = (previous_range - current_range) / reward_cfg.progress_scale_m
-        normalized_effort = (
-            float(np.linalg.norm(commanded)) / self.action_limit_m_s2
-        ) ** 2
-        effort = -reward_cfg.effort_weight * self.config.dt * normalized_effort
-        terminal = 0.0
-        if outcome == "hit":
-            terminal = reward_cfg.intercept_bonus
-        elif outcome == "miss":
-            terminal = -reward_cfg.miss_penalty
-        elif outcome == "timeout":
-            terminal = -reward_cfg.timeout_penalty
-        terms = {
-            "progress": float(progress),
-            "effort": float(effort),
-            "terminal": float(terminal),
-        }
-        return float(sum(terms.values())), terms
-
     def _info(
         self,
         *,
@@ -504,5 +529,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             "action_commanded_m_s2": commanded.copy(),
             "action_achieved_m_s2": achieved.copy(),
             "action_was_clipped": action_was_clipped,
+            "action_layout": self.action_layout,
             "reward_terms": reward_terms.copy(),
+            "legacy_reward": reward_terms.get("legacy_total", 0.0),
+            "legacy_episode_reward": self._episode_legacy_reward,
         }
