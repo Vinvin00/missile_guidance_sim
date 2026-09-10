@@ -1,5 +1,35 @@
 # NOTES
 
+## 2026-09-10 — From-scratch retrain CP2 (lateral2 + new reward)
+
+- Resumed CP1 only; reward / action / obs / domain-rand unchanged.
+  Annealing fallback **not** applied (`effort_weight` stays 5).
+- **40,960 cumulative / 16 new episodes**. Within-checkpoint *training*
+  return regressed (−13.879 → −43.075), but fixed-eval improved on all
+  three stop metrics: hit rate, miss, and eval return.
+- Fixed eval: **4/9 hits (44.4%)**; mean/median miss
+  **493.862 / 5.604 m** (CP1: 549.644 / 327.484). Mean is outlier-driven;
+  median collapsed because four cases are now intercepts.
+- New return **+39.915** (shaping 25.274 / effort −2.066 / terminal +16.707);
+  legacy **+53.404**. Effort share rose with higher lateral activity
+  (control effort 4429 → 29302 m²/s³) but remains secondary.
+- Cmd/achieved RMS **31.67 / 28.98** m/s² (matched); along-track fraction
+  still **~0**. Outcomes: **0 ground / 5 timeout / 4 hit**.
+- Per-case miss CP1 → CP2 (m):
+  - NoManeuver center/demo/offset: 113.7→**1.4 hit**, 219.5→**3.2 hit**,
+    374.7→**3.9 hit**
+  - Weave 3/5/7 g: 207.8→**2.0 hit**, 202.8→8.3, 327.5→5.6
+    (5 g / 7 g are just outside the 5 m lethal radius)
+  - ConstantTurn 3/5/7 g: 431.9→**702.2**, 1014.8→**1464.2**,
+    2054.1→**2253.9** — **lagging class; absolute miss worsened**
+- Spread diagnosis: CP1's mean≫median was mixed; CP2's mean≫median is
+  specifically ConstantTurn. NoManeuver is solved; Weave is near-hit;
+  Turn is the remaining failure mode.
+- Convergence warning: False (hit/miss/eval-return all improved vs CP1).
+  Saved-model reload OK; full suite **56 passed**. **CP3 not started.**
+
+## 2026-09-10 — From-scratch retrain CP1 (lateral2 + new reward)
+
 ## 2026-09-10 — From-scratch retrain CP1 (lateral2 + new reward)
 
 ### Annealing clarification (before training)
