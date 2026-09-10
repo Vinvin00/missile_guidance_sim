@@ -1,5 +1,32 @@
 # NOTES
 
+## 2026-09-10 — visualization scope finalize (speed, labels, accel WS)
+
+- Target B speed reframed as missile-class: catalog **500 m/s** (range
+  300–600), primary source NPS ADA378653 / `NPS-GUIDANCE-2000`. Live
+  slider step 10. Mass/area/Cd for Target B still cite fighter/transport
+  anchors — flagged as remaining incoherence in the sourcing doc.
+- Scenario picker labels → **NoManeuver / ConstantTurn / SinusoidalWeave**.
+  Ids and `_GEOMETRIES` mock paths unchanged (labeling only).
+- `trajectory.frame` now includes `pursuer_accel_cmd_m_s2` and
+  `pursuer_accel_achieved_m_s2` (mock lateral; terminal zeros). HUD g-load
+  prefers achieved when present.
+- Docs: `docs/scenario-parameter-sources.md` rewritten as current spec
+  (speed + RL taxonomy table + WS accel caveat), not a decision log.
+- Verification: Python **56 passed**; frontend **19 passed**. Manual smoke
+  against restarted `:8000`/`:5173`: SET picker shows NoManeuver /
+  ConstantTurn / SinusoidalWeave; Target B slider 500 m/s (300–600);
+  RUN PREVIEW streams to HUD with Target B SPD ≈500 and intercept lock;
+  SinusoidalWeave restream also succeeds. WS frames carry both accel
+  fields (terminal zeros).
+- Remaining roughness (not blocking this pass): Target B mass/area/Cd
+  still fighter/transport-grounded while speed is missile-class; HUD
+  consumes achieved for lateral-G but does not yet render a dedicated
+  cmd-vs-achieved readout; ConstantTurn is label-only over the old
+  head-on mock geometry.
+- Guardrails: no physics/RL/guidance edits; stayed on
+  `feature/rl-visualization`; checkpoint eval still out of scope.
+
 ## 2026-09-09 — mock RL visualization workflows
 
 - Live sliders read `live_control` + `reference_min/max` from `/api/catalog`.

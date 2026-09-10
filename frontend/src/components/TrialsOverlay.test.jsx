@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ViewModeToggle } from './ViewModeToggle'
+import { TrialsOverlay } from './TrialsOverlay'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 afterEach(() => {
@@ -13,22 +13,27 @@ beforeEach(() => {
   useSimulationStore.setState(useSimulationStore.getInitialState(), true)
 })
 
-describe('ViewModeToggle', () => {
-  it('switches between single-trajectory and all-trials modes', () => {
-    render(<ViewModeToggle />)
+describe('TrialsOverlay', () => {
+  it('shows mock intercept counts for the trial set', () => {
+    useSimulationStore.setState({
+      trialSet: {
+        trials: [
+          { episode: 1, success: true, frames: [{ range_m: 2 }] },
+          { episode: 2, success: false, frames: [{ range_m: 40 }] },
+        ],
+      },
+    })
+    render(<TrialsOverlay />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'All trials' }))
-
-    expect(useSimulationStore.getState().viewMode).toBe('trials')
-    expect(screen.getByText('Mock episodes')).toBeTruthy()
+    expect(screen.getByText('/2')).toBeTruthy()
+    expect(screen.getByText('MOCK EPISODES')).toBeTruthy()
   })
 
   it('notifies the parent when the mock trial count changes', () => {
     const onTrialCountChange = vi.fn()
-    useSimulationStore.setState({ viewMode: 'trials' })
-    render(<ViewModeToggle onTrialCountChange={onTrialCountChange} />)
+    render(<TrialsOverlay onTrialCountChange={onTrialCountChange} />)
 
-    fireEvent.change(screen.getByDisplayValue('30'), {
+    fireEvent.change(screen.getByLabelText('Mock episodes'), {
       target: { value: '50' },
     })
 

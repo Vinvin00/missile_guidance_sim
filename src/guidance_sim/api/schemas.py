@@ -100,6 +100,11 @@ class TrajectoryFrame(StrictModel):
     pursuer: BodyState
     target: BodyState
     range_m: float
+    # Lateral accel in world frame (m/s^2). Mock stream populates these so the
+    # RL-relevant commanded/achieved pair is in the contract before checkpoint
+    # eval wiring; real adapter should match SimulationResult field semantics.
+    pursuer_accel_cmd_m_s2: Vector3
+    pursuer_accel_achieved_m_s2: Vector3
 
 
 class StreamCompleted(StrictModel):

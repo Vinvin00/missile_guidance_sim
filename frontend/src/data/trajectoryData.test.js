@@ -46,6 +46,12 @@ describe('trajectory data adapters', () => {
     expect(log.frames).toHaveLength(2)
     expect(log.frames[1].range_m).toBe(200)
     expect(log.source).toBe('mock-saved-session')
+    expect(log.frames[0].pursuer_accel_cmd_m_s2).toBeTruthy()
+    expect(log.frames[1].pursuer_accel_achieved_m_s2).toEqual({
+      x: 0,
+      y: 0,
+      z: 0,
+    })
   })
 
   it('builds a training-shaped mock trial overlay from a seed trajectory', () => {

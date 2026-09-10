@@ -19,10 +19,24 @@ def test_catalog_exposes_generic_grounded_profiles():
         "apn",
         "ogl",
     ]
+    assert [item["label"] for item in catalog["scenarios"]] == [
+        "NoManeuver",
+        "ConstantTurn",
+        "SinusoidalWeave",
+    ]
     assert [profile["name"] for profile in catalog["vehicle_profiles"]] == [
         "Interceptor A",
         "Target B",
     ]
+    target_speed = next(
+        profile["parameters"]["speed"]
+        for profile in catalog["vehicle_profiles"]
+        if profile["role"] == "target"
+    )
+    assert target_speed["value"] == pytest.approx(500.0)
+    assert target_speed["reference_min"] == pytest.approx(300.0)
+    assert target_speed["reference_max"] == pytest.approx(600.0)
+    assert "NPS-GUIDANCE-2000" in target_speed["source_ids"]
     live_controls = []
     for profile in catalog["vehicle_profiles"]:
         for parameter_name, parameter in profile["parameters"].items():
@@ -55,7 +69,7 @@ def test_websocket_streams_ordered_synthetic_trajectory():
         assert started["data_source"] == "synthetic"
         assert started["applied_parameters"] == {
             "interceptor.speed": 700.0,
-            "target.speed": 240.0,
+            "target.speed": 500.0,
         }
 
         frames = [websocket.receive_json() for _ in range(started["frame_count"])]
@@ -68,6 +82,23 @@ def test_websocket_streams_ordered_synthetic_trajectory():
     )
     assert frames[0]["range_m"] > frames[-1]["range_m"]
     assert frames[-1]["range_m"] <= 5.0
+    for frame in frames:
+        for key in (
+            "pursuer_accel_cmd_m_s2",
+            "pursuer_accel_achieved_m_s2",
+        ):
+            assert set(frame[key]) == {"x", "y", "z"}
+            assert all(np.isfinite(frame[key][axis]) for axis in "xyz")
+    assert frames[-1]["pursuer_accel_cmd_m_s2"] == {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+    }
+    assert frames[-1]["pursuer_accel_achieved_m_s2"] == {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+    }
     assert completed == {
         "type": "stream.completed",
         "stream_id": started["stream_id"],
@@ -122,7 +153,7 @@ def test_live_speed_overrides_change_preview_and_initial_state():
         stream_id="slower",
         parameter_overrides={
             "interceptor.speed": 600.0,
-            "target.speed": 300.0,
+            "target.speed": 600.0,
         },
     )
 
@@ -140,7 +171,7 @@ def test_live_speed_overrides_change_preview_and_initial_state():
             slower.frames[0].target.velocity_m_s.y,
             slower.frames[0].target.velocity_m_s.z,
         ]
-    ) == pytest.approx(300.0)
+    ) == pytest.approx(600.0)
 
 
 @pytest.mark.parametrize(

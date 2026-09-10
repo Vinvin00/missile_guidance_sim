@@ -1,30 +1,26 @@
-import { Grid, Html, Line, OrbitControls } from '@react-three/drei'
+import { Grid, Line, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 
-import { TrialOverlaySummary } from './TrialOverlaySummary'
 import { engagementOrigin, toScenePoint } from '../lib/coordinates'
 import { trialAppearance } from '../lib/trialAppearance'
 import { useSimulationStore } from '../store/useSimulationStore'
 
-function VehicleMarker({ label, position, color, shape }) {
+function VehicleMarker({ position, color, shape }) {
   return (
     <group position={position}>
       <mesh>
         {shape === 'cone' ? (
-          <coneGeometry args={[0.09, 0.3, 10]} />
+          <coneGeometry args={[0.075, 0.3, 16]} />
         ) : (
-          <octahedronGeometry args={[0.12, 0]} />
+          <octahedronGeometry args={[0.1, 0]} />
         )}
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.35}
+          emissiveIntensity={0.45}
         />
       </mesh>
-      <Html center position={[0, 0.27, 0]} distanceFactor={8}>
-        <span className="vehicle-label">{label}</span>
-      </Html>
     </group>
   )
 }
@@ -83,10 +79,10 @@ function Trajectories() {
         {points.target.length > 1 && (
           <Line
             points={points.target}
-            color="#ff648f"
+            color="#ff2d16"
             transparent
-            opacity={0.28}
-            lineWidth={1.4}
+            opacity={0.18}
+            lineWidth={1.2}
           />
         )}
         <TrialOverlay origin={origin} />
@@ -100,95 +96,115 @@ function Trajectories() {
         <>
           <Line
             points={points.pursuer}
-            color="#16495a"
+            color="#ffffff"
             transparent
-            opacity={0.55}
+            opacity={0.22}
             lineWidth={1}
           />
           <Line
             points={points.target}
-            color="#542b45"
+            color="#ffffff"
             transparent
-            opacity={0.55}
+            opacity={0.13}
             lineWidth={1}
           />
         </>
       )}
       {visiblePursuer.length > 1 && (
-        <Line points={visiblePursuer} color="#55d9ff" lineWidth={2.6} />
+        <Line points={visiblePursuer} color="#ffffff" lineWidth={2.2} />
       )}
       {visibleTarget.length > 1 && (
-        <Line points={visibleTarget} color="#ff648f" lineWidth={2.4} />
+        <Line points={visibleTarget} color="#ff2d16" lineWidth={2} />
+      )}
+      {visiblePursuer.length > 0 && visibleTarget.length > 0 && (
+        <Line
+          points={[pursuerPosition, targetPosition]}
+          color="#ffffff"
+          transparent
+          opacity={0.18}
+          dashed
+          dashSize={0.12}
+          gapSize={0.08}
+          lineWidth={1}
+        />
       )}
       <VehicleMarker
-        label="Interceptor A"
         position={pursuerPosition}
-        color="#55d9ff"
+        color="#ffffff"
         shape="cone"
       />
       <VehicleMarker
-        label="Target B"
         position={targetPosition}
-        color="#ff648f"
+        color="#ff2d16"
         shape="target"
       />
     </>
   )
 }
 
-export function SimulationScene() {
+export function SimulationScene({ projection = '3d' }) {
   const hasFrames = useSimulationStore((state) => state.frames.length > 0)
   const viewMode = useSimulationStore((state) => state.viewMode)
 
   return (
     <div className="scene-shell">
-      <Canvas
-        camera={{ position: [7.5, 7, 9], fov: 43, near: 0.01, far: 100 }}
-        dpr={[1, 2]}
-        gl={{ antialias: true }}
-      >
-        <color attach="background" args={['#080c13']} />
-        <fog attach="fog" args={['#080c13', 15, 34]} />
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[4, 10, 5]} intensity={1.8} />
+      <Canvas dpr={[1, 2]} gl={{ antialias: true }}>
+        {projection === '2d' ? (
+          <OrthographicCamera
+            makeDefault
+            position={[0, 18, 0]}
+            zoom={48}
+            near={0.01}
+            far={100}
+          />
+        ) : (
+          <PerspectiveCamera
+            makeDefault
+            position={[1.6, 2.1, 6.2]}
+            fov={42}
+            near={0.01}
+            far={200}
+          />
+        )}
+        <color attach="background" args={['#0a0a0a']} />
+        <fog attach="fog" args={['#0a0a0a', 12, 30]} />
+        <ambientLight intensity={1.1} />
+        <directionalLight position={[4, 9, 6]} intensity={1.4} />
         <Grid
-          args={[24, 24]}
+          args={[40, 80]}
           cellSize={0.5}
-          cellThickness={0.45}
-          cellColor="#253346"
+          cellThickness={0.4}
+          cellColor="#1c1c1c"
           sectionSize={2}
-          sectionThickness={0.9}
-          sectionColor="#344a62"
+          sectionThickness={0.7}
+          sectionColor="#333333"
+          position={[0, -3.1, 0]}
           fadeDistance={28}
-          fadeStrength={1.5}
+          fadeStrength={1.4}
           infiniteGrid
         />
-        <axesHelper args={[1.5]} position={[-5, 0.01, 4]} />
         <Trajectories />
         <OrbitControls
           makeDefault
           enableDamping
-          dampingFactor={0.08}
-          minDistance={3}
-          maxDistance={28}
-          target={[0, 3.5, 0]}
+          dampingFactor={0.07}
+          minDistance={2}
+          maxDistance={26}
+          target={[0, 0.25, -0.4]}
+          maxPolarAngle={projection === '2d' ? 0.01 : Math.PI}
+          minPolarAngle={projection === '2d' ? 0 : 0}
         />
       </Canvas>
       {!hasFrames && (
         <div className="empty-scene">
-          <span>3D engagement space</span>
+          <span>3D ENGAGEMENT SPACE</span>
           <strong>
             {viewMode === 'trials'
               ? 'Run a preview to overlay mock trials'
               : 'Choose a scenario and run a preview'}
           </strong>
-          <small>Drag to orbit · scroll to zoom · right-drag to pan</small>
         </div>
       )}
-      {viewMode === 'trials' && <TrialOverlaySummary />}
-      <div className="axis-legend" aria-label="Scene units">
-        z-up simulation · scene units in km
-      </div>
     </div>
   )
 }

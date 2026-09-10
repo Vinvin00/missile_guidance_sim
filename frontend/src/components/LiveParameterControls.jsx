@@ -2,9 +2,6 @@ import { useMemo } from 'react'
 
 import { useSimulationStore } from '../store/useSimulationStore'
 
-// Bounds come from /api/catalog live_control flags. Marking mass/Cd/Cn
-// live in the catalog is enough to surface those sliders later.
-
 function readableName(name) {
   return name.replaceAll('_', ' ')
 }
@@ -36,18 +33,18 @@ export function LiveParameterControls() {
 
   return (
     <section className="live-parameters" aria-labelledby="live-parameters-title">
-      <div className="section-heading">
-        <span className="eyebrow" id="live-parameters-title">
-          Live parameters
+      <div className="live-head">
+        <span className="panel-kicker" id="live-parameters-title">
+          LIVE PARAMETERS
         </span>
-        <small>300 ms restream</small>
+        <span className="muted-mono">300 MS RESTREAM</span>
       </div>
       {controls.map((control) => {
         const value = parameterValues[control.id] ?? control.value
         return (
           <label className="parameter-slider" key={control.id}>
-            <span>
-              <strong>{control.label}</strong>
+            <span className="parameter-top">
+              <span>{control.label.toUpperCase()}</span>
               <output>
                 {value.toLocaleString()} {control.unit}
               </output>
@@ -67,7 +64,7 @@ export function LiveParameterControls() {
               aria-label={control.label}
             />
             <small>
-              grounded range {control.reference_min.toLocaleString()}–
+              GROUNDED RANGE {control.reference_min.toLocaleString()}–
               {control.reference_max.toLocaleString()} {control.unit}
             </small>
           </label>

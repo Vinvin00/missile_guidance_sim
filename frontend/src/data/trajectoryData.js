@@ -28,6 +28,30 @@ function velocityAt(samples, index, field) {
   }
 }
 
+function zeroAccel() {
+  return { x: 0, y: 0, z: 0 }
+}
+
+function lateralFromVelocityChange(samples, index) {
+  if (samples.length < 2) return zeroAccel()
+  const before = samples[Math.max(0, index - 1)]
+  const after = samples[Math.min(samples.length - 1, index + 1)]
+  const dt = after.time_s - before.time_s || 1
+  const vBefore = velocityAt(samples, Math.max(0, index - 1), 'pursuer_position_m')
+  const vAfter = velocityAt(samples, Math.min(samples.length - 1, index + 1), 'pursuer_position_m')
+  const ax = (vAfter.x - vBefore.x) / dt
+  const ay = (vAfter.y - vBefore.y) / dt
+  const az = (vAfter.z - vBefore.z) / dt
+  const vel = velocityAt(samples, index, 'pursuer_position_m')
+  const speed = Math.hypot(vel.x, vel.y, vel.z) || 1
+  const along = (ax * vel.x + ay * vel.y + az * vel.z) / (speed * speed)
+  return {
+    x: ax - along * vel.x,
+    y: ay - along * vel.y,
+    z: az - along * vel.z,
+  }
+}
+
 async function readJson(source) {
   if (typeof source === 'string') {
     const response = await fetch(source)
@@ -67,6 +91,17 @@ export async function loadTrajectoryLog(
       index,
       'target_position_m',
     )
+    const isTerminal = index === log.samples.length - 1
+    const achieved = isTerminal
+      ? zeroAccel()
+      : lateralFromVelocityChange(log.samples, index)
+    const commanded = isTerminal
+      ? zeroAccel()
+      : {
+          x: achieved.x * 1.15,
+          y: achieved.y * 1.15,
+          z: achieved.z * 1.15,
+        }
     return {
       type: 'trajectory.frame',
       stream_id: streamId,
@@ -84,6 +119,8 @@ export async function loadTrajectoryLog(
         sample.pursuer_position_m,
         sample.target_position_m,
       ),
+      pursuer_accel_cmd_m_s2: commanded,
+      pursuer_accel_achieved_m_s2: achieved,
     }
   })
 

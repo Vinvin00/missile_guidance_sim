@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { ControlPanel } from './components/ControlPanel'
+import { AppHeader } from './components/AppHeader'
+import { AppNav } from './components/AppNav'
+import { HudOverlay } from './components/HudOverlay'
 import { PlaybackControls } from './components/PlaybackControls'
+import { SessionReplayPanel } from './components/SessionReplayPanel'
+import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
-import { Telemetry } from './components/Telemetry'
 import { TrainingDashboard } from './components/TrainingDashboard'
+import { TrialsOverlay } from './components/TrialsOverlay'
 import { loadTrajectoryLog, loadTrialSet } from './data/trajectoryData'
 import { useDebouncedParameterRestream } from './hooks/useDebouncedParameterRestream'
 import { usePlaybackClock } from './hooks/usePlaybackClock'
@@ -13,26 +17,18 @@ import { useSimulationStore } from './store/useSimulationStore'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
-function currentHashRoute() {
-  return window.location.hash.replace(/^#/, '') || '/'
-}
-
 export default function App() {
-  const [route, setRoute] = useState(currentHashRoute)
+  const [screen, setScreen] = useState('hud')
+  const [projection, setProjection] = useState('3d')
   const setCatalog = useSimulationStore((state) => state.setCatalog)
   const failStream = useSimulationStore((state) => state.failStream)
   const loadReplay = useSimulationStore((state) => state.loadReplay)
   const setTrialCount = useSimulationStore((state) => state.setTrialCount)
   const setTrialSet = useSimulationStore((state) => state.setTrialSet)
+  const setViewMode = useSimulationStore((state) => state.setViewMode)
   const startStream = useTrajectoryStream()
   usePlaybackClock()
   useDebouncedParameterRestream(startStream)
-
-  useEffect(() => {
-    const onHashChange = () => setRoute(currentHashRoute())
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -50,16 +46,33 @@ export default function App() {
     return () => controller.abort()
   }, [failStream, setCatalog])
 
+  const selectScreen = useCallback(
+    (next) => {
+      setScreen(next)
+      if (next === 'trials') setViewMode('trials')
+      else if (useSimulationStore.getState().viewMode === 'trials') {
+        setViewMode('single')
+      }
+    },
+    [setViewMode],
+  )
+
+  const handleRun = useCallback(() => {
+    startStream()
+    selectScreen('hud')
+  }, [selectScreen, startStream])
+
   const handleReplay = useCallback(
     async (file) => {
       try {
         const trajectoryLog = await loadTrajectoryLog(file)
         loadReplay(trajectoryLog)
+        selectScreen('hud')
       } catch (error) {
         failStream(error.message)
       }
     },
-    [failStream, loadReplay],
+    [failStream, loadReplay, selectScreen],
   )
 
   const handleTrialCountChange = useCallback(
@@ -73,59 +86,28 @@ export default function App() {
   )
 
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">3-DOF point-mass study</span>
-          <h1>Guidance trajectory viewer</h1>
+    <div className="hud-shell">
+      <AppNav screen={screen} onSelect={selectScreen} />
+      <div className="hud-stage">
+        <AppHeader
+          screen={screen}
+          projection={projection}
+          onProjection={setProjection}
+        />
+        <div className="scene-layer">
+          <SimulationScene projection={projection} />
         </div>
-        <nav className="app-nav" aria-label="Viewer sections">
-          <a
-            href="#/"
-            aria-current={route !== '/training' ? 'page' : undefined}
-          >
-            Viewer
-          </a>
-          <a
-            href="#/training"
-            aria-current={route === '/training' ? 'page' : undefined}
-          >
-            Training
-          </a>
-        </nav>
-        <div className="legend">
-          <span>
-            <i className="legend-swatch interceptor" />
-            Interceptor A
-          </span>
-          <span>
-            <i className="legend-swatch target" />
-            Target B
-          </span>
-        </div>
-      </header>
-
-      {route === '/training' ? (
-        <section className="training-route" aria-label="Training dashboard">
-          <TrainingDashboard />
-        </section>
-      ) : (
-        <div className="workspace">
-          <ControlPanel
-            onRun={startStream}
-            onReplay={handleReplay}
-            onTrialCountChange={handleTrialCountChange}
-          />
-          <section className="viewer-column" aria-label="3D trajectory viewer">
-            <SimulationScene />
-            <PlaybackControls />
-          </section>
-          <div className="side-column">
-            <Telemetry />
-            <TrainingDashboard />
-          </div>
-        </div>
-      )}
-    </main>
+        {screen === 'hud' && <HudOverlay />}
+        {screen === 'setup' && <SetupScreen onRun={handleRun} />}
+        {screen === 'trials' && (
+          <TrialsOverlay onTrialCountChange={handleTrialCountChange} />
+        )}
+        {screen === 'train' && <TrainingDashboard />}
+        {screen === 'replay' && (
+          <SessionReplayPanel onReplay={handleReplay} />
+        )}
+        <PlaybackControls />
+      </div>
+    </div>
   )
 }

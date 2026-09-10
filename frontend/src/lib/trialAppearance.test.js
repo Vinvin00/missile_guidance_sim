@@ -8,7 +8,7 @@ describe('trialAppearance', () => {
     const lateHit = trialAppearance({ success: true }, 4, 5)
 
     expect(earlyMiss.opacity).toBeLessThan(lateHit.opacity)
-    expect(lateHit.color).toBe('#7dffb3')
-    expect(earlyMiss.color).toBe('#ff8aa8')
+    expect(lateHit.color).toBe('#f2f2f2')
+    expect(earlyMiss.color).toBe('#ff2d16')
   })
 })

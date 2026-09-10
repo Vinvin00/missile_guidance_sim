@@ -75,6 +75,10 @@ _GUIDANCE_RESIDUAL_M: dict[GuidanceLawId, float] = {
     "ogl": 1.4,
 }
 
+# Synthetic autopilot lag used only to shape cmd vs achieved magnitudes.
+_MOCK_AUTOPILOT_TAU_S = 0.2
+_MOCK_STRUCTURAL_LIMIT_M_S2 = 25.0 * 9.80665
+
 
 def _vector3(values: np.ndarray) -> Vector3:
     return Vector3(x=float(values[0]), y=float(values[1]), z=float(values[2]))
@@ -85,6 +89,57 @@ def _body_state(position: np.ndarray, velocity: np.ndarray) -> BodyState:
         position_m=_vector3(position),
         velocity_m_s=_vector3(velocity),
     )
+
+
+def _project_lateral(accel: np.ndarray, velocity: np.ndarray) -> np.ndarray:
+    speed = float(np.linalg.norm(velocity))
+    if speed < 1e-9:
+        return np.zeros(3)
+    v_hat = velocity / speed
+    return accel - np.dot(accel, v_hat) * v_hat
+
+
+def _mock_lateral_accel_histories(
+    pursuer_velocities: np.ndarray,
+    times: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Plausible commanded/achieved lateral pairs for the synthetic stream.
+
+    Achieved tracks the lateral part of finite-differenced velocity change.
+    Command leads achieved with a first-order lag inversion and a soft
+    structural cap so cmd ≥ achieved in magnitude without claiming physics.
+    """
+
+    frame_count = len(times)
+    total_accel = np.gradient(pursuer_velocities, times, axis=0)
+    achieved = np.zeros((frame_count, 3))
+    for index in range(frame_count):
+        achieved[index] = _project_lateral(
+            total_accel[index], pursuer_velocities[index]
+        )
+
+    achieved_rate = np.gradient(achieved, times, axis=0)
+    commanded = np.zeros((frame_count, 3))
+    for index in range(frame_count):
+        raw_cmd = (
+            achieved[index] + _MOCK_AUTOPILOT_TAU_S * achieved_rate[index]
+        )
+        lateral_cmd = _project_lateral(raw_cmd, pursuer_velocities[index])
+        mag = float(np.linalg.norm(lateral_cmd))
+        if mag > _MOCK_STRUCTURAL_LIMIT_M_S2:
+            lateral_cmd *= _MOCK_STRUCTURAL_LIMIT_M_S2 / mag
+        commanded[index] = lateral_cmd
+        # Keep achieved from exceeding the (already capped) command.
+        ach_mag = float(np.linalg.norm(achieved[index]))
+        cmd_mag = float(np.linalg.norm(commanded[index]))
+        if ach_mag > cmd_mag > 1e-12:
+            achieved[index] *= cmd_mag / ach_mag
+
+    # Terminal sample: no guidance command after intercept, matching
+    # SimulationResult convention in the physics engine.
+    commanded[-1] = np.zeros(3)
+    achieved[-1] = np.zeros(3)
+    return commanded, achieved
 
 
 def build_mock_trajectory(
@@ -187,6 +242,10 @@ def build_mock_trajectory(
         target_velocities[0]
     )
 
+    accel_cmds, accel_achieved = _mock_lateral_accel_histories(
+        pursuer_velocities, times
+    )
+
     frames = [
         TrajectoryFrame(
             stream_id=stream_id,
@@ -195,6 +254,8 @@ def build_mock_trajectory(
             pursuer=_body_state(pursuer_positions[index], pursuer_velocities[index]),
             target=_body_state(target_positions[index], target_velocities[index]),
             range_m=float(ranges[index]),
+            pursuer_accel_cmd_m_s2=_vector3(accel_cmds[index]),
+            pursuer_accel_achieved_m_s2=_vector3(accel_achieved[index]),
         )
         for index, time_s in enumerate(times)
     ]

@@ -1,7 +1,9 @@
 """Generic visualization scenarios backed by public reference ranges.
 
-The labels deliberately avoid real vehicle names.  ``source_ids`` map to the
-review table in ``docs/scenario-parameter-sources.md``.
+Picker labels use the RL-track taxonomy (NoManeuver / ConstantTurn /
+SinusoidalWeave). Scenario ids remain stable so mock geometries stay
+unchanged. ``source_ids`` map to the review table in
+``docs/scenario-parameter-sources.md``.
 """
 
 from __future__ import annotations
@@ -44,24 +46,24 @@ CATALOG = CatalogResponse(
     scenarios=[
         ScenarioOption(
             id="crossing-intercept",
-            label="Crossing intercept",
-            description="Target B crosses the interceptor line of sight.",
+            label="NoManeuver",
+            description="RL-track NoManeuver preview (non-maneuvering target).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=10.0,
         ),
         ScenarioOption(
             id="head-on-intercept",
-            label="Head-on intercept",
-            description="Interceptor A and Target B close nearly nose-to-nose.",
+            label="ConstantTurn",
+            description="RL-track ConstantTurn preview (label only; mock path unchanged).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=7.0,
         ),
         ScenarioOption(
             id="evasive-climb",
-            label="Evasive climbing turn",
-            description="Target B adds a bounded climbing weave.",
+            label="SinusoidalWeave",
+            description="RL-track SinusoidalWeave preview (bounded climbing weave).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=12.0,
@@ -156,16 +158,16 @@ CATALOG = CatalogResponse(
             role="target",
             parameters={
                 "speed": _parameter(
-                    240.0,
+                    500.0,
                     "m/s",
-                    200.0,
                     300.0,
+                    600.0,
                     "synthesized",
-                    "FOI-ADMIRE-2005",
-                    "AIAA-CLIMB-2024",
+                    "NPS-GUIDANCE-2000",
                     "PN-FUZZY-2020",
+                    "PN-TRAJECTORY-2022",
                     live_control=True,
-                    control_step=5.0,
+                    control_step=10.0,
                 ),
                 "mass": _parameter(
                     9_100.0,
