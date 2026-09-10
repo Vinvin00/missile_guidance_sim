@@ -1,5 +1,56 @@
 # NOTES
 
+## 2026-09-10 — t_go continuity at closing/receding boundary (no retrain)
+
+### Quantification (pre-fix)
+
+Collinear sweep at `Vc = 1 ± ε` with the old branch
+(`closing → min(R/Vc, 25)` vs `receding → 5 s`):
+
+| range (m) | \|ΔΦ\| | \|Δ shaping\| (`w=50`) |
+|---|---|---|
+| 500 | 0.0103 | **0.515** |
+| 1000 | 0.0045 | 0.227 |
+| 3000 | 0.0008 | 0.041 |
+| 7000 | 0.0002 | 0.009 |
+
+Episode shaping ≈ 25 over ~1250 steps ⇒ mean per-step ≈ 0.02. The R=500
+jump is ~25× that — material for learning gradients on weaving targets that
+cross `Vc ~ 0`. Fixed.
+
+### Formulation
+
+Branch removed. Single continuous horizon:
+
+```
+t_go = min(range / max(|Vc|, vc_min), t_go_max)
+```
+
+`t_horizon_receding_s` retained on config for dump compatibility, unused.
+Post-fix adjacent `|ΔΦ|` at the old boundary is ~1e-11 (float noise).
+
+### Offline validation (corrected gate 2)
+
+All three gates **PASS**:
+
+1. Classical hit ≫ miss — unchanged.
+2. CP2/CP3/CP4 new-reward order matches miss order: **CP3 > CP2 > CP4**
+   (returns −52.31 / −65.79 / −68.47; misses 1238 / 1787 / 1950 m).
+   Supersedes the mis-specified “CP3/CP4 clearly worse than CP2”.
+3. Flyby ≫ loiter — unchanged.
+
+### Annealing fallback (proposed, not applied)
+
+If hit rate never exceeds 10%: after two consecutive checkpoints with
+`hit_rate < 0.10` and no mean-miss improvement, raise `terminal_weight`
+0.5 → 1.0 while keeping `shaping_weight=50`. Do not drop shaping. Current
+freeze remains `shaping_weight=50`, `terminal_weight=1`.
+
+Full suite **56 passed**. Artifact updated:
+`outputs/reward_redesign_validation.json`.
+
+## 2026-09-10 — Reward redesign + offline validation (no retrain)
+
 ## 2026-09-10 — Reward redesign + offline validation (no retrain)
 
 Gate **failed**. No retrain. Weights were not retuned after seeing the

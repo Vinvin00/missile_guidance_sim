@@ -4,7 +4,7 @@
     "touches_frozen_guidance_law": false,
     "training_layout": "lateral2"
   },
-  "all_gates_passed": false,
+  "all_gates_passed": true,
   "classical_rows": [
     {
       "effort": -0.02652516747715356,
@@ -88,7 +88,7 @@
     },
     {
       "effort": -10.670623273948184,
-      "effort_share": 0.07868465891618719,
+      "effort_share": 0.0786846589161872,
       "final_range_m": 4244.640913443673,
       "final_time_s": 24.999999999999556,
       "law": "APN",
@@ -96,10 +96,10 @@
       "min_range_m": 3853.293623576083,
       "outcome": "timeout",
       "scenario": "constant_turn_5g",
-      "shaping": 25.031806667260277,
-      "shaping_share": 0.18458332930542548,
+      "shaping": 25.031806667260255,
+      "shaping_share": 0.18458332930542537,
       "terminal": -99.91006963528775,
-      "terminal_share": 0.7367320117783873,
+      "terminal_share": 0.7367320117783874,
       "total": -85.54888624197574
     },
     {
@@ -136,7 +136,7 @@
     },
     {
       "effort": -3.1671431702827126,
-      "effort_share": 0.024726955835816848,
+      "effort_share": 0.02472695583581686,
       "final_range_m": 4605.786118528056,
       "final_time_s": 24.999999999999556,
       "law": "OGL",
@@ -144,11 +144,11 @@
       "min_range_m": 3733.2824242890074,
       "outcome": "timeout",
       "scenario": "constant_turn_5g",
-      "shaping": 25.03180666726032,
-      "shaping_share": 0.1954317644240884,
+      "shaping": 25.031806667260273,
+      "shaping_share": 0.19543176442408813,
       "terminal": -99.88568748344593,
-      "terminal_share": 0.7798412797400947,
-      "total": -78.02102398646839
+      "terminal_share": 0.779841279740095,
+      "total": -78.02102398646838
     }
   ],
   "gates": {
@@ -179,18 +179,73 @@
         }
       }
     },
-    "cp3_cp4_worse_than_cp2": {
-      "cp2_minus_cp3": -13.48183199383184,
-      "cp2_minus_cp4": 2.679311270657152,
+    "flyby_above_loiter": {
+      "flyby": {
+        "effort": 0.0,
+        "effort_share": 0.0,
+        "final_range_m": 1823.8276262771633,
+        "final_time_s": 24.999999999999556,
+        "legacy_episode_reward": -48.059932024680734,
+        "min_range_m": 508.6067679192761,
+        "outcome": "timeout",
+        "shaping": 25.031806667260263,
+        "shaping_share": 0.34806182765680865,
+        "terminal": -46.88589495425107,
+        "terminal_share": 0.6519381723431915,
+        "total": -21.85408828699081
+      },
+      "loiter": {
+        "effort": -20.567297347703434,
+        "effort_share": 0.1412608152797813,
+        "final_range_m": 8520.229011264753,
+        "final_time_s": 24.999999999999556,
+        "legacy_episode_reward": -140.02394587455646,
+        "min_range_m": 6070.395355453105,
+        "outcome": "timeout",
+        "shaping": 25.03180666726022,
+        "shaping_share": 0.17192406751185899,
+        "terminal": -99.99893254576145,
+        "terminal_share": 0.6868151172083596,
+        "total": -95.53442322620447
+      },
       "margin": 10.0,
-      "passed": false,
+      "passed": true
+    },
+    "reward_ranks_with_miss_distance": {
+      "criterion": "new-reward ranking of CP2/CP3/CP4 must match mean-miss ranking (expected CP3 best, CP2 middle, CP4 worst); supersedes 'CP3/CP4 clearly worse than CP2'",
+      "expected_order_best_to_worst": [
+        "cp3",
+        "cp2",
+        "cp4"
+      ],
+      "mean_episode_rewards": {
+        "cp2": -65.7930219591537,
+        "cp3": -52.311189965321894,
+        "cp4": -68.47233322981087
+      },
+      "mean_miss_distances_m": {
+        "cp2": 1786.6389253405077,
+        "cp3": 1238.4742359784018,
+        "cp4": 1950.0917705318175
+      },
+      "order_by_miss_best_to_worst": [
+        "cp3",
+        "cp2",
+        "cp4"
+      ],
+      "order_by_reward_best_to_worst": [
+        "cp3",
+        "cp2",
+        "cp4"
+      ],
+      "passed": true,
       "scores": {
         "cp2": {
           "cases": [
             {
               "control_effort_m2_s3": 17467.91999647347,
               "effort_penalty": -0.3285983983705267,
-              "episode_reward": -69.13308786925137,
+              "episode_reward": -69.13308786925131,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -68.71924376010219,
@@ -198,13 +253,13 @@
               "miss_distance_m": 1191.1988972312115,
               "name": "no_maneuver_center",
               "outcome": "timeout",
-              "progress_reward": 14.290542824579052,
+              "progress_reward": 14.290542824579042,
               "terminal_reward": -83.09503229545989
             },
             {
               "control_effort_m2_s3": 17293.410109505276,
               "effort_penalty": -0.3039228437098215,
-              "episode_reward": -64.29499943532173,
+              "episode_reward": -64.29499943532167,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -61.45803477490977,
@@ -212,7 +267,7 @@
               "miss_distance_m": 1423.027636729489,
               "name": "no_maneuver_demo",
               "outcome": "timeout",
-              "progress_reward": 25.031806667260216,
+              "progress_reward": 25.03180666726024,
               "terminal_reward": -89.02288325887213
             },
             {
@@ -226,13 +281,13 @@
               "miss_distance_m": 1473.3232332358914,
               "name": "no_maneuver_offset",
               "outcome": "timeout",
-              "progress_reward": 32.76187009545893,
+              "progress_reward": 32.76187009545889,
               "terminal_reward": -90.02095030949916
             },
             {
               "control_effort_m2_s3": 20556.298493755756,
               "effort_penalty": -0.3125764163488409,
-              "episode_reward": -77.8529541388783,
+              "episode_reward": -77.85295413887832,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -62.65528670889035,
@@ -246,7 +301,7 @@
             {
               "control_effort_m2_s3": 20584.250933440366,
               "effort_penalty": -0.291391888373919,
-              "episode_reward": -73.91058224515419,
+              "episode_reward": -73.91058224515417,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -58.976530629436155,
@@ -254,13 +309,13 @@
               "miss_distance_m": 2496.09185898737,
               "name": "constant_turn_right_5g",
               "outcome": "timeout",
-              "progress_reward": 25.03180666726025,
+              "progress_reward": 25.03180666726026,
               "terminal_reward": -98.65099702404054
             },
             {
               "control_effort_m2_s3": 22118.118004858108,
               "effort_penalty": -0.2987307531663247,
-              "episode_reward": -68.23974788384147,
+              "episode_reward": -68.23974788384149,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -53.501664294864064,
@@ -268,13 +323,13 @@
               "miss_distance_m": 3148.0891905021354,
               "name": "constant_turn_left_7g",
               "outcome": "timeout",
-              "progress_reward": 31.690994024209196,
+              "progress_reward": 31.690994024209175,
               "terminal_reward": -99.63201115488435
             },
             {
               "control_effort_m2_s3": 18120.543575295647,
               "effort_penalty": -0.3489254857775135,
-              "episode_reward": -61.205777891478895,
+              "episode_reward": -61.20577789147893,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -68.14053546702993,
@@ -282,13 +337,13 @@
               "miss_distance_m": 1151.484812176595,
               "name": "weave_3g_055hz",
               "outcome": "timeout",
-              "progress_reward": 20.967684302959018,
+              "progress_reward": 20.967684302958993,
               "terminal_reward": -81.82453670866039
             },
             {
               "control_effort_m2_s3": 17327.791545796594,
               "effort_penalty": -0.3060313982368877,
-              "episode_reward": -63.10253213279499,
+              "episode_reward": -63.10253213279494,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -60.969232419503186,
@@ -296,7 +351,7 @@
               "miss_distance_m": 1368.2076550854079,
               "name": "weave_5g_070hz",
               "outcome": "timeout",
-              "progress_reward": 25.03180666726029,
+              "progress_reward": 25.03180666726027,
               "terminal_reward": -87.82830740181834
             },
             {
@@ -310,15 +365,15 @@
               "miss_distance_m": 1382.9501515333575,
               "name": "weave_7g_090hz",
               "outcome": "timeout",
-              "progress_reward": 31.690994024209196,
+              "progress_reward": 31.690994024209203,
               "terminal_reward": -88.16101659783332
             }
           ],
           "mean_effort_penalty": -0.3176211591091042,
-          "mean_episode_reward": -65.79302195915372,
+          "mean_episode_reward": -65.7930219591537,
           "mean_legacy_episode_reward": -58.67198504629542,
           "mean_miss_distance_m": 1786.6389253405077,
-          "mean_progress_reward": 25.27390995290613,
+          "mean_progress_reward": 25.273909952906124,
           "mean_terminal_reward": -90.74931075295072,
           "n_hits": 0
         },
@@ -327,7 +382,7 @@
             {
               "control_effort_m2_s3": 116447.81929223936,
               "effort_penalty": -0.32507814460511586,
-              "episode_reward": -49.54108836928344,
+              "episode_reward": -49.54108836928346,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -65.13154371263442,
@@ -335,13 +390,13 @@
               "miss_distance_m": 749.8601802360982,
               "name": "no_maneuver_center",
               "outcome": "timeout",
-              "progress_reward": 14.290542824579042,
+              "progress_reward": 14.290542824579045,
               "terminal_reward": -63.50655304925736
             },
             {
               "control_effort_m2_s3": 122397.08357626754,
               "effort_penalty": -0.3323740563292753,
-              "episode_reward": -18.561599466888286,
+              "episode_reward": -18.5615994668883,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -54.81535700115313,
@@ -349,13 +404,13 @@
               "miss_distance_m": 463.1035628861993,
               "name": "no_maneuver_demo",
               "outcome": "timeout",
-              "progress_reward": 25.031806667260234,
+              "progress_reward": 25.031806667260245,
               "terminal_reward": -43.261032077819266
             },
             {
               "control_effort_m2_s3": 133067.22418869956,
               "effort_penalty": -0.29938085573176576,
-              "episode_reward": -61.023868787493,
+              "episode_reward": -61.023868787493015,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -47.8338567692786,
@@ -363,7 +418,7 @@
               "miss_distance_m": 1695.6541331095955,
               "name": "no_maneuver_offset",
               "outcome": "timeout",
-              "progress_reward": 32.76187009545891,
+              "progress_reward": 32.76187009545892,
               "terminal_reward": -93.48635802722016
             },
             {
@@ -377,7 +432,7 @@
               "miss_distance_m": 1730.0483711055954,
               "name": "constant_turn_left_3g",
               "outcome": "timeout",
-              "progress_reward": 20.967684302958947,
+              "progress_reward": 20.967684302958943,
               "terminal_reward": -93.90616494158695
             },
             {
@@ -411,7 +466,7 @@
             {
               "control_effort_m2_s3": 117212.01574426798,
               "effort_penalty": -0.3140260635438873,
-              "episode_reward": -60.13586825738673,
+              "episode_reward": -60.135868257386704,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -67.16656308087076,
@@ -419,13 +474,13 @@
               "miss_distance_m": 1120.9389461741662,
               "name": "weave_3g_055hz",
               "outcome": "timeout",
-              "progress_reward": 20.96768430295903,
+              "progress_reward": 20.967684302958986,
               "terminal_reward": -80.78952649680186
             },
             {
               "control_effort_m2_s3": 122657.6709233266,
               "effort_penalty": -0.3314380646356879,
-              "episode_reward": -23.99817106097473,
+              "episode_reward": -23.998171060974755,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -55.52897993572575,
@@ -433,7 +488,7 @@
               "miss_distance_m": 532.1009071805918,
               "name": "weave_5g_070hz",
               "outcome": "timeout",
-              "progress_reward": 25.03180666726028,
+              "progress_reward": 25.031806667260263,
               "terminal_reward": -48.69853966359929
             },
             {
@@ -447,15 +502,15 @@
               "miss_distance_m": 1530.4579935250426,
               "name": "weave_7g_090hz",
               "outcome": "timeout",
-              "progress_reward": 31.69099402420919,
+              "progress_reward": 31.690994024209203,
               "terminal_reward": -91.05029363135247
             }
           ],
           "mean_effort_penalty": -0.2932571964604088,
-          "mean_episode_reward": -52.31118996532188,
+          "mean_episode_reward": -52.311189965321894,
           "mean_legacy_episode_reward": -53.504262696558065,
           "mean_miss_distance_m": 1238.4742359784018,
-          "mean_progress_reward": 25.273909952906124,
+          "mean_progress_reward": 25.27390995290612,
           "mean_terminal_reward": -77.2918427217676,
           "n_hits": 0
         },
@@ -464,7 +519,7 @@
             {
               "control_effort_m2_s3": 126402.3424976,
               "effort_penalty": -0.29324821423855135,
-              "episode_reward": -73.64775489823337,
+              "episode_reward": -73.64775489823342,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -69.94469859586032,
@@ -472,13 +527,13 @@
               "miss_distance_m": 1360.2476557269174,
               "name": "no_maneuver_center",
               "outcome": "timeout",
-              "progress_reward": 14.290542824579056,
+              "progress_reward": 14.290542824579049,
               "terminal_reward": -87.64504950857392
             },
             {
               "control_effort_m2_s3": 136407.6309642583,
               "effort_penalty": -0.2840792706769953,
-              "episode_reward": -66.1326015247719,
+              "episode_reward": -66.13260152477189,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -62.94535320236478,
@@ -486,13 +541,13 @@
               "miss_distance_m": 1520.6064720171494,
               "name": "no_maneuver_demo",
               "outcome": "timeout",
-              "progress_reward": 25.031806667260238,
+              "progress_reward": 25.031806667260284,
               "terminal_reward": -90.88032892135513
             },
             {
               "control_effort_m2_s3": 152505.89988204217,
               "effort_penalty": -0.33031876692083995,
-              "episode_reward": -61.57183760485833,
+              "episode_reward": -61.571837604858324,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -50.6590612434339,
@@ -500,7 +555,7 @@
               "miss_distance_m": 1738.3405701082186,
               "name": "no_maneuver_offset",
               "outcome": "timeout",
-              "progress_reward": 32.76187009545888,
+              "progress_reward": 32.76187009545889,
               "terminal_reward": -94.00338893339637
             },
             {
@@ -514,13 +569,13 @@
               "miss_distance_m": 2643.208934411135,
               "name": "constant_turn_left_3g",
               "outcome": "timeout",
-              "progress_reward": 20.96768430295894,
+              "progress_reward": 20.967684302958954,
               "terminal_reward": -98.99312406569761
             },
             {
               "control_effort_m2_s3": 175730.62501199226,
               "effort_penalty": -0.3186970549404172,
-              "episode_reward": -74.18601007049045,
+              "episode_reward": -74.18601007049047,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -61.87017806050955,
@@ -528,13 +583,13 @@
               "miss_distance_m": 2598.343805911459,
               "name": "constant_turn_right_5g",
               "outcome": "timeout",
-              "progress_reward": 25.031806667260206,
+              "progress_reward": 25.03180666726019,
               "terminal_reward": -98.89911968281027
             },
             {
               "control_effort_m2_s3": 191093.23358069814,
               "effort_penalty": -0.33479226148474883,
-              "episode_reward": -68.31240333260655,
+              "episode_reward": -68.31240333260654,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -56.71183715745485,
@@ -542,13 +597,13 @@
               "miss_distance_m": 3200.551783500484,
               "name": "constant_turn_left_7g",
               "outcome": "timeout",
-              "progress_reward": 31.690994024209196,
+              "progress_reward": 31.690994024209203,
               "terminal_reward": -99.668605095331
             },
             {
               "control_effort_m2_s3": 124316.46403829439,
               "effort_penalty": -0.3112876443247968,
-              "episode_reward": -67.40497828885334,
+              "episode_reward": -67.40497828885331,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -69.53908647387819,
@@ -556,13 +611,13 @@
               "miss_distance_m": 1378.4947127183038,
               "name": "weave_3g_055hz",
               "outcome": "timeout",
-              "progress_reward": 20.967684302958965,
+              "progress_reward": 20.9676843029589,
               "terminal_reward": -88.0613749474875
             },
             {
               "control_effort_m2_s3": 136203.8748060425,
               "effort_penalty": -0.28551504017637797,
-              "episode_reward": -65.33314132888208,
+              "episode_reward": -65.33314132888212,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -62.4857376137855,
@@ -570,13 +625,13 @@
               "miss_distance_m": 1476.4159858117675,
               "name": "weave_5g_070hz",
               "outcome": "timeout",
-              "progress_reward": 25.03180666726024,
+              "progress_reward": 25.03180666726025,
               "terminal_reward": -90.079432955966
             },
             {
               "control_effort_m2_s3": 152805.5964419928,
               "effort_penalty": -0.3265787713152876,
-              "episode_reward": -61.30719925501794,
+              "episode_reward": -61.30719925501796,
               "final_time_s": 24.999999999999556,
               "hit": false,
               "legacy_episode_reward": -49.86051415467587,
@@ -584,7 +639,7 @@
               "miss_distance_m": 1634.616014580924,
               "name": "weave_7g_090hz",
               "outcome": "timeout",
-              "progress_reward": 31.690994024209203,
+              "progress_reward": 31.690994024209193,
               "terminal_reward": -92.67161450791188
             }
           ],
@@ -597,38 +652,6 @@
           "n_hits": 0
         }
       }
-    },
-    "flyby_above_loiter": {
-      "flyby": {
-        "effort": 0.0,
-        "effort_share": 0.0,
-        "final_range_m": 1823.8276262771633,
-        "final_time_s": 24.999999999999556,
-        "legacy_episode_reward": -48.059932024680734,
-        "min_range_m": 508.6067679192761,
-        "outcome": "timeout",
-        "shaping": 25.031806667260266,
-        "shaping_share": 0.3480618276568086,
-        "terminal": -46.88589495425107,
-        "terminal_share": 0.6519381723431913,
-        "total": -21.854088286990805
-      },
-      "loiter": {
-        "effort": -20.567297347703434,
-        "effort_share": 0.14126081527978132,
-        "final_range_m": 8520.229011264753,
-        "final_time_s": 24.999999999999556,
-        "legacy_episode_reward": -140.02394587455646,
-        "min_range_m": 6070.395355453105,
-        "outcome": "timeout",
-        "shaping": 25.031806667260216,
-        "shaping_share": 0.171924067511859,
-        "terminal": -99.99893254576145,
-        "terminal_share": 0.6868151172083597,
-        "total": -95.53442322620461
-      },
-      "margin": 10.0,
-      "passed": true
     }
   },
   "reward_config": {
@@ -647,9 +670,18 @@
     "vc_min_m_s": 1.0,
     "zem_scale_m": 500.0
   },
+  "t_go_continuity": {
+    "formulation": "t_go = min(range / max(|Vc|, vc_min), t_go_max); no closing/receding branch",
+    "pre_fix_worst_jump": {
+      "abs_d_phi": 0.010308,
+      "abs_d_shaping": 0.5154,
+      "note": "At Vc=1\u00b1\u03b5 with collinear geometry, t_go jumped 25s\u21925s. Per-step shaping jump ~0.52 vs mean per-step shaping ~0.02 on a ~25-unit episode \u2014 material for learning gradients.",
+      "range_m": 500.0
+    }
+  },
   "term_scale_calibration": {
     "mean_abs_effort": 3.2238051181223737,
-    "mean_abs_shaping": 25.031806667260263,
+    "mean_abs_shaping": 25.031806667260252,
     "mean_abs_terminal": 93.62311631648144,
     "mean_effort_share": 0.023110627702264776,
     "mean_shaping_share": 0.21185247879629732,
@@ -657,6 +689,11 @@
   },
   "weight_annealing_plan": {
     "applied": false,
+    "fallback_if_hit_rate_never_exceeds_0.10": {
+      "action": "keep shaping_weight=50; raise terminal_weight from 0.5 to 1.0 so closest-approach credit is not permanently half-weighted; do not drop shaping_weight",
+      "rationale": "The <10% band currently only defines an early schedule and never exits. Without a fallback the run would stay on terminal_weight=0.5 indefinitely even if miss distance is improving. Raising the terminal weight restores the calibrated miss grading without weakening dense shaping while hits are rare.",
+      "trigger": "after two consecutive checkpoints with hit_rate < 0.10 and no improvement in mean miss vs the previous checkpoint"
+    },
     "hit_rate_0.10_to_0.40": {
       "shaping_weight": 50.0,
       "terminal_weight": 1.0
@@ -665,7 +702,7 @@
       "shaping_weight": 15.0,
       "terminal_weight": 1.0
     },
-    "notes": "Annealing is reported for review only and was not applied. This pass freezes shaping_weight=50, terminal_weight=1, shaping_gamma=1 (undiscounted PBRS telescope for logged returns).",
+    "notes": "Annealing is reported for review only and was not applied. This pass freezes shaping_weight=50, terminal_weight=1, shaping_gamma=1 (undiscounted PBRS telescope for logged returns). The fallback above is a proposal only.",
     "until_hit_rate_below_0.10": {
       "shaping_weight": 50.0,
       "terminal_weight": 0.5

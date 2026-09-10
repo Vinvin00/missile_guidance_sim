@@ -233,15 +233,35 @@ def _gate_checkpoints() -> dict[str, object]:
             "n_hits": summary.n_hits,
             "cases": [asdict(case) for case in summary.cases],
         }
-    cp2 = float(scores["cp2"]["mean_episode_reward"])
-    cp3 = float(scores["cp3"]["mean_episode_reward"])
-    cp4 = float(scores["cp4"]["mean_episode_reward"])
-    passed = (cp3 < cp2 - MARGIN) and (cp4 < cp2 - MARGIN)
+    labels = ("cp2", "cp3", "cp4")
+    rewards = np.array(
+        [float(scores[label]["mean_episode_reward"]) for label in labels]
+    )
+    misses = np.array(
+        [float(scores[label]["mean_miss_distance_m"]) for label in labels]
+    )
+    # Corrected criterion: reward ranking must match miss ranking
+    # (higher return ↔ lower mean miss). Expected: CP3 best, CP2 middle, CP4 worst.
+    order_by_reward = tuple(labels[i] for i in np.argsort(-rewards))
+    order_by_miss = tuple(labels[i] for i in np.argsort(misses))
+    expected_order = ("cp3", "cp2", "cp4")
+    passed = order_by_reward == order_by_miss == expected_order
     return {
         "passed": passed,
-        "margin": MARGIN,
-        "cp2_minus_cp3": cp2 - cp3,
-        "cp2_minus_cp4": cp2 - cp4,
+        "criterion": (
+            "new-reward ranking of CP2/CP3/CP4 must match mean-miss ranking "
+            "(expected CP3 best, CP2 middle, CP4 worst); supersedes "
+            "'CP3/CP4 clearly worse than CP2'"
+        ),
+        "order_by_reward_best_to_worst": list(order_by_reward),
+        "order_by_miss_best_to_worst": list(order_by_miss),
+        "expected_order_best_to_worst": list(expected_order),
+        "mean_episode_rewards": {
+            label: float(scores[label]["mean_episode_reward"]) for label in labels
+        },
+        "mean_miss_distances_m": {
+            label: float(scores[label]["mean_miss_distance_m"]) for label in labels
+        },
         "scores": scores,
     }
 
@@ -291,15 +311,50 @@ def main() -> int:
                 "shaping_weight": 15.0,
                 "terminal_weight": 1.0,
             },
+            "fallback_if_hit_rate_never_exceeds_0.10": {
+                "trigger": (
+                    "after two consecutive checkpoints with hit_rate < 0.10 and "
+                    "no improvement in mean miss vs the previous checkpoint"
+                ),
+                "action": (
+                    "keep shaping_weight=50; raise terminal_weight from 0.5 to 1.0 "
+                    "so closest-approach credit is not permanently half-weighted; "
+                    "do not drop shaping_weight"
+                ),
+                "rationale": (
+                    "The <10% band currently only defines an early schedule and "
+                    "never exits. Without a fallback the run would stay on "
+                    "terminal_weight=0.5 indefinitely even if miss distance is "
+                    "improving. Raising the terminal weight restores the calibrated "
+                    "miss grading without weakening dense shaping while hits are rare."
+                ),
+            },
             "notes": (
                 "Annealing is reported for review only and was not applied. "
                 "This pass freezes shaping_weight=50, terminal_weight=1, "
-                "shaping_gamma=1 (undiscounted PBRS telescope for logged returns)."
+                "shaping_gamma=1 (undiscounted PBRS telescope for logged returns). "
+                "The fallback above is a proposal only."
+            ),
+        },
+        "t_go_continuity": {
+            "pre_fix_worst_jump": {
+                "range_m": 500.0,
+                "abs_d_phi": 0.010308,
+                "abs_d_shaping": 0.5154,
+                "note": (
+                    "At Vc=1±ε with collinear geometry, t_go jumped 25s→5s. "
+                    "Per-step shaping jump ~0.52 vs mean per-step shaping ~0.02 "
+                    "on a ~25-unit episode — material for learning gradients."
+                ),
+            },
+            "formulation": (
+                "t_go = min(range / max(|Vc|, vc_min), t_go_max); "
+                "no closing/receding branch"
             ),
         },
         "gates": {
             "classical_hit_above_miss": gate1,
-            "cp3_cp4_worse_than_cp2": gate2,
+            "reward_ranks_with_miss_distance": gate2,
             "flyby_above_loiter": gate3,
         },
         "classical_rows": classical,
@@ -316,7 +371,7 @@ def main() -> int:
         json.dumps(gate1["per_law"], sort_keys=True),
     )
     print(
-        "Gate 2 CP3/CP4 worse than CP2:",
+        "Gate 2 reward ranks with miss:",
         gate2["passed"],
         {k: v for k, v in gate2.items() if k != "scores"},
     )

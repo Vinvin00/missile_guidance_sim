@@ -42,6 +42,7 @@ class RewardConfig:
     terminal_weight: float = 1.0
     vc_min_m_s: float = 1.0
     t_go_max_s: float = 25.0
+    # Unused by continuous t_go; retained so older config dumps remain valid.
     t_horizon_receding_s: float = 5.0
 
     def __post_init__(self) -> None:
