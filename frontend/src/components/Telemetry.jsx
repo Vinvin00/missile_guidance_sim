@@ -12,11 +12,21 @@ function metric(value, unit, digits = 0) {
   })} ${unit}`
 }
 
+const SOURCE_LABELS = {
+  'synthetic-stream': 'synthetic',
+  'mock-saved-session': 'mock session',
+}
+
 export function Telemetry() {
   const frames = useSimulationStore((state) => state.frames)
   const cursor = useSimulationStore((state) => state.cursor)
   const streamResult = useSimulationStore((state) => state.streamResult)
+  const activeDataSource = useSimulationStore(
+    (state) => state.activeDataSource,
+  )
   const frame = frames[cursor]
+  const sourceLabel =
+    SOURCE_LABELS[activeDataSource] ?? activeDataSource
 
   const items = [
     ['Range', metric(frame?.range_m, 'm', 1)],
@@ -34,7 +44,7 @@ export function Telemetry() {
     <section className="telemetry" aria-label="Current trajectory telemetry">
       <div className="telemetry-heading">
         <span className="eyebrow">Live state</span>
-        <span className="source-chip">synthetic</span>
+        <span className="source-chip">{sourceLabel}</span>
       </div>
       <dl>
         {items.map(([label, value]) => (

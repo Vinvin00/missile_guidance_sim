@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from guidance_sim.api.catalog import get_catalog
+from guidance_sim.api.catalog import get_catalog, resolve_live_parameters
 from guidance_sim.api.schemas import (
     BodyState,
     GuidanceLawId,
@@ -20,8 +20,8 @@ from guidance_sim.api.schemas import (
 )
 
 _DT_S = 0.1
-_INTERCEPTOR_SPEED_M_S = 700.0
-_TARGET_SPEED_M_S = 240.0
+_INTERCEPTOR_SPEED_KEY = "interceptor.speed"
+_TARGET_SPEED_KEY = "target.speed"
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ class MockTrajectory:
     dt_s: float
     frames: list[TrajectoryFrame]
     closest_approach_m: float
+    applied_parameters: dict[str, float]
 
 
 _GEOMETRIES: dict[ScenarioId, MockGeometry] = {
@@ -90,16 +91,32 @@ def build_mock_trajectory(
     scenario_id: ScenarioId,
     guidance_law: GuidanceLawId,
     stream_id: str,
+    parameter_overrides: dict[str, float] | None = None,
 ) -> MockTrajectory:
     """Build one repeatable z-up trajectory for the selected preview."""
+
+    default_parameters = resolve_live_parameters({})
+    applied_parameters = resolve_live_parameters(parameter_overrides or {})
+    interceptor_speed_m_s = applied_parameters[_INTERCEPTOR_SPEED_KEY]
+    target_speed_m_s = applied_parameters[_TARGET_SPEED_KEY]
 
     scenario = next(
         item for item in get_catalog().scenarios if item.id == scenario_id
     )
     geometry = _GEOMETRIES[scenario_id]
-    frame_count = int(round(scenario.duration_s / _DT_S)) + 1
-    times = np.linspace(0.0, scenario.duration_s, frame_count)
-    u = times / scenario.duration_s
+    reference_closing_scale = (
+        default_parameters[_INTERCEPTOR_SPEED_KEY]
+        + 0.35 * default_parameters[_TARGET_SPEED_KEY]
+    )
+    selected_closing_scale = interceptor_speed_m_s + 0.35 * target_speed_m_s
+    duration_s = scenario.duration_s * np.clip(
+        reference_closing_scale / selected_closing_scale,
+        0.65,
+        1.4,
+    )
+    frame_count = int(round(duration_s / _DT_S)) + 1
+    times = np.linspace(0.0, duration_s, frame_count)
+    u = times / duration_s
 
     horizontal_range = np.sqrt(
         scenario.initial_range_m**2 - geometry.lateral_offset_m**2
@@ -118,8 +135,8 @@ def build_mock_trajectory(
     heading_rad = np.deg2rad(geometry.target_heading_deg)
     target_velocity = np.array(
         [
-            _TARGET_SPEED_M_S * np.cos(heading_rad),
-            _TARGET_SPEED_M_S * np.sin(heading_rad),
+            target_speed_m_s * np.cos(heading_rad),
+            target_speed_m_s * np.sin(heading_rad),
             geometry.target_climb_rate_m_s,
         ]
     )
@@ -133,7 +150,11 @@ def build_mock_trajectory(
             - 0.45 * geometry.weave_amplitude_m * np.sin(np.pi / 3.0)
         )
 
-    lateral_curve_m, vertical_curve_m = _GUIDANCE_CURVE_M[guidance_law]
+    curve_scale = default_parameters[_INTERCEPTOR_SPEED_KEY] / interceptor_speed_m_s
+    lateral_curve_m, vertical_curve_m = (
+        component * curve_scale
+        for component in _GUIDANCE_CURVE_M[guidance_law]
+    )
     lead_arc = np.sin(np.pi * u)
     lead_direction = np.column_stack(
         (
@@ -160,9 +181,9 @@ def build_mock_trajectory(
     # samples are finite differences of the deliberately geometric preview.
     initial_los = target_start - pursuer_start
     pursuer_velocities[0] = (
-        initial_los / np.linalg.norm(initial_los) * _INTERCEPTOR_SPEED_M_S
+        initial_los / np.linalg.norm(initial_los) * interceptor_speed_m_s
     )
-    target_velocities[0] *= _TARGET_SPEED_M_S / np.linalg.norm(
+    target_velocities[0] *= target_speed_m_s / np.linalg.norm(
         target_velocities[0]
     )
 
@@ -181,4 +202,5 @@ def build_mock_trajectory(
         dt_s=_DT_S,
         frames=frames,
         closest_approach_m=float(np.min(ranges)),
+        applied_parameters=applied_parameters,
     )

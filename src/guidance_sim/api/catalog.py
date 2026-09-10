@@ -6,6 +6,7 @@ review table in ``docs/scenario-parameter-sources.md``.
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from guidance_sim.api.schemas import (
@@ -24,6 +25,8 @@ def _parameter(
     reference_max: float,
     basis: Literal["direct", "synthesized", "illustrative"],
     *source_ids: str,
+    live_control: bool = False,
+    control_step: float | None = None,
 ) -> ParameterValue:
     return ParameterValue(
         value=value,
@@ -32,6 +35,8 @@ def _parameter(
         reference_max=reference_max,
         basis=basis,
         source_ids=list(source_ids),
+        live_control=live_control,
+        control_step=control_step,
     )
 
 
@@ -94,6 +99,8 @@ CATALOG = CatalogResponse(
                     "NPS-GUIDANCE-2000",
                     "PN-FUZZY-2020",
                     "PN-TRAJECTORY-2022",
+                    live_control=True,
+                    control_step=10.0,
                 ),
                 "mass": _parameter(
                     200.0,
@@ -157,6 +164,8 @@ CATALOG = CatalogResponse(
                     "FOI-ADMIRE-2005",
                     "AIAA-CLIMB-2024",
                     "PN-FUZZY-2020",
+                    live_control=True,
+                    control_step=5.0,
                 ),
                 "mass": _parameter(
                     9_100.0,
@@ -212,3 +221,36 @@ def get_catalog() -> CatalogResponse:
     """Return an isolated catalog object for request-safe serialization."""
 
     return CATALOG.model_copy(deep=True)
+
+
+def get_live_parameters() -> dict[str, ParameterValue]:
+    """Flatten catalog-marked controls without hardcoding vehicle fields."""
+
+    controls: dict[str, ParameterValue] = {}
+    for profile in CATALOG.vehicle_profiles:
+        for parameter_name, parameter in profile.parameters.items():
+            if parameter.live_control:
+                controls[f"{profile.role}.{parameter_name}"] = parameter
+    return controls
+
+
+def resolve_live_parameters(overrides: dict[str, float]) -> dict[str, float]:
+    """Apply bounded client overrides to catalog defaults."""
+
+    controls = get_live_parameters()
+    unknown = sorted(set(overrides) - set(controls))
+    if unknown:
+        raise ValueError(f"unknown live parameter: {unknown[0]}")
+
+    resolved = {name: parameter.value for name, parameter in controls.items()}
+    for name, value in overrides.items():
+        parameter = controls[name]
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+        if not parameter.reference_min <= value <= parameter.reference_max:
+            raise ValueError(
+                f"{name} must be between {parameter.reference_min:g} "
+                f"and {parameter.reference_max:g}"
+            )
+        resolved[name] = value
+    return resolved

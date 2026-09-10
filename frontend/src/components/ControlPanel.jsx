@@ -1,3 +1,6 @@
+import { LiveParameterControls } from './LiveParameterControls'
+import { SessionReplayPanel } from './SessionReplayPanel'
+import { ViewModeToggle } from './ViewModeToggle'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 function formatParameter(parameter) {
@@ -7,7 +10,7 @@ function formatParameter(parameter) {
   })} ${parameter.unit}`
 }
 
-export function ControlPanel({ onRun }) {
+export function ControlPanel({ onRun, onReplay, onTrialCountChange }) {
   const catalog = useSimulationStore((state) => state.catalog)
   const selectedScenarioId = useSimulationStore(
     (state) => state.selectedScenarioId,
@@ -84,6 +87,9 @@ export function ControlPanel({ onRun }) {
         </div>
       )}
 
+      <LiveParameterControls />
+      <ViewModeToggle onTrialCountChange={onTrialCountChange} />
+
       <button
         className="run-button"
         type="button"
@@ -94,6 +100,8 @@ export function ControlPanel({ onRun }) {
       </button>
 
       {error && <p className="error-message">{error}</p>}
+
+      <SessionReplayPanel onReplay={onReplay} disabled={busy} />
 
       <div className="source-note">
         <strong>Synthetic stream</strong>
@@ -111,7 +119,7 @@ export function ControlPanel({ onRun }) {
               <h2>{profile.name}</h2>
             </div>
             <dl>
-              {['speed', 'mass', 'maneuver_limit'].map((key) => (
+              {['mass', 'maneuver_limit'].map((key) => (
                 <div key={key}>
                   <dt>{key.replace('_', ' ')}</dt>
                   <dd>{formatParameter(profile.parameters[key])}</dd>

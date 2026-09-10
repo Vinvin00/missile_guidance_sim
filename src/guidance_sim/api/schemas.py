@@ -39,6 +39,8 @@ class ParameterValue(StrictModel):
     reference_max: float
     basis: Literal["direct", "synthesized", "illustrative"]
     source_ids: list[str]
+    live_control: bool = False
+    control_step: float | None = None
 
 
 class VehicleProfile(StrictModel):
@@ -75,6 +77,7 @@ class StreamStartRequest(StrictModel):
     scenario_id: ScenarioId
     guidance_law: GuidanceLawId
     frame_interval_ms: int = Field(default=8, ge=0, le=250)
+    parameter_overrides: dict[str, float] = Field(default_factory=dict)
 
 
 class StreamStarted(StrictModel):
@@ -86,6 +89,7 @@ class StreamStarted(StrictModel):
     frame_count: int
     dt_s: float
     data_source: DataSource = "synthetic"
+    applied_parameters: dict[str, float]
 
 
 class TrajectoryFrame(StrictModel):

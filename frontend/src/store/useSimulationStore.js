@@ -1,9 +1,31 @@
 import { create } from 'zustand'
 
+function liveParameterValues(catalog, currentValues) {
+  const values = {}
+  for (const profile of catalog.vehicle_profiles) {
+    for (const [name, parameter] of Object.entries(profile.parameters)) {
+      if (!parameter.live_control) continue
+      const id = `${profile.role}.${name}`
+      const current = currentValues[id]
+      values[id] =
+        current >= parameter.reference_min &&
+        current <= parameter.reference_max
+          ? current
+          : parameter.value
+    }
+  }
+  return values
+}
+
 export const useSimulationStore = create((set, get) => ({
   catalog: null,
   selectedScenarioId: 'crossing-intercept',
   selectedGuidanceLaw: 'pn',
+  parameterValues: {},
+  viewMode: 'single',
+  trialCount: 30,
+  trialSet: null,
+  activeDataSource: 'synthetic-stream',
   streamStatus: 'idle',
   streamMeta: null,
   streamResult: null,
@@ -30,18 +52,38 @@ export const useSimulationStore = create((set, get) => ({
         selectedGuidanceLaw: lawExists
           ? state.selectedGuidanceLaw
           : catalog.guidance_laws[0]?.id,
+        parameterValues: liveParameterValues(
+          catalog,
+          state.parameterValues,
+        ),
       }
     }),
 
   selectScenario: (scenarioId) => set({ selectedScenarioId: scenarioId }),
   selectGuidanceLaw: (guidanceLaw) =>
     set({ selectedGuidanceLaw: guidanceLaw }),
+  setLiveParameter: (parameterId, value) =>
+    set((state) => ({
+      parameterValues: {
+        ...state.parameterValues,
+        [parameterId]: value,
+      },
+    })),
+  setViewMode: (viewMode) =>
+    set({
+      viewMode,
+      isPlaying: false,
+    }),
+  setTrialCount: (trialCount) => set({ trialCount }),
+  setTrialSet: (trialSet) => set({ trialSet }),
 
   beginStream: () =>
     set({
+      activeDataSource: 'synthetic-stream',
       streamStatus: 'connecting',
       streamMeta: null,
       streamResult: null,
+      trialSet: null,
       frames: [],
       cursor: 0,
       playheadS: 0,
@@ -66,6 +108,35 @@ export const useSimulationStore = create((set, get) => ({
       playheadS: 0,
       isPlaying: state.frames.length > 1,
     })),
+
+  loadReplay: (trajectoryLog) =>
+    set({
+      selectedScenarioId: trajectoryLog.scenario_id,
+      selectedGuidanceLaw: trajectoryLog.guidance_law,
+      activeDataSource: trajectoryLog.source,
+      streamStatus: 'ready',
+      streamMeta: {
+        stream_id: trajectoryLog.session_id,
+        scenario_id: trajectoryLog.scenario_id,
+        guidance_law: trajectoryLog.guidance_law,
+        frame_count: trajectoryLog.frames.length,
+        dt_s: trajectoryLog.dt_s,
+        data_source: trajectoryLog.source,
+      },
+      streamResult: {
+        outcome: trajectoryLog.outcome,
+        closest_approach_m: trajectoryLog.closest_approach_m,
+        frame_count: trajectoryLog.frames.length,
+        data_source: trajectoryLog.source,
+      },
+      frames: trajectoryLog.frames,
+      trialSet: null,
+      viewMode: 'single',
+      cursor: 0,
+      playheadS: 0,
+      isPlaying: false,
+      error: null,
+    }),
 
   failStream: (message) =>
     set({

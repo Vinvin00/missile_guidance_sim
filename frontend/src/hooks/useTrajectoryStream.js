@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 
+import { loadTrialSet } from '../data/trajectoryData'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 function websocketUrl() {
@@ -17,6 +18,9 @@ export function useTrajectoryStream() {
   const selectedGuidanceLaw = useSimulationStore(
     (state) => state.selectedGuidanceLaw,
   )
+  const parameterValues = useSimulationStore(
+    (state) => state.parameterValues,
+  )
   const beginStream = useSimulationStore((state) => state.beginStream)
   const markStreamStarted = useSimulationStore(
     (state) => state.markStreamStarted,
@@ -24,6 +28,7 @@ export function useTrajectoryStream() {
   const appendFrame = useSimulationStore((state) => state.appendFrame)
   const completeStream = useSimulationStore((state) => state.completeStream)
   const failStream = useSimulationStore((state) => state.failStream)
+  const setTrialSet = useSimulationStore((state) => state.setTrialSet)
 
   const startStream = useCallback(() => {
     requestIdRef.current += 1
@@ -42,6 +47,7 @@ export function useTrajectoryStream() {
           scenario_id: selectedScenarioId,
           guidance_law: selectedGuidanceLaw,
           frame_interval_ms: 6,
+          parameter_overrides: parameterValues,
         }),
       )
     }
@@ -59,6 +65,12 @@ export function useTrajectoryStream() {
         case 'stream.completed':
           completed = true
           completeStream(message)
+          loadTrialSet({
+            baseFrames: useSimulationStore.getState().frames,
+            count: useSimulationStore.getState().trialCount,
+          }).then((trialSet) => {
+            if (requestId === requestIdRef.current) setTrialSet(trialSet)
+          })
           break
         case 'stream.error':
           completed = true
@@ -91,8 +103,10 @@ export function useTrajectoryStream() {
     completeStream,
     failStream,
     markStreamStarted,
+    parameterValues,
     selectedGuidanceLaw,
     selectedScenarioId,
+    setTrialSet,
   ])
 
   useEffect(

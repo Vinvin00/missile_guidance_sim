@@ -26,9 +26,13 @@ ML checkpoint integration remains deferred.
 
 **Interactive visualization scaffold — done.** A FastAPI WebSocket
 streams explicitly synthetic trajectory frames into a Vite + React Three
-Fiber viewer with orbit controls, scenario/guidance selection, telemetry,
-and local playback controls. The stream contract is ready for a future
-evaluation adapter, but it does not load or evaluate an RL checkpoint.
+Fiber viewer with orbit controls, scenario/guidance selection, live
+parameter sliders, telemetry, and local playback controls. The viewer
+also has mock RL workflow UI: all-trials overlay, a training dashboard,
+and last-session replay. Those surfaces read isolated mock loaders so a
+real training feed can replace the JSON later without changing the scene.
+The stream contract is ready for a future evaluation adapter, but it does
+not load or evaluate an RL checkpoint.
 
 ## Architecture
 
@@ -137,6 +141,21 @@ npm run dev
    levels (intercept rate, average miss distance)
 5. ~~Interactive R3F visualization with orbit/playback controls~~ ✅
 6. Results and benchmarks written up in this README
+
+## Visualization mock data
+
+The viewer still uses labeled synthetic sources:
+
+- `/api/catalog` plus `/ws/trajectory` — live synthetic preview, including
+  catalog-bounded interceptor/target speed overrides
+- `frontend/public/mock/last-session.json` — saved-session replay sample
+- `frontend/public/mock/training-log.json` — `{episode, reward, success}`
+  training dashboard sample
+- `loadTrialSet()` — seeded mock overlay of 20–50 PN-like trials
+
+Swap `loadTrajectoryLog()`, `loadTrialSet()`, or `loadTrainingLog()` when a
+real RL episode log exists. Do not treat overlay colors or dashboard
+curves as trained-policy results.
 
 ### Possible later extension (not started)
 

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "session_id": "mock-session-2026-09-09",
+  "source": "mock-saved-session",
+  "note": "SYNTHETIC last-session sample. Not a real RL rollout log.",
+  "scenario_id": "evasive-climb",
+  "guidance_law": "pn",
+  "outcome": "intercept",
+  "samples": [
+    {
+      "time_s": 0,
+      "pursuer_position_m": { "x": 0, "y": 0, "z": 3040 },
+      "target_position_m": { "x": 6000, "y": 900, "z": 3300 }
+    },
+    {
+      "time_s": 1,
+      "pursuer_position_m": { "x": 600, "y": 80, "z": 3070 },
+      "target_position_m": { "x": 5800, "y": 975, "z": 3320 }
+    },
+    {
+      "time_s": 2,
+      "pursuer_position_m": { "x": 1200, "y": 180, "z": 3105 },
+      "target_position_m": { "x": 5600, "y": 1035, "z": 3345 }
+    },
+    {
+      "time_s": 3,
+      "pursuer_position_m": { "x": 1780, "y": 300, "z": 3140 },
+      "target_position_m": { "x": 5400, "y": 1080, "z": 3370 }
+    },
+    {
+      "time_s": 4,
+      "pursuer_position_m": { "x": 2320, "y": 450, "z": 3180 },
+      "target_position_m": { "x": 5200, "y": 1120, "z": 3390 }
+    },
+    {
+      "time_s": 5,
+      "pursuer_position_m": { "x": 2800, "y": 650, "z": 3230 },
+      "target_position_m": { "x": 5000, "y": 1170, "z": 3405 }
+    },
+    {
+      "time_s": 6,
+      "pursuer_position_m": { "x": 3220, "y": 850, "z": 3280 },
+      "target_position_m": { "x": 4800, "y": 1240, "z": 3420 }
+    },
+    {
+      "time_s": 7,
+      "pursuer_position_m": { "x": 3560, "y": 1070, "z": 3330 },
+      "target_position_m": { "x": 4600, "y": 1320, "z": 3435 }
+    },
+    {
+      "time_s": 8,
+      "pursuer_position_m": { "x": 3800, "y": 1250, "z": 3370 },
+      "target_position_m": { "x": 4400, "y": 1395, "z": 3445 }
+    },
+    {
+      "time_s": 9,
+      "pursuer_position_m": { "x": 3950, "y": 1400, "z": 3410 },
+      "target_position_m": { "x": 4200, "y": 1455, "z": 3455 }
+    },
+    {
+      "time_s": 10,
+      "pursuer_position_m": { "x": 4001.5, "y": 1501, "z": 3460 },
+      "target_position_m": { "x": 4000, "y": 1500, "z": 3460 }
+    }
+  ]
+}

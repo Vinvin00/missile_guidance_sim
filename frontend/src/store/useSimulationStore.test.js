@@ -48,4 +48,25 @@ describe('simulation playback store', () => {
       isPlaying: true,
     })
   })
+
+  it('loads a saved session into the existing playback buffers', () => {
+    useSimulationStore.getState().loadReplay({
+      scenario_id: 'evasive-climb',
+      guidance_law: 'pn',
+      source: 'mock-saved-session',
+      session_id: 'unit-replay',
+      dt_s: 0.1,
+      outcome: 'intercept',
+      closest_approach_m: 3.2,
+      frames,
+    })
+
+    expect(useSimulationStore.getState()).toMatchObject({
+      activeDataSource: 'mock-saved-session',
+      viewMode: 'single',
+      selectedScenarioId: 'evasive-climb',
+      frames,
+      isPlaying: false,
+    })
+  })
 })

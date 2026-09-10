@@ -74,17 +74,28 @@ async def trajectory_stream(websocket: WebSocket) -> None:
             return
 
         stream_id = str(uuid4())
-        trajectory = build_mock_trajectory(
-            request.scenario_id,
-            request.guidance_law,
-            stream_id,
-        )
+        try:
+            trajectory = build_mock_trajectory(
+                request.scenario_id,
+                request.guidance_law,
+                stream_id,
+                request.parameter_overrides,
+            )
+        except ValueError as exc:
+            error = StreamError(
+                code="invalid_parameter_override",
+                detail=str(exc),
+            )
+            await websocket.send_json(error.model_dump(mode="json"))
+            await websocket.close(code=1008)
+            return
         started = StreamStarted(
             stream_id=stream_id,
             scenario_id=request.scenario_id,
             guidance_law=request.guidance_law,
             frame_count=len(trajectory.frames),
             dt_s=trajectory.dt_s,
+            applied_parameters=trajectory.applied_parameters,
         )
         await websocket.send_json(started.model_dump(mode="json"))
 

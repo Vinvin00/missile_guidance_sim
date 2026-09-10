@@ -76,6 +76,27 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
+.app-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.app-nav a {
+  border: 1px solid rgb(139 158 184 / 18%);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: #aeb9c8;
+  background: rgb(17 25 37 / 70%);
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.app-nav a[aria-current='page'] {
+  color: #07131a;
+  background: #55d9ff;
+  border-color: transparent;
+}
+
 .legend {
   display: flex;
   gap: 16px;
@@ -118,6 +139,7 @@ input:focus-visible {
 
 .control-panel,
 .telemetry,
+.training-dashboard,
 .scene-shell,
 .playback-controls {
   border: 1px solid rgb(139 158 184 / 16%);
@@ -127,9 +149,22 @@ input:focus-visible {
 }
 
 .control-panel,
-.telemetry {
+.telemetry,
+.training-dashboard {
   border-radius: 14px;
   padding: 18px;
+}
+
+.side-column {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.training-route {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
 }
 
 .panel-heading,
@@ -161,6 +196,179 @@ input:focus-visible {
 .status-error {
   color: #ff759a;
   border-color: rgb(255 100 143 / 32%);
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 18px 0 10px;
+}
+
+.section-heading small {
+  color: #6f7e92;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+}
+
+.live-parameters,
+.view-mode-control,
+.session-replay {
+  margin-top: 16px;
+}
+
+.parameter-slider,
+.trial-count {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.parameter-slider span,
+.trial-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #c5cfdb;
+  font-size: 0.72rem;
+}
+
+.parameter-slider output,
+.parameter-slider small {
+  color: #6f7e92;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+}
+
+.parameter-slider input,
+.timeline {
+  width: 100%;
+  accent-color: #55d9ff;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.segmented-control button,
+.session-replay-actions button,
+.file-input {
+  border: 1px solid rgb(139 158 184 / 18%);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #aeb9c8;
+  background: #111925;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.segmented-control button[aria-pressed='true'] {
+  color: #07131a;
+  background: #55d9ff;
+  border-color: transparent;
+}
+
+.session-replay p {
+  margin: 0 0 10px;
+  color: #75849a;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.session-replay-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.file-input {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.file-input input {
+  display: none;
+}
+
+.trial-overlay-summary {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgb(139 158 184 / 16%);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #aeb9c8;
+  background: rgb(8 12 19 / 78%);
+  font-size: 0.62rem;
+  pointer-events: none;
+}
+
+.trial-overlay-summary div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trial-legend {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.trial-legend.success {
+  background: #7dffb3;
+}
+
+.trial-legend.failed {
+  background: #ff8aa8;
+}
+
+.training-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.training-metrics div {
+  display: grid;
+  gap: 4px;
+}
+
+.training-metrics dt {
+  color: #6f7e92;
+  font-size: 0.62rem;
+}
+
+.training-metrics dd {
+  margin: 0;
+  color: #dce4ef;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 0.92rem;
+}
+
+.reward-chart {
+  margin: 0;
+}
+
+.reward-chart svg {
+  display: block;
+  width: 100%;
+  height: 120px;
+  border-radius: 8px;
+  background: #111925;
+}
+
+.reward-chart figcaption {
+  margin-top: 6px;
+  color: #6f7e92;
+  font-size: 0.62rem;
 }
 
 .field-label {
@@ -434,7 +642,8 @@ input:disabled {
   padding: 7px;
 }
 
-.telemetry {
+.telemetry,
+.side-column {
   align-self: start;
 }
 
@@ -459,7 +668,7 @@ input:disabled {
     grid-template-columns: 250px minmax(0, 1fr);
   }
 
-  .telemetry {
+  .side-column {
     grid-column: 1 / -1;
   }
 

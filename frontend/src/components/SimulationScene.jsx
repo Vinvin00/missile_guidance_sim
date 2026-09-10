@@ -2,7 +2,9 @@ import { Grid, Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 
+import { TrialOverlaySummary } from './TrialOverlaySummary'
 import { engagementOrigin, toScenePoint } from '../lib/coordinates'
+import { trialAppearance } from '../lib/trialAppearance'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 function VehicleMarker({ label, position, color, shape }) {
@@ -27,9 +29,32 @@ function VehicleMarker({ label, position, color, shape }) {
   )
 }
 
+function TrialOverlay({ origin }) {
+  const trials = useSimulationStore((state) => state.trialSet?.trials ?? [])
+
+  return trials.map((trial, index) => {
+    const appearance = trialAppearance(trial, index, trials.length)
+    const points = trial.frames.map((frame) =>
+      toScenePoint(frame.pursuer.position_m, origin),
+    )
+    if (points.length < 2) return null
+    return (
+      <Line
+        key={trial.episode}
+        points={points}
+        color={appearance.color}
+        transparent
+        opacity={appearance.opacity}
+        lineWidth={appearance.lineWidth}
+      />
+    )
+  })
+}
+
 function Trajectories() {
   const frames = useSimulationStore((state) => state.frames)
   const cursor = useSimulationStore((state) => state.cursor)
+  const viewMode = useSimulationStore((state) => state.viewMode)
   const origin = useMemo(() => engagementOrigin(frames[0]), [frames])
 
   const points = useMemo(
@@ -51,6 +76,23 @@ function Trajectories() {
   const targetPosition = toScenePoint(current.target.position_m, origin)
   const visiblePursuer = points.pursuer.slice(0, cursor + 1)
   const visibleTarget = points.target.slice(0, cursor + 1)
+
+  if (viewMode === 'trials') {
+    return (
+      <>
+        {points.target.length > 1 && (
+          <Line
+            points={points.target}
+            color="#ff648f"
+            transparent
+            opacity={0.28}
+            lineWidth={1.4}
+          />
+        )}
+        <TrialOverlay origin={origin} />
+      </>
+    )
+  }
 
   return (
     <>
@@ -96,6 +138,7 @@ function Trajectories() {
 
 export function SimulationScene() {
   const hasFrames = useSimulationStore((state) => state.frames.length > 0)
+  const viewMode = useSimulationStore((state) => state.viewMode)
 
   return (
     <div className="scene-shell">
@@ -134,10 +177,15 @@ export function SimulationScene() {
       {!hasFrames && (
         <div className="empty-scene">
           <span>3D engagement space</span>
-          <strong>Choose a scenario and run a preview</strong>
+          <strong>
+            {viewMode === 'trials'
+              ? 'Run a preview to overlay mock trials'
+              : 'Choose a scenario and run a preview'}
+          </strong>
           <small>Drag to orbit · scroll to zoom · right-drag to pan</small>
         </div>
       )}
+      {viewMode === 'trials' && <TrialOverlaySummary />}
       <div className="axis-legend" aria-label="Scene units">
         z-up simulation · scene units in km
       </div>

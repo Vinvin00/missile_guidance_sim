@@ -23,8 +23,9 @@ def test_catalog_exposes_generic_grounded_profiles():
         "Interceptor A",
         "Target B",
     ]
+    live_controls = []
     for profile in catalog["vehicle_profiles"]:
-        for parameter in profile["parameters"].values():
+        for parameter_name, parameter in profile["parameters"].items():
             assert parameter["reference_min"] <= parameter["value"]
             assert parameter["value"] <= parameter["reference_max"]
             assert parameter["basis"] in {
@@ -33,6 +34,10 @@ def test_catalog_exposes_generic_grounded_profiles():
                 "illustrative",
             }
             assert parameter["source_ids"]
+            if parameter["live_control"]:
+                live_controls.append(f"{profile['role']}.{parameter_name}")
+                assert parameter["control_step"] > 0
+    assert live_controls == ["interceptor.speed", "target.speed"]
 
 
 def test_websocket_streams_ordered_synthetic_trajectory():
@@ -48,6 +53,10 @@ def test_websocket_streams_ordered_synthetic_trajectory():
         started = websocket.receive_json()
         assert started["type"] == "stream.started"
         assert started["data_source"] == "synthetic"
+        assert started["applied_parameters"] == {
+            "interceptor.speed": 700.0,
+            "target.speed": 240.0,
+        }
 
         frames = [websocket.receive_json() for _ in range(started["frame_count"])]
         completed = websocket.receive_json()
@@ -82,6 +91,56 @@ def test_websocket_rejects_unknown_scenario():
 
     assert error["type"] == "stream.error"
     assert error["code"] == "invalid_request"
+
+
+def test_websocket_rejects_out_of_range_live_parameter():
+    with TestClient(app).websocket_connect("/ws/trajectory") as websocket:
+        websocket.send_json(
+            {
+                "type": "stream.start",
+                "scenario_id": "crossing-intercept",
+                "guidance_law": "pn",
+                "parameter_overrides": {"interceptor.speed": 1_200.0},
+            }
+        )
+        error = websocket.receive_json()
+
+    assert error["type"] == "stream.error"
+    assert error["code"] == "invalid_parameter_override"
+    assert "between 600 and 1000" in error["detail"]
+
+
+def test_live_speed_overrides_change_preview_and_initial_state():
+    default = build_mock_trajectory(
+        "crossing-intercept",
+        "pn",
+        stream_id="default",
+    )
+    slower = build_mock_trajectory(
+        "crossing-intercept",
+        "pn",
+        stream_id="slower",
+        parameter_overrides={
+            "interceptor.speed": 600.0,
+            "target.speed": 300.0,
+        },
+    )
+
+    assert len(slower.frames) > len(default.frames)
+    assert np.linalg.norm(
+        [
+            slower.frames[0].pursuer.velocity_m_s.x,
+            slower.frames[0].pursuer.velocity_m_s.y,
+            slower.frames[0].pursuer.velocity_m_s.z,
+        ]
+    ) == pytest.approx(600.0)
+    assert np.linalg.norm(
+        [
+            slower.frames[0].target.velocity_m_s.x,
+            slower.frames[0].target.velocity_m_s.y,
+            slower.frames[0].target.velocity_m_s.z,
+        ]
+    ) == pytest.approx(300.0)
 
 
 @pytest.mark.parametrize(
