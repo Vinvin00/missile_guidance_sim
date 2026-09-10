@@ -1,5 +1,54 @@
 # NOTES
 
+## 2026-09-10 — From-scratch retrain CP3 (lateral2 + new reward)
+
+- Resumed CP2 only; reward / action / obs / domain-rand unchanged.
+  Effort-weight annealing **not** applied.
+- **61,440 cumulative / 16 new episodes**. Training return improved within
+  CP3 (−12.352 → +9.796). Fixed-eval vs CP2: hit rate flat 4/9, mean miss
+  worsened 493.9 → 542.1 m, eval return worsened +39.92 → +34.39.
+  Harness `convergence_warning=True` (streak=1). Per stop rule this is the
+  first non-improving joint transition; CP4 not started per instructions.
+- New return **+34.387** (shaping 25.274 / effort −6.343 / terminal +15.456);
+  legacy **+51.242**. Control effort rose again 29302 → **102900** m²/s³.
+  Cmd/achieved RMS **50.10 / 43.50** (still matched); along-track **~0**.
+  Outcomes: **0 ground / 5 timeout / 4 hit**.
+- Per-case miss CP1 → CP2 → CP3 (m):
+  - NoManeuver c/d/o: 113.7→1.4→**0.2 hit**, 219.5→3.2→**4.9 hit**,
+    374.7→3.9→**3.4 hit**
+  - Weave 3/5/7 g: 207.8→2.0→**3.1 hit**, 202.8→8.3→14.1,
+    327.5→5.6→8.9
+  - ConstantTurn 3/5/7 g: 431.9→702.2→**877.0**, 1014.8→1464.2→**1440.3**,
+    2054.1→2253.9→**2527.3**
+- **ConstantTurn: continues diverging** (3 g and 7 g worse than CP2; 5 g
+  only −24 m vs CP2 and still far worse than CP1). Lagging class unchanged.
+
+### ConstantTurn diagnostic (CP3 policy, no config changes)
+
+Compared frozen eval `constant_turn_left_3g` vs successful `weave_3g_055hz`.
+Artifact: `outputs/constant_turn_diagnostic_cp3.json`.
+
+- Trajectory: Turn still closing at timeout (R 6500→877 m, min at t=25 s).
+  Weave intercepts at t≈16.5 s (R→3.1 m). At Turn timeout, separation is
+  mostly **along-track** (dx≈869 m) not cross-track (dy≈63 m) — pursuer
+  trails the circling target rather than flying past laterally.
+- Command character: Turn has **sustained asymmetric bias** (bias energy
+  fraction 0.52, mean sign run 3.6 s, ZCR 0.005). Weave is oscillatory /
+  near-symmetric (bias ≈0, mean sign run 0.44 s, ZCR 0.045). Failure is
+  **not** “policy only knows how to weave.”
+- Timing: closing is established early (Vc>0 throughout); failure is
+  **never completing intercept within max_time** (still closing at end),
+  not a late near-miss that reopens after a close approach.
+- Shared-cause flag vs prior APN/ConstantTurn finding: **same scenario
+  class, different mechanism.** APN’s issue is constant-a_T; this policy
+  already applies sustained lateral bias. Shared factor is that
+  ConstantTurn’s rotating accel geometry is harder under the frozen
+  observation — not that RL inherited the APN modeling error.
+
+Saved-model reload OK; full suite **56 passed**. **CP4 not started.**
+
+## 2026-09-10 — From-scratch retrain CP2 (lateral2 + new reward)
+
 ## 2026-09-10 — From-scratch retrain CP2 (lateral2 + new reward)
 
 - Resumed CP1 only; reward / action / obs / domain-rand unchanged.
