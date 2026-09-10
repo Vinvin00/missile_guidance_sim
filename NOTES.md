@@ -1,5 +1,43 @@
 # NOTES
 
+## 2026-09-10 — Eval Group A/B reporting split + CP4
+
+Reporting-only change (no reward / action / obs / max_time / scenario edits).
+
+- **Group A** (feasible-within-budget; drives stop): NoManeuver×3 + Weave×3
+- **Group B** (budget-constrained; tracked only): ConstantTurn×3
+  Classical PN/APN/OGL all miss Turn under frozen 25 s
+  (`outputs/constant_turn_feasibility_diagnostic.json`).
+- Progress log now prints Group A/B hit/miss/reward/effort alongside pooled
+  9-case metrics. Stop = two consecutive Group-A non-improvements on
+  reward + miss + hit together.
+
+### Retroactive CP1–3 (from logged cases)
+
+| CP | A hits | A miss mean/med | A reward | B hits | B miss mean/med |
+|---|---|---|---|---|---|
+| 1 | 0/6 | 241.0 / 213.6 | +1.0 | 0/3 | 1167 / 1015 |
+| 2 | 4/6 | 4.1 / 3.6 | +89.5 | 0/3 | 1473 / 1464 |
+| 3 | 4/6 | 5.8 / 4.2 | +83.3 | 0/3 | 1615 / 1440 |
+
+CP2→CP3 Group A did **not** improve (hits flat, miss/reward slightly worse).
+Pooled CP3 warning was **not** only Group B noise — Group A also stalled.
+
+### Checkpoint 4 (unchanged training config)
+
+- **81,920 cumulative / 16 new episodes**. Training return −17.70 → +24.10.
+- Pooled: **3/9 hits (33.3%)**; miss **529.280 / 6.030 m**; return **+19.138**
+  (shaping 25.274 / effort −10.930 / terminal +4.794); effort **197488**.
+- **Group A: 3/6** hits, miss 5.759 / 5.186 m, reward +59.888, effort 274847
+  — **regressed vs CP3** (lost Weave hits; NoManeuver still 3/3).
+- **Group B: 0/3**, miss 1576 / 1414 m, reward −62.364 (still near classical
+  ceiling under this budget).
+- Per-case miss (m): NoManeuver 4.75 / 4.36 / 3.58 **hit**; Turn 813.9 /
+  1413.8 / 2501.3; Weave 5.62 / 10.22 / 6.03 (all miss, near lethal).
+- Group-A stop warning: **True** (CP2→CP3 and CP3→CP4 both non-improving
+  on Group A). **CP5 not started.**
+- Full suite **57 passed**.
+
 ## 2026-09-10 — From-scratch retrain CP3 (lateral2 + new reward)
 
 - Resumed CP2 only; reward / action / obs / domain-rand unchanged.

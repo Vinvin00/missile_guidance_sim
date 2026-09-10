@@ -72,3 +72,41 @@
 - Model: `outputs/checkpoints/rl_checkpoint_03.zip`
 - Evaluation details: `outputs/rl_checkpoint_03_eval.json`
 - Training curve: `outputs/training_curve.png`
+
+## Reporting split (retroactive CP1–3)
+
+Group A = NoManeuver + Weave (feasible within 25 s; drives stop).
+Group B = ConstantTurn (budget-constrained; tracked only).
+
+- CP1 Group A: 0/6 hits, miss 240.991/213.622 m, reward 1.015742, effort 5714.991
+- CP1 Group B: 0/3 hits, miss 1166.950/1014.826 m, reward -45.662107, effort 1858.270
+- CP2 Group A: 4/6 hits, miss 4.076/3.586 m, reward 89.531516, effort 28688.840
+- CP2 Group B: 0/3 hits, miss 1473.433/1464.221 m, reward -59.316635, effort 30527.930
+- CP3 Group A: 4/6 hits, miss 5.763/4.155 m, reward 83.327981, effort 134522.592
+- CP3 Group B: 0/3 hits, miss 1614.842/1440.323 m, reward -63.495412, effort 39656.152
+
+- CP1→CP2: Group A improved (hits 0/6→4/6, miss 241→4.1 m).
+- CP2→CP3: Group A did **not** improve (hits flat 4/6, miss 4.1→5.8 m, reward 89.5→83.3). Pooled CP3 warning was therefore **not** only Group B noise — Group A also stalled under the same joint criteria (though absolute Group A performance remained strong).
+
+## Checkpoint 4
+
+- Cumulative timesteps: 81,920
+- Episodes completed this checkpoint: 16
+- Episodes completed total: 64
+- First/last quintile mean reward: -17.697392 / 24.097405
+- Within-checkpoint reward change: +41.794797
+- Fixed-eval hit rate: 3/9 (33.3%)
+- Fixed-eval mean/median miss distance: 529.280 / 6.030 m
+- Fixed-eval mean episode reward: 19.137620
+- Fixed-eval mean reward components (shaping/effort/terminal): 25.273910 / -10.930051 / 4.793761
+- Fixed-eval mean legacy episode reward: 24.900412
+- Fixed-eval mean control effort: 197488.238608 m²/s³
+- Fixed-eval mean commanded/achieved RMS accel: 69.209 / 56.197 m/s²
+- Fixed-eval mean commanded along-track energy fraction: 0.000000
+- Fixed-eval outcomes (ground impact/timeout/hit): 0/6/3
+- Group A (NoManeuver+Weave) hit rate / mean/median miss / mean reward / mean effort: 3/6 / 5.759 / 5.186 m / 59.888424 / 274846.621824 m²/s³
+- Group B (ConstantTurn) hit rate / mean/median miss / mean reward / mean effort: 0/3 / 1576.322 / 1413.770 m / -62.363988 / 42771.472175 m²/s³
+- Possible convergence warning (Group A stop): True
+- Model: `outputs/checkpoints/rl_checkpoint_04.zip`
+- Evaluation details: `outputs/rl_checkpoint_04_eval.json`
+- Training curve: `outputs/training_curve.png`

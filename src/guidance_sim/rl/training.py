@@ -207,6 +207,28 @@ class CaseEvaluation:
 
 
 @dataclass(frozen=True)
+class EvalGroupSummary:
+    """Aggregate metrics for one reporting slice of the fixed eval set."""
+
+    name: str
+    n_cases: int
+    n_hits: int
+    hit_rate: float
+    mean_miss_distance_m: float
+    median_miss_distance_m: float
+    mean_episode_reward: float
+    mean_control_effort_m2_s3: float
+    n_ground_impacts: int
+    n_timeouts: int
+
+
+# Group A: feasible within the frozen 25 s budget (NoManeuver + Weave).
+# Group B: budget-constrained ConstantTurn (tracked, not used for stop).
+GROUP_A_MANEUVERS = frozenset({"none", "weave"})
+GROUP_B_MANEUVERS = frozenset({"constant_turn"})
+
+
+@dataclass(frozen=True)
 class EvaluationSummary:
     n_cases: int
     n_hits: int
@@ -224,7 +246,80 @@ class EvaluationSummary:
     mean_commanded_rms_m_s2: float
     mean_achieved_rms_m_s2: float
     mean_commanded_along_track_fraction: float
+    group_a: EvalGroupSummary
+    group_b: EvalGroupSummary
     cases: tuple[CaseEvaluation, ...]
+
+
+def _summarize_eval_group(
+    name: str,
+    cases: Sequence[CaseEvaluation],
+) -> EvalGroupSummary:
+    if not cases:
+        return EvalGroupSummary(
+            name=name,
+            n_cases=0,
+            n_hits=0,
+            hit_rate=0.0,
+            mean_miss_distance_m=0.0,
+            median_miss_distance_m=0.0,
+            mean_episode_reward=0.0,
+            mean_control_effort_m2_s3=0.0,
+            n_ground_impacts=0,
+            n_timeouts=0,
+        )
+    misses = np.array([case.miss_distance_m for case in cases], dtype=float)
+    rewards = np.array([case.episode_reward for case in cases], dtype=float)
+    efforts = np.array([case.control_effort_m2_s3 for case in cases], dtype=float)
+    n_hits = sum(case.hit for case in cases)
+    return EvalGroupSummary(
+        name=name,
+        n_cases=len(cases),
+        n_hits=n_hits,
+        hit_rate=float(n_hits / len(cases)),
+        mean_miss_distance_m=float(np.mean(misses)),
+        median_miss_distance_m=float(np.median(misses)),
+        mean_episode_reward=float(np.mean(rewards)),
+        mean_control_effort_m2_s3=float(np.mean(efforts)),
+        n_ground_impacts=sum(case.outcome == "miss" for case in cases),
+        n_timeouts=sum(case.outcome == "timeout" for case in cases),
+    )
+
+
+def group_summary_from_case_dicts(
+    name: str,
+    case_dicts: Sequence[dict[str, object]],
+    *,
+    maneuvers: frozenset[str],
+) -> EvalGroupSummary:
+    """Rebuild a group summary from archived per-case JSON (CP1–3 provenance)."""
+
+    selected = [case for case in case_dicts if str(case["maneuver"]) in maneuvers]
+    if not selected:
+        return _summarize_eval_group(name, ())
+    reconstructed = [
+        CaseEvaluation(
+            name=str(case["name"]),
+            maneuver=str(case["maneuver"]),
+            hit=bool(case["hit"]),
+            outcome=str(case["outcome"]),
+            miss_distance_m=float(case["miss_distance_m"]),
+            episode_reward=float(case["episode_reward"]),
+            progress_reward=float(case.get("progress_reward", 0.0)),
+            effort_penalty=float(case.get("effort_penalty", 0.0)),
+            terminal_reward=float(case.get("terminal_reward", 0.0)),
+            legacy_episode_reward=float(case.get("legacy_episode_reward", 0.0)),
+            final_time_s=float(case.get("final_time_s", 0.0)),
+            control_effort_m2_s3=float(case["control_effort_m2_s3"]),
+            commanded_rms_m_s2=float(case.get("commanded_rms_m_s2", 0.0)),
+            achieved_rms_m_s2=float(case.get("achieved_rms_m_s2", 0.0)),
+            commanded_along_track_fraction=float(
+                case.get("commanded_along_track_fraction", 0.0)
+            ),
+        )
+        for case in selected
+    ]
+    return _summarize_eval_group(name, reconstructed)
 
 
 @dataclass(frozen=True)
@@ -556,6 +651,12 @@ def evaluate_policy(
     n_hits = sum(result.hit for result in results)
     n_ground_impacts = sum(result.outcome == "miss" for result in results)
     n_timeouts = sum(result.outcome == "timeout" for result in results)
+    group_a_cases = tuple(
+        result for result in results if result.maneuver in GROUP_A_MANEUVERS
+    )
+    group_b_cases = tuple(
+        result for result in results if result.maneuver in GROUP_B_MANEUVERS
+    )
     return EvaluationSummary(
         n_cases=len(results),
         n_hits=n_hits,
@@ -573,6 +674,8 @@ def evaluate_policy(
         mean_commanded_rms_m_s2=float(np.mean(commanded_rms)),
         mean_achieved_rms_m_s2=float(np.mean(achieved_rms)),
         mean_commanded_along_track_fraction=float(np.mean(along_frac)),
+        group_a=_summarize_eval_group("group_a_feasible", group_a_cases),
+        group_b=_summarize_eval_group("group_b_budget_constrained", group_b_cases),
         cases=tuple(results),
     )
 
@@ -649,16 +752,47 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     )
 
 
+def _group_metrics_from_evaluation_payload(
+    evaluation: dict[str, object],
+) -> tuple[float, float, int] | None:
+    """Return (mean_reward, mean_miss, n_hits) for Group A, including CP1–3 JSON."""
+
+    group_a = evaluation.get("group_a")
+    if isinstance(group_a, dict):
+        return (
+            float(group_a["mean_episode_reward"]),
+            float(group_a["mean_miss_distance_m"]),
+            int(group_a["n_hits"]),
+        )
+    cases = evaluation.get("cases")
+    if not isinstance(cases, list):
+        return None
+    summary = group_summary_from_case_dicts(
+        "group_a_feasible",
+        cases,
+        maneuvers=GROUP_A_MANEUVERS,
+    )
+    if summary.n_cases == 0:
+        return None
+    return (
+        summary.mean_episode_reward,
+        summary.mean_miss_distance_m,
+        summary.n_hits,
+    )
+
+
 def _previous_no_improvement_streak(
     output_dir: Path,
     checkpoint_index: int,
     evaluation: EvaluationSummary,
 ) -> int:
-    """Count consecutive checkpoints with no joint improvement.
+    """Count consecutive checkpoints with no Group-A joint improvement.
 
-    Improvement requires at least one of: higher eval return, lower mean miss,
-    or higher hit rate (beyond small tolerances). Two consecutive non-improving
-    transitions raise the convergence flag.
+    Stop condition uses only Group A (NoManeuver + Weave). Group B
+    (ConstantTurn) is reported but does not drive the flag, because under the
+    frozen 25 s budget it is expected to plateau near the classical ceiling.
+    Improvement requires at least one of: higher Group-A eval return, lower
+    Group-A mean miss, or higher Group-A hit count (beyond small tolerances).
     """
 
     if checkpoint_index <= 1:
@@ -667,18 +801,44 @@ def _previous_no_improvement_streak(
     if not previous_path.exists():
         return 0
     previous = json.loads(previous_path.read_text(encoding="utf-8"))
-    previous_streak = int(previous.get("no_improvement_streak", 0))
     prev_eval = previous.get("evaluation", {})
-    prev_reward = prev_eval.get("mean_episode_reward")
-    prev_miss = prev_eval.get("mean_miss_distance_m")
-    prev_hits = prev_eval.get("n_hits")
-    if prev_reward is None or prev_miss is None or prev_hits is None:
+    if not isinstance(prev_eval, dict):
         return 0
+    previous_group_a = _group_metrics_from_evaluation_payload(prev_eval)
+    if previous_group_a is None:
+        return 0
+    prev_reward, prev_miss, prev_hits = previous_group_a
+
+    if "group_a" in prev_eval:
+        previous_streak = int(previous.get("no_improvement_streak", 0))
+    else:
+        # Legacy CP1–3 metadata stored a pooled streak. Rebuild the Group-A
+        # streak from the prior transition when available.
+        previous_streak = 0
+        if checkpoint_index >= 3:
+            older_path = output_dir / f"rl_checkpoint_{checkpoint_index - 2:02d}.json"
+            if older_path.exists():
+                older = json.loads(older_path.read_text(encoding="utf-8"))
+                older_eval = older.get("evaluation", {})
+                if isinstance(older_eval, dict):
+                    older_group_a = _group_metrics_from_evaluation_payload(older_eval)
+                    if older_group_a is not None:
+                        o_reward, o_miss, o_hits = older_group_a
+                        rw_th = max(1.0, 0.02 * abs(float(o_reward)))
+                        ms_th = max(1.0, 0.02 * abs(float(o_miss)))
+                        older_to_prev_improved = (
+                            float(prev_reward) > float(o_reward) + rw_th
+                            or float(prev_miss) < float(o_miss) - ms_th
+                            or int(prev_hits) > int(o_hits)
+                        )
+                        previous_streak = 0 if older_to_prev_improved else 1
+
+    current = evaluation.group_a
     reward_threshold = max(1.0, 0.02 * abs(float(prev_reward)))
     miss_threshold = max(1.0, 0.02 * abs(float(prev_miss)))
-    reward_improved = evaluation.mean_episode_reward > float(prev_reward) + reward_threshold
-    miss_improved = evaluation.mean_miss_distance_m < float(prev_miss) - miss_threshold
-    hit_improved = evaluation.n_hits > int(prev_hits)
+    reward_improved = current.mean_episode_reward > float(prev_reward) + reward_threshold
+    miss_improved = current.mean_miss_distance_m < float(prev_miss) - miss_threshold
+    hit_improved = current.n_hits > int(prev_hits)
     improved = reward_improved or miss_improved or hit_improved
     return 0 if improved else previous_streak + 1
 
@@ -735,7 +895,9 @@ def _append_progress(
             f"{config.timesteps_per_checkpoint:,}\n"
             f"- Training seed: {config.seed}\n"
             f"- Fixed evaluation set: {len(FIXED_EVALUATION_CASES)} engagements "
-            "(3 no-maneuver, 3 constant-turn, 3 sinusoidal-weave)\n\n",
+            "(3 no-maneuver, 3 constant-turn, 3 sinusoidal-weave)\n"
+            "- Reporting split: Group A = NoManeuver+Weave (stop condition); "
+            "Group B = ConstantTurn (tracked only; budget-constrained)\n\n",
             encoding="utf-8",
         )
 
@@ -782,7 +944,25 @@ def _append_progress(
         "- Fixed-eval outcomes (ground impact/timeout/hit): "
         f"{evaluation.n_ground_impacts}/{evaluation.n_timeouts}/"
         f"{evaluation.n_hits}",
-        f"- Possible convergence warning: {report.convergence_warning}",
+        (
+            "- Group A (NoManeuver+Weave) hit rate / mean/median miss / "
+            f"mean reward / mean effort: "
+            f"{evaluation.group_a.n_hits}/{evaluation.group_a.n_cases} / "
+            f"{evaluation.group_a.mean_miss_distance_m:.3f} / "
+            f"{evaluation.group_a.median_miss_distance_m:.3f} m / "
+            f"{evaluation.group_a.mean_episode_reward:.6f} / "
+            f"{evaluation.group_a.mean_control_effort_m2_s3:.6f} m²/s³"
+        ),
+        (
+            "- Group B (ConstantTurn) hit rate / mean/median miss / "
+            f"mean reward / mean effort: "
+            f"{evaluation.group_b.n_hits}/{evaluation.group_b.n_cases} / "
+            f"{evaluation.group_b.mean_miss_distance_m:.3f} / "
+            f"{evaluation.group_b.median_miss_distance_m:.3f} m / "
+            f"{evaluation.group_b.mean_episode_reward:.6f} / "
+            f"{evaluation.group_b.mean_control_effort_m2_s3:.6f} m²/s³"
+        ),
+        f"- Possible convergence warning (Group A stop): {report.convergence_warning}",
         f"- Model: `{report.checkpoint_path.relative_to(path.parent.parent)}`",
         f"- Evaluation details: "
         f"`{report.evaluation_path.relative_to(path.parent.parent)}`",
@@ -879,9 +1059,8 @@ def run_checkpoint(
         checkpoint_index,
         evaluation,
     )
-    # At checkpoint 2, one non-improving transition already represents two
-    # consecutive checkpoint summaries with no joint improvement on
-    # reward / miss / hit rate.
+    # At checkpoint 2, one non-improving Group-A transition already represents
+    # two consecutive Group-A summaries with no joint improvement.
     convergence_warning = no_improvement_streak >= 1
 
     _write_json(evaluation_path, _jsonable_evaluation(evaluation))

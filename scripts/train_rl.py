@@ -67,7 +67,10 @@ def main() -> None:
     print(f"Training curve: {report.curve_path}")
     print(f"Progress log: {report.progress_path}")
     if report.convergence_warning:
-        print("WARNING: reward has not improved across two checkpoints.")
+        print(
+            "WARNING: Group A (NoManeuver+Weave) has not improved across "
+            "two checkpoints."
+        )
 
 
 if __name__ == "__main__":

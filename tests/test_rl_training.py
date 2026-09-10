@@ -90,12 +90,35 @@ def test_fixed_evaluation_is_deterministic_and_resets_recurrent_state():
         assert case.episode_reward == pytest.approx(
             case.progress_reward + case.effort_penalty + case.terminal_reward
         )
+    assert summary_a.group_a.n_cases == 3
+    assert summary_a.group_b.n_cases == 0
     assert sum(policy_a.episode_starts) == len(cases)
     assert all(
         not value
         for index, value in enumerate(policy_a.episode_starts)
         if index % 2 == 1
     )
+
+
+def test_eval_groups_split_feasible_and_budget_constrained_cases():
+    config = SimulationConfig(
+        dt=0.02,
+        max_time=0.04,
+        intercept_radius=5.0,
+        autopilot_tau=0.2,
+    )
+    summary = evaluate_policy(
+        _ZeroRecurrentPolicy(),
+        cases=FIXED_EVALUATION_CASES,
+        simulation_config=config,
+    )
+    assert summary.group_a.n_cases == 6
+    assert summary.group_b.n_cases == 3
+    assert summary.group_a.n_cases + summary.group_b.n_cases == summary.n_cases
+    assert {case.maneuver for case in summary.cases if case.maneuver != "constant_turn"} <= {
+        "none",
+        "weave",
+    }
 
 
 def test_ppo_action_wrapper_rescales_to_physical_limit_before_dynamics():
