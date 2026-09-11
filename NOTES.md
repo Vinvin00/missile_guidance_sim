@@ -1,5 +1,139 @@
 # NOTES
 
+## 2026-09-11 — WS data_source label: synthetic → rollout
+
+- `DataSource = Literal["synthetic", "rollout"]`. Live catalog +
+  `/ws/trajectory` envelopes set `data_source="rollout"`. Schema defaults
+  remain `"synthetic"` for the mock_stream / trial-overlay path.
+- Frontend store `activeDataSource` tracks envelope `data_source` (live
+  restream gated on `"rollout"`). Frame payload fields unchanged.
+
+## 2026-09-11 — Target B fighter-class re-grounding
+
+- Chose direction **(a)**: Target B stays an ADMIRE-scale fighter/attack
+  airframe; speed dropped from missile-class **500 m/s** to **240 m/s**
+  (review range **200–300**, step 5). Mass 9,100 kg / wing 45 m² / Cd
+  0.035 / Cn_max 1.1 / 9 g unchanged.
+- Speed sources: `FOI-ADMIRE-2005`, `AIAA-CLIMB-2024` (242 m/s example →
+  240), `GENERIC-MISSILE-1994` (Mach 0.7 aircraft/target),
+  `PN-FUZZY-2020` (300 m/s upper edge). Removed `NPS-GUIDANCE-2000` from
+  Target B speed (kept only as Interceptor/geometry anchor in the doc).
+- Docs + catalog + setup note updated. UI reads catalog dynamically so
+  SET/HUD/sliders pick up 240 without hardcoded frontend constants.
+- RL rollout stream unchanged: frozen eval kinematics ignore catalog
+  speed; assumption confirmed (loader echoes overrides only).
+- Guardrails: viz branch only; no physics/guidance/rl/training edits.
+
+## 2026-09-11 — wire RL baseline rollouts into WS stream
+
+- Mock path was `api/mock_stream.build_mock_trajectory` →
+  `api/main.trajectory_stream` (`/ws/trajectory`). Replaced that call with
+  `api/rollout_stream.build_rollout_trajectory`.
+- Capture (read-only vs training worktree): `scripts/capture_rl_rollout.py`
+  loads `outputs/CURRENT_RL_BASELINE.json` →
+  `rl_checkpoint_05.zip`, runs one fixed-eval episode, writes
+  `outputs/rl_rollouts/{case}.json`. Captured Group A hits:
+  `no_maneuver_demo` (miss 1.229 m) and `weave_5g_070hz` (miss 4.117 m).
+- Scenario map: `crossing-intercept`/`head-on-intercept` →
+  `no_maneuver_demo`; `evasive-climb` → `weave_5g_070hz`. ConstantTurn has
+  no baseline hit (Group B 0/3), so it reuses the NoManeuver demo.
+- Schema unchanged: `pursuer_accel_cmd_m_s2` /
+  `pursuer_accel_achieved_m_s2` filled from env `action_commanded_m_s2` /
+  `action_achieved_m_s2` (post radial clip / post lag+clamp). Terminal
+  sample zeroed to match `SimulationResult` intercept convention.
+  `DataSource` remains `Literal["synthetic"]` (no schema edit); health
+  root string says `rl_rollout` for operators.
+- Live speed overrides still validated/echoed; they no longer reshape the
+  path (frozen rollout). Guidance-law selector is protocol-only.
+- Left `mock_stream.py` in tree for frontend trial-overlay helpers; WS
+  path no longer calls it.
+- Gotcha: per-step `|achieved|` can exceed `|commanded|` under autopilot
+  lag (achieved tracks a delayed command). Both stay ≤ structural 25 g.
+- Verification: capture scripts hit-confirmed; pytest on viz suite after
+  swap. Visual smoke: restart `:8000` and RUN PREVIEW NoManeuver.
+
+## 2026-09-10 — visualization scope finalize (speed, labels, accel WS)
+
+- Target B speed reframed as missile-class: catalog **500 m/s** (range
+  300–600), primary source NPS ADA378653 / `NPS-GUIDANCE-2000`. Live
+  slider step 10. Mass/area/Cd for Target B still cite fighter/transport
+  anchors — flagged as remaining incoherence in the sourcing doc.
+- Scenario picker labels → **NoManeuver / ConstantTurn / SinusoidalWeave**.
+  Ids and `_GEOMETRIES` mock paths unchanged (labeling only).
+- `trajectory.frame` now includes `pursuer_accel_cmd_m_s2` and
+  `pursuer_accel_achieved_m_s2` (mock lateral; terminal zeros). HUD g-load
+  prefers achieved when present.
+- Docs: `docs/scenario-parameter-sources.md` rewritten as current spec
+  (speed + RL taxonomy table + WS accel caveat), not a decision log.
+- Verification: Python **56 passed**; frontend **19 passed**. Manual smoke
+  against restarted `:8000`/`:5173`: SET picker shows NoManeuver /
+  ConstantTurn / SinusoidalWeave; Target B slider 500 m/s (300–600);
+  RUN PREVIEW streams to HUD with Target B SPD ≈500 and intercept lock;
+  SinusoidalWeave restream also succeeds. WS frames carry both accel
+  fields (terminal zeros).
+- Remaining roughness (not blocking this pass): Target B mass/area/Cd
+  still fighter/transport-grounded while speed is missile-class; HUD
+  consumes achieved for lateral-G but does not yet render a dedicated
+  cmd-vs-achieved readout; ConstantTurn is label-only over the old
+  head-on mock geometry.
+- Guardrails: no physics/RL/guidance edits; stayed on
+  `feature/rl-visualization`; checkpoint eval still out of scope.
+
+## 2026-09-09 — mock RL visualization workflows
+
+- Live sliders read `live_control` + `reference_min/max` from `/api/catalog`.
+  Only interceptor/target speed are marked live so far; mass/Cd/Cn can be
+  promoted later without a frontend rewrite. Slider changes debounce 300 ms
+  and restream the synthetic trajectory.
+- All-trials overlay is generated by `loadTrialSet()` / `generateMockTrialSet()`
+  from the current synthetic path. Opacity rises with episode index; green
+  is intercept, pink is miss. This is **not** an RL rollout log.
+- Training dashboard and `#/training` consume `loadTrainingLog()` which
+  currently fetches `frontend/public/mock/training-log.json`.
+- Last-session replay uses `loadTrajectoryLog()` against
+  `frontend/public/mock/last-session.json` or a user-selected JSON file, then
+  reuses the existing playback store/controls.
+- Verification: Python **56 passed** (was 54; catalog/stream override tests);
+  frontend **17 passed** (was 4). ESLint clean. Production app chunk
+  `index-*.js` 13.05 → 24.99 kB (+11.94 kB; gzip 4.57 → 8.13 kB). `vendor-r3f`
+  unchanged at 1,115.07 kB / 306.70 kB gzip.
+- Guardrails held: no physics/guidance/RL training edits; stayed on
+  `feature/rl-visualization`.
+
+## 2026-09-09 — interactive visualization scaffold
+
+- Added a FastAPI catalog plus `/ws/trajectory` protocol:
+  `stream.start` → `stream.started` → ordered `trajectory.frame` messages →
+  `stream.completed`. Invalid start messages return `stream.error`.
+- The current data source is deliberately and visibly `synthetic`. No
+  checkpoint discovery, loading, model import, or evaluation adapter was
+  added; that work remains gated on a stable observation-v2 format.
+- Added a Vite/React viewer using the portfolio's R3F, Drei, and Zustand
+  stack. It maps simulation `[x,y,z]` metres (z-up) to Three `[x,z,-y]`
+  kilometres (y-up), supports orbit/pan/zoom, local play/pause/restart,
+  scrubbing, playback rate, telemetry, and scenario/guidance selectors.
+- Generic `Interceptor A` / `Target B` catalog values are exposed with
+  source IDs, source ranges, and `synthesized`/`illustrative` labels.
+  Full citations and conventions are in
+  `docs/scenario-parameter-sources.md`; no named system is modeled.
+- Gotcha: constant `Cd` and `Cn_max` values are reduced-order review
+  placeholders. Reference-area conventions differ (interceptor frontal area,
+  target wing area), so these values must not be mixed or presented as
+  class-wide constants.
+- Python 3.14 on this macOS worktree skips the editable install's `.pth`
+  file when that file inherits the hidden flag under `.venv`. The documented
+  Uvicorn command uses `--app-dir src`, which is deterministic and avoids
+  relying on editable-path processing.
+- Verification: baseline **42 passed**; final Python suite **54 passed**;
+  frontend **4 passed**, ESLint clean, production build successful. Browser
+  verification confirmed catalog GET 200, WebSocket acceptance, 101 rendered
+  frames, local playback, a 3.2 m synthetic closest approach, and no app error
+  overlay.
+- Non-blocking build tradeoff: the R3F/Drei vendor chunk is about 1.1 MB
+  minified (307 kB gzip), above Vite's default warning threshold. Route-level
+  lazy loading can be considered when this viewer is embedded in the wider
+  portfolio.
+- Guardrails held: no edits under `physics/`, `rl/`, or `guidance/`.
 ## 2026-09-10 — Priority 1: seeker noise + α-β estimator
 
 Credibility improvements Priority 1 / AGENTS Step 5a–5b (alpha-beta only).

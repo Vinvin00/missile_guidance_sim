@@ -35,8 +35,13 @@ Group B ConstantTurn **0/3**, miss plateau near classical PN under the
 Built directly in 3D with realistic dynamics from the start (gravity,
 drag, an atmosphere model, and airframe-limited maneuverability),
 rather than as a 2D kinematic scaffold to be retrofitted later.
-Shadow-mode PN-vs-RL comparison and FastAPI serving are next; the ML
-and API packages are still scaffolded stubs until that phase.
+
+**Interactive visualization — done.** A FastAPI WebSocket streams
+captured RL baseline evaluation rollouts (`data_source=rollout`) into a
+Vite + React Three Fiber viewer with orbit controls, scenario/guidance
+selection, live parameter sliders, telemetry, and local playback.
+Target B is fighter-class grounded at **240 m/s**. Trial-overlay and
+training-dashboard surfaces still use isolated mock loaders.
 
 ## Architecture
 
@@ -52,14 +57,17 @@ src/guidance_sim/
 ├── guidance/
 │   ├── base.py                      # GuidanceLaw abstract interface (returns a 3D vector)
 │   └── proportional_navigation.py   # Classical PN, full 3D vector form
-├── ml/               # LSTM trajectory predictor or RL policy (not yet implemented)
+├── rl/
+│   └── environment.py  # Gymnasium wrapper (training remains on its own branch)
 ├── simulation/
 │   └── engine.py       # Simulation, SimulationConfig, SimulationResult
-├── api/              # FastAPI /simulate service (not yet implemented)
-└── visualization/    # Trajectory plotting / GIF export (not yet implemented)
+├── api/              # FastAPI catalog + rollout WebSocket stream
+└── visualization/    # Matplotlib trajectory plotting / GIF export
 
 tests/                # Pytest suite: atmosphere, aerodynamics, dynamics/integration, PN baseline
 scripts/run_demo.py   # Manual one-off simulation runner
+frontend/             # Vite + React + R3F/Drei/Zustand interactive viewer
+docs/                 # Scenario parameter source review
 ```
 
 ## Physics model
@@ -123,20 +131,40 @@ pytest
 
 # Run a one-off demo simulation
 python scripts/run_demo.py
+
+# Start the visualization API
+uvicorn --app-dir src guidance_sim.api.main:app --reload
+
+# In a second terminal, start the interactive viewer
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Roadmap
 
 1. ~~3D physics core (gravity + drag + atmosphere + airframe limits) + PN baseline, tested~~ ✅
-2. PyTorch component — LSTM trajectory predictor feeding PN (first
-   milestone) or an RL policy (PPO via stable-baselines3) trained
-   from scratch (stretch goal)
-3. FastAPI `/simulate` endpoint returning full trajectories and
-   intercept outcomes for both PN and the ML approach
+2. RL policy training and frozen checkpoint evaluation
+3. ~~FastAPI trajectory WebSocket contract with synthetic preview~~ ✅
 4. Evaluation harness comparing PN vs. ML across target maneuverability
    levels (intercept rate, average miss distance)
-5. Visualization: matplotlib 3D trajectory animation exported as GIF
+5. ~~Interactive R3F visualization with orbit/playback controls~~ ✅
 6. Results and benchmarks written up in this README
+
+## Visualization mock data
+
+The live stream uses captured RL rollout sources:
+
+- `/api/catalog` plus `/ws/trajectory` — live rollout preview, including
+  catalog-bounded interceptor/target speed overrides
+- `frontend/public/mock/last-session.json` — saved-session replay sample
+- `frontend/public/mock/training-log.json` — `{episode, reward, success}`
+  training dashboard sample
+- `loadTrialSet()` — seeded mock overlay of 20–50 PN-like trials
+
+Swap `loadTrajectoryLog()`, `loadTrialSet()`, or `loadTrainingLog()` when a
+real RL episode log exists. Do not treat overlay colors or dashboard
+curves as trained-policy results.
 
 ### Possible later extension (not started)
 
