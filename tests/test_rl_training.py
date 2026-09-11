@@ -204,6 +204,31 @@ def test_training_budget_is_exactly_five_equal_checkpoints():
     assert config.timesteps_per_checkpoint * 5 == config.total_timesteps
     assert config.domain_randomization is False
     assert config.action_layout == "lateral2"
+    assert config.use_target_turn_rate_obs is False
+    assert len(config.observation_names) == 10
 
     with pytest.raises(ValueError, match="exactly five"):
         PPOTrainingConfig(total_checkpoints=4)
+
+
+def test_existing_checkpoints_load_under_default_obs_contract():
+    """CP1–CP3 (and CP4) must still load with use_target_turn_rate_obs=False."""
+
+    from pathlib import Path
+
+    from sb3_contrib import RecurrentPPO
+
+    root = Path(__file__).resolve().parents[1]
+    for index in (1, 2, 3):
+        path = root / "outputs" / "checkpoints" / f"rl_checkpoint_{index:02d}.zip"
+        if not path.exists():
+            pytest.skip(f"missing checkpoint artifact: {path}")
+        model = RecurrentPPO.load(path, device="cpu")
+        assert model.observation_space.shape == (10,)
+        summary = evaluate_policy(
+            model,
+            cases=FIXED_EVALUATION_CASES[:1],
+            use_target_turn_rate_obs=False,
+        )
+        assert summary.n_cases == 1
+        assert np.isfinite(summary.mean_episode_reward)

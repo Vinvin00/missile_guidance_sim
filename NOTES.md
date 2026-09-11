@@ -1,6 +1,31 @@
 # NOTES
 
+## 2026-09-10 — Priority 1: seeker noise + α-β estimator
+
+Credibility improvements Priority 1 / AGENTS Step 5a–5b (alpha-beta only).
+
+- **Sensor layer** (`sensors/measurement.py`, alias `seeker_model.py`):
+  `SeekerNoiseConfig` (az/el/rate/range/range-rate stds) + `SensorConfig`
+  (update rate, Pd, latency) + `Sensor.measure` → optional `Measurement`.
+  Defaults ~1 mrad angle noise (literature order-of-magnitude; full citations
+  deferred to Priority 4 / `REFERENCES.md`).
+- **Estimator** (`estimation/alpha_beta.py`, alias `filter.py`): fixed-gain
+  α-β with `beta = alpha²/(2-alpha)`. Consumes noisy spherical measurements,
+  outputs filtered Cartesian target `State`. Guidance never sees raw noise.
+- **Engine wiring**: optional `sensor` + `estimator` + `rng` on `Simulation`.
+  Omitted → perfect-information path unchanged (legacy tests).
+- **Regression**: `test_miss_distance_degrades_with_seeker_noise` sweeps
+  scales `{0,2,5,12}` (7 seeds); requires Spearman(ρ)≥0.6 and high≫low miss.
+  Artifact script: `scripts/run_seeker_noise_sweep.py` →
+  `outputs/seeker_noise_sweep.{csv,png}`.
+- Gotcha: zero-noise α-β still has lag, so median miss can dip slightly at
+  mild noise vs the filter floor — hence near-monotonic (Spearman) not
+  pairwise-strict.
+- Verified: focused seeker tests + full suite **71 passed**. Did not start
+  Priority 2 (Monte Carlo harness).
+
 ## 2026-09-10 — Eval Group A/B reporting split + CP4
+
 
 Reporting-only change (no reward / action / obs / max_time / scenario edits).
 
@@ -600,3 +625,114 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   wandering control **−133.572646**, ground-impact miss at 5064.154 m.
 - **Phase 2 was not started due to the review gate:** 0 training episodes,
   0 training timesteps, and no checkpoint.
+
+## 2026-09-10 — Observation experiment: target turn-rate feature (no training)
+
+- Inspected current RL obs: **already includes 3D LOS rate**
+  `omega_los = cross(r_rel, v_rel) / |r|^2` as channels 3–5. Hypothesis that
+  LOS rate was missing is incorrect. Missing quantity for ConstantTurn is
+  **target body turn rate / a_T**, not omega_LOS.
+- Added optional `use_target_turn_rate_obs: bool = False` on `InterceptionEnv`
+  and `PPOTrainingConfig` (default off → CP1–CP4 contract unchanged).
+- New feature (when flag on): append 3 channels
+  `tanh(omega_T / 0.2 rad/s)` where
+  `omega_T = cross(v_target, a_lat_achieved) / |v|^2`. Analytic from state —
+  **no finite-difference filter**.
+- **Fallback decision:** at `reset` before any `step`,
+  `last_achieved_lateral_accel` is zero → turn-rate obs is `[0,0,0]`. Does
+  **not** seed from maneuver command (would leak commanded vs achieved).
+- Obs dim: **10** (flag off) / **13** (flag on). Policy input size comes from
+  Gymnasium space; SB3 builds layers from env. Resume guard compares
+  `config.observation_names` so a turn-rate branch cannot resume CP1–CP4.
+- Tests: circular-turn hand check + env append/fallback; CP1–CP3 load under
+  flag off. No training run started. Reward/hparams/frozen CP lineage
+  untouched.
+
+## 2026-09-10 — Start turn-rate obs experiment CP1 (separate lineage)
+
+- Wired `--use-target-turn-rate-obs` into `scripts/train_rl.py`.
+- Launched checkpoint 1 into `outputs/observation_target_turn_rate/`
+  with flag on (13-D obs). Does **not** resume or overwrite frozen
+  `outputs/checkpoints/` CP1–CP4.
+- CP1 finished (20,480 steps, 16 episodes). Obs confirmed 13-D with
+  `use_target_turn_rate_obs: true`. Fixed eval **0/9 hits**; Group B
+  ConstantTurn mean miss **3296.9 m** (median 2683.1 m). Within-checkpoint
+  reward quintile **-55.8 → -76.8**. Frozen CP1–CP4 under `outputs/` untouched.
+  Stopped after CP1; CP2+ not started.
+
+## 2026-09-10 — Turn-rate obs experiment CP2–CP4
+
+- Ran CP2–CP4 in `outputs/observation_target_turn_rate/` (flag on).
+  Frozen `outputs/checkpoints/` untouched.
+- Hits: CP2 **1/9**, CP3 **4/9**, CP4 **3/9**. Group A stop warning at CP4.
+- Group B (ConstantTurn) mean miss **improved** across checkpoints:
+  CP1 3297 → CP2 2051 → CP3 1886 → CP4 1609 m (still 0/3 hits).
+  Contrast with frozen lineage ConstantTurn regression. Control effort rose
+  sharply on Group A (CP4 ~346k m²/s³). CP5 not started.
+
+## 2026-09-10 — Turn-rate obs branch: diagnose GA regression + CP5 conclusion
+
+### Step 1 — Group A CP3→CP4 hit regression
+- Sole flip: `weave_7g_090hz` HIT→MISS (2.737 → 6.090 m; radius=5 m).
+- Frozen 10-D lineage also 4/6→3/6 GA hits CP3→CP4 (`weave_3g_055hz`).
+- **Classification (a) noise / intercept-boundary variance.** No code change.
+  Detail: `outputs/observation_target_turn_rate/group_a_cp3_cp4_diagnostic.json`.
+
+### Step 3 — CP5 (102,400 timesteps)
+- Hits **5/9** (GA **5/6**, GB **0/3**). Mean/median miss **535.8 / 4.1 m**.
+- Reward components: shaping **+25.27** / effort **−7.89** / terminal **+26.98**.
+- Along-track fraction ~0 (lateral2 intact). cmd/ach RMS **68.5 / 52.6**.
+- Group B mean miss **1599.7 m** (CP4 was 1609) — plateau vs prior steep drop.
+  Per-case GB: 3g **832**, 5g **1453**, 7g **2515** m.
+  Classical PN ceiling: 973 / 1194 / 2165 m (same cases).
+- Tests: **66 passed** (`--ignore=tests/test_seeker_noise_miss.py`; seeker
+  test is unrelated flake). Commit hash at conclusion time recorded in
+  session report (working tree dirty with this branch + unrelated seeker WIP).
+
+### Step 4 — Verdict (no promote / no discard)
+- **Group B:** improved CP1→CP4 then **plateaued** at CP5 near (not under)
+  the PN time-budget ceiling; 3g case now *beats* PN (832 vs 973), 5g/7g
+  still worse. Not converging to hits under this budget.
+- **Group A:** recovered to **5/6** at CP5 (above CP3 peak 4/6).
+- **Recommendation:** do **not** promote over frozen lineage yet — GB still
+  0 hits and ~PN-level misses on hard turns. Signal that turn-rate obs
+  reversed frozen GB *regression* is real; further training or estimator-
+  free privileged a_T ethics review needed before promotion. Frozen
+  lineage left untouched.
+
+## 2026-09-11 — Promote turn-rate obs CP5 as RL baseline
+
+### Seeker-test skip resolution (Step 1)
+- CP5 originally used `--ignore=tests/test_seeker_noise_miss.py` because that
+  suite **failed** a near-monotonic miss-vs-noise gate
+  (`medians [4.48, 3.08, 4.31, 56.18]` — scale 1.0 dipped below 0.0).
+- **Unrelated to turn-rate obs:** the test drives classical PN through
+  `Sensor` + `AlphaBetaFilter` in `simulation.engine` seeker hooks; it never
+  constructs `InterceptionEnv` or reads `use_target_turn_rate_obs`.
+- **Pre-existing / WIP relative to frozen lineage:** `tests/test_seeker_*.py`,
+  `src/guidance_sim/sensors/`, and `src/guidance_sim/estimation/` were
+  **untracked** at promotion time — they do not exist on committed
+  `feature/rl-training` HEAD without local WIP. Re-run after stash of
+  untracked files: no seeker tests present. Not introduced by this branch.
+- At promotion re-check the WIP seeker suite passes (noise scales in the
+  local file are now `(0, 2, 5, 12)`). Full suite with **nothing ignored**:
+  **71 passed**. Seeker WIP left **uncommitted** (separate from this
+  promotion).
+
+### Promotion (Steps 2–3)
+- Current baseline pointer: `outputs/CURRENT_RL_BASELINE.json` →
+  `outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip`
+  (13-D, `use_target_turn_rate_obs=True`).
+- Prior 10-D lineage kept at `outputs/checkpoints/` with README noting
+  superseded status — **not deleted**.
+- README Status/Results updated to the new baseline.
+
+### Group B ceiling — accepted limit (Step 4)
+- ConstantTurn cases **plateau near classical-PN miss** under the current
+  **25 s** fixed-eval budget. This is **not** treated as a training
+  deficiency: PN itself also **misses all three** ConstantTurn cases at
+  this budget (≈973 / 1194 / 2165 m). Turn-rate CP5 GB: ≈833 / 1453 /
+  2515 m (3g beats PN; 5g/7g still worse; 0/3 hits).
+- **Open item (deferred):** extend `max_time` so 3g/5g can convert to
+  hits — requires its **own from-scratch retrain**; not pursued in this
+  promotion pass.

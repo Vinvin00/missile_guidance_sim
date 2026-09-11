@@ -15,7 +15,10 @@ from guidance_sim.rl.environment import (
     LOS_RATE_SCALE_RAD_S,
     OBSERVATION_NAMES,
     RANGE_SCALE_M,
+    TARGET_TURN_RATE_SCALE_RAD_S,
     InterceptionEnv,
+    compute_target_turn_rate_rad_s,
+    observation_names,
 )
 from guidance_sim.simulation.engine import SimulationConfig
 
@@ -24,10 +27,12 @@ def _assert_observation_contract(
     env: InterceptionEnv,
     observation: np.ndarray,
 ) -> None:
-    assert observation.shape == (10,)
+    expected_dim = len(env.observation_names)
+    assert observation.shape == (expected_dim,)
     assert observation.dtype == np.float32
     assert env.observation_space.contains(observation)
     assert np.all(np.isfinite(observation))
+    assert env.observation_space.shape == (expected_dim,)
 
 
 def _zero_action(env: InterceptionEnv) -> np.ndarray:
@@ -305,3 +310,80 @@ def test_seeded_reset_is_deterministic_and_constructs_fresh_episode_objects():
     observation_c, _ = env.reset(seed=100)
     _assert_observation_contract(env, observation_c)
     assert not np.array_equal(observation_b, observation_c)
+
+
+def test_target_turn_rate_matches_circular_turn_hand_check():
+    """omega = cross(v, a) / |v|^2; |omega| = |a|/|v| for pure lateral a."""
+
+    speed = 200.0
+    accel = 3.0 * 9.80665  # 3 g lateral
+    velocity = np.array([speed, 0.0, 0.0])
+    lateral = np.array([0.0, accel, 0.0])
+    omega = compute_target_turn_rate_rad_s(velocity, lateral)
+
+    expected = np.array([0.0, 0.0, accel / speed])
+    np.testing.assert_allclose(omega, expected, rtol=0.0, atol=1e-12)
+    assert float(np.linalg.norm(omega)) == pytest.approx(accel / speed)
+    # Along-track accel contributes nothing.
+    np.testing.assert_allclose(
+        compute_target_turn_rate_rad_s(velocity, np.array([accel, 0.0, 0.0])),
+        np.zeros(3),
+        atol=1e-12,
+    )
+    np.testing.assert_array_equal(
+        compute_target_turn_rate_rad_s(np.zeros(3), lateral),
+        np.zeros(3),
+    )
+
+
+def test_use_target_turn_rate_obs_appends_scaled_channels_and_zero_fallback():
+    from guidance_sim.physics.atmosphere import G0
+    from guidance_sim.physics.maneuvers import ConstantTurn
+
+    assert observation_names(use_target_turn_rate_obs=False) == OBSERVATION_NAMES
+    assert len(observation_names(use_target_turn_rate_obs=True)) == 13
+
+    def turn_factory(_rng: np.random.Generator) -> ConstantTurn:
+        return ConstantTurn(accel=3.0 * G0)
+
+    env = InterceptionEnv(
+        config=SimulationConfig(dt=0.02, max_time=1.0, autopilot_tau=0.0),
+        maneuver_factory=turn_factory,
+        use_target_turn_rate_obs=True,
+    )
+    observation, info = env.reset(seed=3)
+    _assert_observation_contract(env, observation)
+    assert observation.shape == (13,)
+    # Decision point: pre-step achieved accel is zero → turn-rate channels zero.
+    np.testing.assert_array_equal(observation[-3:], np.zeros(3, dtype=np.float32))
+    np.testing.assert_allclose(info["target_turn_rate_rad_s"], 0.0)
+
+    observation, _, _, _, info = env.step(_zero_action(env))
+    _assert_observation_contract(env, observation)
+    expected_omega = compute_target_turn_rate_rad_s(
+        env.target.state.velocity,
+        env.target.last_achieved_lateral_accel,
+    )
+    np.testing.assert_allclose(info["target_turn_rate_rad_s"], expected_omega)
+    np.testing.assert_allclose(
+        observation[-3:],
+        np.tanh(expected_omega / TARGET_TURN_RATE_SCALE_RAD_S).astype(np.float32),
+    )
+    # Sustained turn: |omega| = |a_perp| / |v| (along-track residual ignored).
+    speed = float(np.linalg.norm(env.target.state.velocity))
+    a_vec = env.target.last_achieved_lateral_accel
+    a_lat = float(np.linalg.norm(a_vec))
+    assert a_lat > 1.0
+    v_hat = env.target.state.velocity / speed
+    a_perp = float(np.linalg.norm(a_vec - np.dot(a_vec, v_hat) * v_hat))
+    assert float(np.linalg.norm(expected_omega)) == pytest.approx(
+        a_perp / speed, rel=1e-9, abs=1e-12
+    )
+
+    # Default flag off keeps the frozen 10-D contract.
+    default_env = InterceptionEnv(
+        config=SimulationConfig(dt=0.02, max_time=1.0, autopilot_tau=0.0)
+    )
+    obs_default, _ = default_env.reset(seed=3)
+    assert obs_default.shape == (10,)
+    assert default_env.use_target_turn_rate_obs is False

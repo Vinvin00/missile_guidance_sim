@@ -3,10 +3,13 @@
 Examples:
     python scripts/train_rl.py --checkpoint 1
     python scripts/train_rl.py --checkpoint 2
+    python scripts/train_rl.py --checkpoint 1 \\
+        --output-dir outputs/observation_target_turn_rate \\
+        --use-target-turn-rate-obs
 
 Each invocation refuses to overwrite an existing checkpoint and exits after
 writing the model, cumulative training curve, fixed-set evaluation, and
-``outputs/training_progress.md``.
+``training_progress.md`` under ``--output-dir``.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from guidance_sim.rl.training import run_checkpoint
+from guidance_sim.rl.training import PPOTrainingConfig, run_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,19 +37,32 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(__file__).resolve().parent.parent / "outputs",
     )
+    parser.add_argument(
+        "--use-target-turn-rate-obs",
+        action="store_true",
+        help=(
+            "append target turn-rate channels (13-D obs). Start a fresh "
+            "output-dir lineage; do not resume CP1–CP4 trained without it."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    config = PPOTrainingConfig(
+        use_target_turn_rate_obs=bool(args.use_target_turn_rate_obs),
+    )
     report = run_checkpoint(
         checkpoint_index=args.checkpoint,
         output_dir=args.output_dir,
+        config=config,
     )
     evaluation = report.evaluation
     curve = report.curve
     print(f"Checkpoint {report.checkpoint_index} complete; training stopped.")
     print(f"Cumulative timesteps: {report.cumulative_timesteps:,}")
+    print(f"use_target_turn_rate_obs: {config.use_target_turn_rate_obs}")
     print(f"Episodes this checkpoint: {curve.checkpoint_episodes}")
     if curve.first_quintile_mean_reward is not None:
         print(
@@ -62,6 +78,11 @@ def main() -> None:
         "Mean/median miss distance: "
         f"{evaluation.mean_miss_distance_m:.3f} / "
         f"{evaluation.median_miss_distance_m:.3f} m"
+    )
+    print(
+        "Group B (ConstantTurn) hits / mean miss: "
+        f"{evaluation.group_b.n_hits}/{evaluation.group_b.n_cases} / "
+        f"{evaluation.group_b.mean_miss_distance_m:.3f} m"
     )
     print(f"Model: {report.checkpoint_path}")
     print(f"Training curve: {report.curve_path}")

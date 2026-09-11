@@ -47,7 +47,10 @@ from guidance_sim.rl.domain_randomization import (
     randomized_initial_conditions,
     randomized_maneuver_factory,
 )
-from guidance_sim.rl.environment import OBSERVATION_NAMES, InterceptionEnv
+from guidance_sim.rl.environment import (
+    InterceptionEnv,
+    observation_names,
+)
 from guidance_sim.simulation.engine import SimulationConfig
 
 
@@ -73,6 +76,8 @@ class PPOTrainingConfig:
     lstm_hidden_size: int = 64
     domain_randomization: bool = False
     action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2
+    # Off by default: preserves CP1–CP4 obs contract. New experiment branch only.
+    use_target_turn_rate_obs: bool = False
 
     def __post_init__(self) -> None:
         if self.total_checkpoints != 5:
@@ -90,6 +95,12 @@ class PPOTrainingConfig:
             raise ValueError("batch_size must divide n_steps * n_envs")
         if self.dt <= 0.0 or self.max_time <= 0.0:
             raise ValueError("simulation dt and max_time must be positive")
+
+    @property
+    def observation_names(self) -> tuple[str, ...]:
+        return observation_names(
+            use_target_turn_rate_obs=self.use_target_turn_rate_obs
+        )
 
     @property
     def total_timesteps(self) -> int:
@@ -460,6 +471,7 @@ def make_training_vec_env(
             initial_condition_sampler=initial_condition_sampler,
             maneuver_factory=maneuver_factory,
             action_layout=config.action_layout,
+            use_target_turn_rate_obs=config.use_target_turn_rate_obs,
         )
         return gym.wrappers.RescaleAction(
             physical_env,
@@ -548,6 +560,7 @@ def evaluate_policy(
     simulation_config: SimulationConfig | None = None,
     seed: int = 91_000,
     action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
+    use_target_turn_rate_obs: bool = False,
 ) -> EvaluationSummary:
     """Evaluate a policy on the immutable, ordered scenario set."""
 
@@ -560,6 +573,7 @@ def evaluate_policy(
             initial_condition_sampler=_case_initial_conditions(case),
             maneuver_factory=_case_maneuver(case),
             action_layout=action_layout,
+            use_target_turn_rate_obs=use_target_turn_rate_obs,
         )
         env = gym.wrappers.RescaleAction(
             physical_env,
@@ -855,7 +869,7 @@ def _validate_previous_observation_contract(
         )
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     previous_names = tuple(metadata.get("observation_names", ()))
-    if previous_names != OBSERVATION_NAMES:
+    if previous_names != config.observation_names:
         raise ValueError(
             "preceding checkpoint uses an incompatible observation contract; "
             "restart from checkpoint 1"
@@ -880,8 +894,9 @@ def _append_progress(
         path.write_text(
             "# Phase 2 training progress\n\n"
             f"- Algorithm: recurrent PPO (`MlpLstmPolicy`, 64 hidden units)\n"
-            f"- Observation: {len(OBSERVATION_NAMES)} values "
-            f"(`{', '.join(OBSERVATION_NAMES)}`)\n"
+            f"- Observation: {len(config.observation_names)} values "
+            f"(`{', '.join(config.observation_names)}`)\n"
+            f"- use_target_turn_rate_obs: {config.use_target_turn_rate_obs}\n"
             "- Policy action: normalized "
             f"`[-1, 1]^{action_dimension(config.action_layout)}`, rescaled to "
             "the physical 25 g environment action before dynamics\n"
@@ -1051,6 +1066,7 @@ def run_checkpoint(
         model,
         simulation_config=config.simulation_config(),
         action_layout=config.action_layout,
+        use_target_turn_rate_obs=config.use_target_turn_rate_obs,
     )
     total_episodes = _count_csv_rows(episode_csv_path)
     curve = _curve_summary(callback.rows, total_episodes)
@@ -1082,7 +1098,8 @@ def run_checkpoint(
         {
             "checkpoint_index": checkpoint_index,
             "cumulative_timesteps": cumulative_timesteps,
-            "observation_names": list(OBSERVATION_NAMES),
+            "observation_names": list(config.observation_names),
+            "use_target_turn_rate_obs": config.use_target_turn_rate_obs,
             "action_layout": config.action_layout,
             "domain_randomization": config.domain_randomization,
             "config": asdict(config),

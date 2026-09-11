@@ -1,6 +1,7 @@
 """Gymnasium environment for the existing 3D point-mass engagement.
 
-The observation is a ten-element, ``float32`` vector in this exact order:
+The default observation is a ten-element, ``float32`` vector in this exact
+order (CP1–CP4 lineage; ``use_target_turn_rate_obs=False``):
 
 ``[r_hat_x, r_hat_y, r_hat_z, omega_x_s, omega_y_s, omega_z_s,
 range_s, closing_s, height_agl_s, altitude_rate_s]``.
@@ -11,13 +12,23 @@ angle wrap or pole singularity.  The remaining values are bounded,
 dimensionless transforms of physical quantities:
 
 * ``omega_s = tanh(omega_los / 0.1 rad/s)``, where
-  ``omega_los = cross(r_rel, v_rel) / range**2``;
+  ``omega_los = cross(r_rel, v_rel) / range**2`` (already present — this is
+  relative LOS rate, not target body turn rate);
 * ``range_s = range / (range + 10_000 m)``;
 * ``closing_s = tanh(closing_velocity / 1_000 m/s)``, where positive means
   closing;
 * ``height_agl_s = max(height_above_ground, 0) /
   (max(height_above_ground, 0) + 5_000 m)``;
 * ``altitude_rate_s = tanh(pursuer_vz / 200 m/s)``.
+
+With ``use_target_turn_rate_obs=True``, three more channels are appended:
+
+``[omega_t_x_s, omega_t_y_s, omega_t_z_s]`` where
+``omega_t = cross(v_target, a_lat_achieved) / |v_target|**2`` and
+``omega_t_s = tanh(omega_t / 0.2 rad/s)``.  This is the analytic angular
+rate of the target velocity vector from achieved lateral accel (no finite
+difference, so no smoothing filter).  Before the first ``step``, achieved
+accel is zero and the feature falls back to ``[0, 0, 0]``.
 
 Height above the environment's configurable ground plane is more useful than
 raw world ``z`` when ``ground_altitude_m`` is nonzero.  It and pursuer vertical
@@ -66,12 +77,14 @@ from guidance_sim.rl.zem import potential_from_zem, predicted_miss_m
 from guidance_sim.simulation.engine import SimulationConfig
 
 LOS_RATE_SCALE_RAD_S = 0.1
+TARGET_TURN_RATE_SCALE_RAD_S = 0.2
 RANGE_SCALE_M = 10_000.0
 CLOSING_SPEED_SCALE_M_S = 1_000.0
 ALTITUDE_SCALE_M = 5_000.0
 ALTITUDE_RATE_SCALE_M_S = 200.0
 _KINEMATIC_EPS = 1e-9
 
+# Default / frozen CP1–CP4 observation contract (flag off).
 OBSERVATION_NAMES = (
     "los_unit_x",
     "los_unit_y",
@@ -84,6 +97,38 @@ OBSERVATION_NAMES = (
     "height_above_ground_scaled",
     "altitude_rate_scaled",
 )
+
+TARGET_TURN_RATE_OBSERVATION_NAMES = (
+    "target_turn_rate_x_scaled",
+    "target_turn_rate_y_scaled",
+    "target_turn_rate_z_scaled",
+)
+
+
+def observation_names(*, use_target_turn_rate_obs: bool = False) -> tuple[str, ...]:
+    """Return the observation name tuple for the given feature flag."""
+
+    if use_target_turn_rate_obs:
+        return OBSERVATION_NAMES + TARGET_TURN_RATE_OBSERVATION_NAMES
+    return OBSERVATION_NAMES
+
+
+def compute_target_turn_rate_rad_s(
+    velocity_m_s: np.ndarray,
+    lateral_accel_m_s2: np.ndarray,
+) -> np.ndarray:
+    """Angular rate of the velocity vector from lateral acceleration.
+
+    ``omega = cross(v, a) / |v|**2``.  For pure lateral ``a`` this has
+    magnitude ``|a|/|v|``.  Returns zeros when speed is near zero.
+    """
+
+    velocity = np.asarray(velocity_m_s, dtype=float).reshape(3)
+    accel = np.asarray(lateral_accel_m_s2, dtype=float).reshape(3)
+    speed_sq = float(np.dot(velocity, velocity))
+    if speed_sq <= _KINEMATIC_EPS**2:
+        return np.zeros(3)
+    return np.cross(velocity, accel) / speed_sq
 
 InitialConditionSampler = Callable[[np.random.Generator], tuple[State, State]]
 ManeuverFactory = Callable[[np.random.Generator], ManeuverProfile]
@@ -172,6 +217,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         target_vehicle: VehicleParams | None = None,
         ground_altitude_m: float = 0.0,
         action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
+        use_target_turn_rate_obs: bool = False,
     ) -> None:
         super().__init__()
         self.config = replace(config) if config is not None else SimulationConfig()
@@ -179,6 +225,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if action_layout not in (ACTION_LAYOUT_LATERAL2, ACTION_LAYOUT_WORLD3):
             raise ValueError(f"unsupported action_layout: {action_layout}")
         self.action_layout: ActionLayout = action_layout
+        self.use_target_turn_rate_obs = bool(use_target_turn_rate_obs)
         self._validate_config()
 
         self._initial_condition_sampler = initial_condition_sampler
@@ -202,12 +249,24 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             high=action_bound,
             dtype=np.float32,
         )
+        self.observation_names = observation_names(
+            use_target_turn_rate_obs=self.use_target_turn_rate_obs
+        )
+        obs_dim = len(self.observation_names)
+        # Base bounds: 6 LOS channels in [-1,1], range/height in [0,1],
+        # closing and altitude rate in [-1,1]. Extra turn-rate channels [-1,1].
+        low = np.array(
+            [-1.0] * 6 + [0.0, -1.0, 0.0, -1.0],
+            dtype=np.float32,
+        )
+        high = np.ones(10, dtype=np.float32)
+        if self.use_target_turn_rate_obs:
+            low = np.concatenate((low, np.full(3, -1.0, dtype=np.float32)))
+            high = np.concatenate((high, np.ones(3, dtype=np.float32)))
+        assert low.shape == (obs_dim,) and high.shape == (obs_dim,)
         self.observation_space = spaces.Box(
-            low=np.array(
-                [-1.0] * 6 + [0.0, -1.0, 0.0, -1.0],
-                dtype=np.float32,
-            ),
-            high=np.ones(10, dtype=np.float32),
+            low=low,
+            high=high,
             dtype=np.float32,
         )
 
@@ -451,7 +510,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
     def _observation(
         self,
     ) -> tuple[np.ndarray, dict[str, np.ndarray | float]]:
-        if self.pursuer is None:
+        if self.pursuer is None or self.target is None:
             raise RuntimeError("environment has not been reset")
         los_unit, los_rate, range_m, closing_velocity = self._kinematics()
         height_above_ground_m = (
@@ -459,25 +518,30 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         )
         nonnegative_height_m = max(height_above_ground_m, 0.0)
         altitude_rate_m_s = float(self.pursuer.state.velocity[2])
-        observation = np.concatenate(
-            (
-                los_unit,
-                np.tanh(los_rate / LOS_RATE_SCALE_RAD_S),
-                np.array(
-                    [
-                        range_m / (range_m + RANGE_SCALE_M),
-                        np.tanh(
-                            closing_velocity / CLOSING_SPEED_SCALE_M_S
-                        ),
-                        nonnegative_height_m
-                        / (nonnegative_height_m + ALTITUDE_SCALE_M),
-                        np.tanh(
-                            altitude_rate_m_s / ALTITUDE_RATE_SCALE_M_S
-                        ),
-                    ]
-                ),
-            )
+        # Decision: use post-clamp achieved lateral accel. Before the first
+        # step this is identically zero (entity default) — not maneuver command.
+        target_turn_rate = compute_target_turn_rate_rad_s(
+            self.target.state.velocity,
+            self.target.last_achieved_lateral_accel,
         )
+        parts: list[np.ndarray] = [
+            los_unit,
+            np.tanh(los_rate / LOS_RATE_SCALE_RAD_S),
+            np.array(
+                [
+                    range_m / (range_m + RANGE_SCALE_M),
+                    np.tanh(closing_velocity / CLOSING_SPEED_SCALE_M_S),
+                    nonnegative_height_m
+                    / (nonnegative_height_m + ALTITUDE_SCALE_M),
+                    np.tanh(altitude_rate_m_s / ALTITUDE_RATE_SCALE_M_S),
+                ]
+            ),
+        ]
+        if self.use_target_turn_rate_obs:
+            parts.append(
+                np.tanh(target_turn_rate / TARGET_TURN_RATE_SCALE_RAD_S)
+            )
+        observation = np.concatenate(parts)
         observation = np.clip(
             observation,
             self.observation_space.low,
@@ -492,6 +556,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             "closing_velocity_m_s": closing_velocity,
             "height_above_ground_m": height_above_ground_m,
             "altitude_rate_m_s": altitude_rate_m_s,
+            "target_turn_rate_rad_s": target_turn_rate.copy(),
         }
         return observation, physical
 
