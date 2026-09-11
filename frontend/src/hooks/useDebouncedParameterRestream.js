@@ -23,7 +23,7 @@ export function useDebouncedParameterRestream(startStream, delayMs = 300) {
     if (previousSignature.current === signature) return undefined
 
     previousSignature.current = signature
-    if (!hasTrajectory || activeDataSource !== 'synthetic-stream') {
+    if (!hasTrajectory || activeDataSource !== 'rollout') {
       return undefined
     }
 

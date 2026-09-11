@@ -104,6 +104,7 @@ async def trajectory_stream(websocket: WebSocket) -> None:
             guidance_law=request.guidance_law,
             frame_count=len(trajectory.frames),
             dt_s=trajectory.dt_s,
+            data_source="rollout",
             applied_parameters=trajectory.applied_parameters,
         )
         await websocket.send_json(started.model_dump(mode="json"))
@@ -120,6 +121,7 @@ async def trajectory_stream(websocket: WebSocket) -> None:
             ),
             closest_approach_m=trajectory.closest_approach_m,
             frame_count=len(trajectory.frames),
+            data_source="rollout",
         )
         await websocket.send_json(completed.model_dump(mode="json"))
         await websocket.close(code=1000)

@@ -43,6 +43,7 @@ def _parameter(
 
 
 CATALOG = CatalogResponse(
+    data_source="rollout",
     scenarios=[
         ScenarioOption(
             id="crossing-intercept",

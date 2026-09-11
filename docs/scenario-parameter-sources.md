@@ -97,10 +97,11 @@ differ.
   citing the fighter/airframe anchors above. The earlier missile-class
   500 m/s Target B speed (source [2]) was withdrawn as inconsistent
   with that airframe set.
-- The live WebSocket preview streams captured RL baseline rollouts.
-  Catalog vehicle scalars (including Target B speed) are review metadata
-  and live-control echo values; frozen rollout kinematics come from the
-  physics-engine evaluation cases, not from reshaping the catalog speed
-  slider. Each `trajectory.frame` carries
+- The live WebSocket preview streams captured RL baseline rollouts
+  (`data_source="rollout"` on catalog / stream envelopes). Catalog vehicle
+  scalars (including Target B speed) are review metadata and live-control
+  echo values; frozen rollout kinematics come from the physics-engine
+  evaluation cases, not from reshaping the catalog speed slider. Mock
+  trial-overlay helpers remain `synthetic`. Each `trajectory.frame` carries
   `pursuer_accel_cmd_m_s2` and `pursuer_accel_achieved_m_s2` from the
   captured episode.

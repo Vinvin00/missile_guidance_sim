@@ -25,7 +25,7 @@ export const useSimulationStore = create((set, get) => ({
   viewMode: 'single',
   trialCount: 30,
   trialSet: null,
-  activeDataSource: 'synthetic-stream',
+  activeDataSource: 'rollout',
   streamStatus: 'idle',
   streamMeta: null,
   streamResult: null,
@@ -79,7 +79,7 @@ export const useSimulationStore = create((set, get) => ({
 
   beginStream: () =>
     set({
-      activeDataSource: 'synthetic-stream',
+      activeDataSource: 'rollout',
       streamStatus: 'connecting',
       streamMeta: null,
       streamResult: null,
@@ -92,7 +92,11 @@ export const useSimulationStore = create((set, get) => ({
     }),
 
   markStreamStarted: (streamMeta) =>
-    set({ streamStatus: 'streaming', streamMeta }),
+    set({
+      streamStatus: 'streaming',
+      streamMeta,
+      activeDataSource: streamMeta?.data_source ?? 'rollout',
+    }),
 
   appendFrame: (frame) =>
     set((state) => ({

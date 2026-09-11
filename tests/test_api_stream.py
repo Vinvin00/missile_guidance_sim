@@ -13,7 +13,7 @@ def test_catalog_exposes_generic_grounded_profiles():
 
     assert response.status_code == 200
     catalog = response.json()
-    assert catalog["data_source"] == "synthetic"
+    assert catalog["data_source"] == "rollout"
     assert [item["id"] for item in catalog["guidance_laws"]] == [
         "pn",
         "apn",
@@ -68,8 +68,7 @@ def test_websocket_streams_ordered_rl_rollout():
         )
         started = websocket.receive_json()
         assert started["type"] == "stream.started"
-        # Schema DataSource enum is still Literal["synthetic"]; value unchanged.
-        assert started["data_source"] == "synthetic"
+        assert started["data_source"] == "rollout"
         assert started["applied_parameters"] == {
             "interceptor.speed": 700.0,
             "target.speed": 240.0,
@@ -120,7 +119,7 @@ def test_websocket_streams_ordered_rl_rollout():
         "outcome": "intercept",
         "closest_approach_m": pytest.approx(1.2291061736251598, rel=0, abs=1e-9),
         "frame_count": len(frames),
-        "data_source": "synthetic",
+        "data_source": "rollout",
     }
 
 

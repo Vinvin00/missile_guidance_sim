@@ -1,5 +1,13 @@
 # NOTES
 
+## 2026-09-11 — WS data_source label: synthetic → rollout
+
+- `DataSource = Literal["synthetic", "rollout"]`. Live catalog +
+  `/ws/trajectory` envelopes set `data_source="rollout"`. Schema defaults
+  remain `"synthetic"` for the mock_stream / trial-overlay path.
+- Frontend store `activeDataSource` tracks envelope `data_source` (live
+  restream gated on `"rollout"`). Frame payload fields unchanged.
+
 ## 2026-09-11 — Target B fighter-class re-grounding
 
 - Chose direction **(a)**: Target B stays an ADMIRE-scale fighter/attack

@@ -12,7 +12,7 @@ ScenarioId = Literal[
     "evasive-climb",
 ]
 GuidanceLawId = Literal["pn", "apn", "ogl"]
-DataSource = Literal["synthetic"]
+DataSource = Literal["synthetic", "rollout"]
 
 
 class StrictModel(BaseModel):
