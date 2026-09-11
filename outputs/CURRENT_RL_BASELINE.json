@@ -1,0 +1,27 @@
+{
+  "status": "current_baseline",
+  "promoted_at": "2026-09-11",
+  "branch_name": "observation_target_turn_rate",
+  "description": "Recurrent PPO with 13-D observation (base 10-D LOS kinematics + target turn-rate channels). Flag: use_target_turn_rate_obs=True. Note: LOS rate was already in the base 10-D vector; this branch adds target body turn-rate from achieved lateral accel, not a second LOS-rate channel.",
+  "model_path": "outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip",
+  "metadata_path": "outputs/observation_target_turn_rate/rl_checkpoint_05.json",
+  "eval_path": "outputs/observation_target_turn_rate/rl_checkpoint_05_eval.json",
+  "progress_path": "outputs/observation_target_turn_rate/training_progress.md",
+  "observation_dim": 13,
+  "use_target_turn_rate_obs": true,
+  "action_layout": "lateral2",
+  "cumulative_timesteps": 102400,
+  "fixed_eval_summary": {
+    "hits": "5/9",
+    "group_a_hits": "5/6",
+    "group_b_hits": "0/3",
+    "mean_miss_m": 535.81,
+    "median_miss_m": 4.117,
+    "group_b_mean_miss_m": 1599.73
+  },
+  "supersedes": {
+    "lineage": "reward_redesign_10dim_lateral2",
+    "previous_best_note": "Prior active lineage lived under outputs/checkpoints/ (10-D obs, use_target_turn_rate_obs=false). Kept for comparison; not deleted.",
+    "previous_checkpoint_dir": "outputs/checkpoints/"
+  }
+}

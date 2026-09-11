@@ -18,12 +18,25 @@ paper.
 
 ## Status
 
+**Current RL baseline (promoted 2026-09-11):** recurrent PPO with a
+**13-D** observation (`use_target_turn_rate_obs=True`) — base LOS
+kinematics plus target turn-rate channels. Checkpoint:
+
+`outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip`
+
+Pointer file: [`outputs/CURRENT_RL_BASELINE.json`](outputs/CURRENT_RL_BASELINE.json).
+
+Fixed-eval at promotion: **5/9 hits** (Group A NoManeuver+Weave **5/6**;
+Group B ConstantTurn **0/3**, miss plateau near classical PN under the
+25 s budget). The prior **10-D** reward-redesign lineage remains under
+`outputs/checkpoints/` for comparison (see that directory's README).
+
 **Phase 1: 3D physics core + PN baseline — done.**
 Built directly in 3D with realistic dynamics from the start (gravity,
 drag, an atmosphere model, and airframe-limited maneuverability),
-rather than as a 2D kinematic scaffold to be retrofitted later. The
-ML component and FastAPI service are scaffolded as empty packages;
-see "Roadmap" below.
+rather than as a 2D kinematic scaffold to be retrofitted later.
+Shadow-mode PN-vs-RL comparison and FastAPI serving are next; the ML
+and API packages are still scaffolded stubs until that phase.
 
 ## Architecture
 
@@ -136,6 +149,13 @@ extension) and isn't planned unless there's a specific reason to need it.
 
 ## Results (to be filled in as phases complete)
 
-_Baseline PN performance against maneuvering targets, and later the
-PN-vs-ML comparison, will be documented here once the evaluation
-harness (Roadmap step 4) is built._
+**RL baseline (turn-rate obs CP5, 2026-09-11):** see
+`outputs/CURRENT_RL_BASELINE.json` and
+`outputs/observation_target_turn_rate/training_progress.md`.
+Group A **5/6** hits; Group B ConstantTurn remains a known
+time-budget ceiling near classical PN (not a training bug — PN
+also fails all three ConstantTurn cases at `max_time=25 s`).
+PN-vs-RL shadow comparison is not yet run (next phase).
+
+_Baseline PN performance tables and the full PN-vs-ML harness write-up
+land here once Roadmap step 4 / shadow-mode comparison is complete._

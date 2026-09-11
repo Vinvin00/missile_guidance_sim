@@ -1,9 +1,10 @@
 """Gymnasium environment for the existing 3D point-mass engagement.
 
-The observation is an eight-element, ``float32`` vector in this exact order:
+The default observation is a ten-element, ``float32`` vector in this exact
+order (CP1–CP4 lineage; ``use_target_turn_rate_obs=False``):
 
 ``[r_hat_x, r_hat_y, r_hat_z, omega_x_s, omega_y_s, omega_z_s,
-range_s, closing_s]``.
+range_s, closing_s, height_agl_s, altitude_rate_s]``.
 
 ``r_hat`` is the world-frame target-from-pursuer LOS unit vector.  A unit
 vector is used instead of azimuth/elevation so the 3D representation has no
@@ -11,34 +12,50 @@ angle wrap or pole singularity.  The remaining values are bounded,
 dimensionless transforms of physical quantities:
 
 * ``omega_s = tanh(omega_los / 0.1 rad/s)``, where
-  ``omega_los = cross(r_rel, v_rel) / range**2``;
+  ``omega_los = cross(r_rel, v_rel) / range**2`` (already present — this is
+  relative LOS rate, not target body turn rate);
 * ``range_s = range / (range + 10_000 m)``;
 * ``closing_s = tanh(closing_velocity / 1_000 m/s)``, where positive means
-  closing.
+  closing;
+* ``height_agl_s = max(height_above_ground, 0) /
+  (max(height_above_ground, 0) + 5_000 m)``;
+* ``altitude_rate_s = tanh(pursuer_vz / 200 m/s)``.
 
-The action is a world-frame acceleration request in m/s^2 with shape ``(3,)``.
-Its Euclidean norm is radially projected to the pursuer structural limit
-(``max_load_factor * g0``).  The resulting command is then passed unchanged
-to :meth:`PointMassEntity.step`, which applies the existing first-order
-autopilot lag, velocity-normal projection, aerodynamic limit, structural
-limit, and configured integrator.
+With ``use_target_turn_rate_obs=True``, three more channels are appended:
 
-Reward per step is:
+``[omega_t_x_s, omega_t_y_s, omega_t_z_s]`` where
+``omega_t = cross(v_target, a_lat_achieved) / |v_target|**2`` and
+``omega_t_s = tanh(omega_t / 0.2 rad/s)``.  This is the analytic angular
+rate of the target velocity vector from achieved lateral accel (no finite
+difference, so no smoothing filter).  Before the first ``step``, achieved
+accel is zero and the feature falls back to ``[0, 0, 0]``.
 
-``(R_before - R_after) / 100 m
-  - 1.0 * dt * (||a_commanded|| / a_structural_max)**2
-  + terminal_term``
+Height above the environment's configurable ground plane is more useful than
+raw world ``z`` when ``ground_altitude_m`` is nonzero.  It and pursuer vertical
+speed make ground proximity observable without changing the physics model.
 
-where ``terminal_term`` is ``+100`` for intercept and ``-100`` for either a
-physical miss (ground impact) or timeout.  Effort uses the norm-bounded
-command before lag/clamp so a policy cannot avoid cost by demanding control
-that the actuator cannot achieve.  Multiplication by ``dt`` makes this an
-integrated effort cost rather than a control-rate-dependent per-step cost.
+The default action (``lateral2``) is a two-component coefficient vector on an
+orthonormal basis of the velocity-normal plane, in m/s^2.  Each component is
+boxed at the pursuer structural limit; the reconstructed world-frame command
+is then radially clipped to that same limit.  The along-track null space of
+``clamp_lateral_command`` is therefore not representable.  This mapping lives
+only in the RL wrapper: ``GuidanceLaw.compute_command`` is still a world-frame
+``(3,)`` vector, and ``PointMassEntity.step`` is unchanged.
+
+``action_layout="world3"`` restores the Phase-1/2 three-component world-frame
+action so archived 3D policies can be replayed.  The world command is still
+passed to ``PointMassEntity.step``, which applies lag, velocity-normal
+projection, aerodynamic/structural clamps, and the configured integrator.
+
+Reward per step is potential-based ZEM shaping plus closest-approach terminal
+plus a small cost on **achieved** (post-clamp) lateral acceleration.  The
+Phase-1 range-progress / commanded-effort / ±100 terminal reward is attached
+as ``legacy_*`` diagnostics and is not part of the env return.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Callable
 
 import gymnasium as gym
@@ -48,13 +65,26 @@ import numpy as np
 from guidance_sim.physics.atmosphere import G0
 from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import ManeuverProfile, NoManeuver
+from guidance_sim.rl.actions import (
+    ACTION_LAYOUT_LATERAL2,
+    ACTION_LAYOUT_WORLD3,
+    ActionLayout,
+    action_dimension,
+    lateral_to_world,
+)
+from guidance_sim.rl.reward import RewardConfig, compute_reward
+from guidance_sim.rl.zem import potential_from_zem, predicted_miss_m
 from guidance_sim.simulation.engine import SimulationConfig
 
 LOS_RATE_SCALE_RAD_S = 0.1
+TARGET_TURN_RATE_SCALE_RAD_S = 0.2
 RANGE_SCALE_M = 10_000.0
 CLOSING_SPEED_SCALE_M_S = 1_000.0
+ALTITUDE_SCALE_M = 5_000.0
+ALTITUDE_RATE_SCALE_M_S = 200.0
 _KINEMATIC_EPS = 1e-9
 
+# Default / frozen CP1–CP4 observation contract (flag off).
 OBSERVATION_NAMES = (
     "los_unit_x",
     "los_unit_y",
@@ -64,32 +94,44 @@ OBSERVATION_NAMES = (
     "los_rate_z_scaled",
     "range_scaled",
     "closing_velocity_scaled",
+    "height_above_ground_scaled",
+    "altitude_rate_scaled",
 )
+
+TARGET_TURN_RATE_OBSERVATION_NAMES = (
+    "target_turn_rate_x_scaled",
+    "target_turn_rate_y_scaled",
+    "target_turn_rate_z_scaled",
+)
+
+
+def observation_names(*, use_target_turn_rate_obs: bool = False) -> tuple[str, ...]:
+    """Return the observation name tuple for the given feature flag."""
+
+    if use_target_turn_rate_obs:
+        return OBSERVATION_NAMES + TARGET_TURN_RATE_OBSERVATION_NAMES
+    return OBSERVATION_NAMES
+
+
+def compute_target_turn_rate_rad_s(
+    velocity_m_s: np.ndarray,
+    lateral_accel_m_s2: np.ndarray,
+) -> np.ndarray:
+    """Angular rate of the velocity vector from lateral acceleration.
+
+    ``omega = cross(v, a) / |v|**2``.  For pure lateral ``a`` this has
+    magnitude ``|a|/|v|``.  Returns zeros when speed is near zero.
+    """
+
+    velocity = np.asarray(velocity_m_s, dtype=float).reshape(3)
+    accel = np.asarray(lateral_accel_m_s2, dtype=float).reshape(3)
+    speed_sq = float(np.dot(velocity, velocity))
+    if speed_sq <= _KINEMATIC_EPS**2:
+        return np.zeros(3)
+    return np.cross(velocity, accel) / speed_sq
 
 InitialConditionSampler = Callable[[np.random.Generator], tuple[State, State]]
 ManeuverFactory = Callable[[np.random.Generator], ManeuverProfile]
-
-
-@dataclass(frozen=True)
-class RewardConfig:
-    """Numerically conservative Phase-1 reward scales."""
-
-    progress_scale_m: float = 100.0
-    effort_weight: float = 1.0
-    intercept_bonus: float = 100.0
-    miss_penalty: float = 100.0
-    timeout_penalty: float = 100.0
-
-    def __post_init__(self) -> None:
-        values = (
-            self.progress_scale_m,
-            self.effort_weight,
-            self.intercept_bonus,
-            self.miss_penalty,
-            self.timeout_penalty,
-        )
-        if not all(np.isfinite(value) and value > 0.0 for value in values):
-            raise ValueError("reward scales and weights must be finite and positive")
 
 
 def demo_initial_conditions(
@@ -137,6 +179,21 @@ def _no_maneuver_factory(_rng: np.random.Generator) -> ManeuverProfile:
     return NoManeuver()
 
 
+def _empty_reward_terms() -> dict[str, float]:
+    return {
+        "progress": 0.0,
+        "shaping": 0.0,
+        "effort": 0.0,
+        "terminal": 0.0,
+        "legacy_progress": 0.0,
+        "legacy_effort": 0.0,
+        "legacy_terminal": 0.0,
+        "legacy_total": 0.0,
+        "zem_m": 0.0,
+        "potential": 0.0,
+    }
+
+
 class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
     """Step-wise RL wrapper around the established point-mass dynamics.
 
@@ -159,10 +216,16 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         pursuer_vehicle: VehicleParams | None = None,
         target_vehicle: VehicleParams | None = None,
         ground_altitude_m: float = 0.0,
+        action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
+        use_target_turn_rate_obs: bool = False,
     ) -> None:
         super().__init__()
         self.config = replace(config) if config is not None else SimulationConfig()
         self.reward_config = reward_config or RewardConfig()
+        if action_layout not in (ACTION_LAYOUT_LATERAL2, ACTION_LAYOUT_WORLD3):
+            raise ValueError(f"unsupported action_layout: {action_layout}")
+        self.action_layout: ActionLayout = action_layout
+        self.use_target_turn_rate_obs = bool(use_target_turn_rate_obs)
         self._validate_config()
 
         self._initial_condition_sampler = initial_condition_sampler
@@ -179,15 +242,31 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if not np.isfinite(self.action_limit_m_s2) or self.action_limit_m_s2 <= 0.0:
             raise ValueError("pursuer structural acceleration limit must be positive")
 
-        action_bound = np.full(3, self.action_limit_m_s2, dtype=np.float32)
+        n_action = action_dimension(self.action_layout)
+        action_bound = np.full(n_action, self.action_limit_m_s2, dtype=np.float32)
         self.action_space = spaces.Box(
             low=-action_bound,
             high=action_bound,
             dtype=np.float32,
         )
+        self.observation_names = observation_names(
+            use_target_turn_rate_obs=self.use_target_turn_rate_obs
+        )
+        obs_dim = len(self.observation_names)
+        # Base bounds: 6 LOS channels in [-1,1], range/height in [0,1],
+        # closing and altitude rate in [-1,1]. Extra turn-rate channels [-1,1].
+        low = np.array(
+            [-1.0] * 6 + [0.0, -1.0, 0.0, -1.0],
+            dtype=np.float32,
+        )
+        high = np.ones(10, dtype=np.float32)
+        if self.use_target_turn_rate_obs:
+            low = np.concatenate((low, np.full(3, -1.0, dtype=np.float32)))
+            high = np.concatenate((high, np.ones(3, dtype=np.float32)))
+        assert low.shape == (obs_dim,) and high.shape == (obs_dim,)
         self.observation_space = spaces.Box(
-            low=np.array([-1.0] * 6 + [0.0, -1.0], dtype=np.float32),
-            high=np.ones(8, dtype=np.float32),
+            low=low,
+            high=high,
             dtype=np.float32,
         )
 
@@ -197,6 +276,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self.time_s = 0.0
         self.min_range_m = np.inf
         self._episode_done = True
+        self._phi = 0.0
+        self._episode_legacy_reward = 0.0
 
     def _validate_config(self) -> None:
         cfg = self.config
@@ -245,17 +326,23 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self._ground_impact_reason() is not None:
             raise ValueError("initial states must be above ground_altitude_m")
         self._episode_done = False
+        self._episode_legacy_reward = 0.0
+        zem_m = self._predicted_miss(self._remaining_time_s())
+        self._phi = potential_from_zem(
+            zem_m, self.reward_config.zem_scale_m, terminal=False
+        )
 
         observation, physical = self._observation()
+        n_action = action_dimension(self.action_layout)
         return observation, self._info(
             physical=physical,
             outcome="ongoing",
             termination_reason=None,
-            requested=np.zeros(3),
+            requested=np.zeros(n_action),
             commanded=np.zeros(3),
             achieved=np.zeros(3),
             action_was_clipped=False,
-            reward_terms={"progress": 0.0, "effort": 0.0, "terminal": 0.0},
+            reward_terms=_empty_reward_terms(),
         )
 
     def step(
@@ -269,9 +356,12 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self.target_maneuver is None:
             raise RuntimeError("target maneuver is unavailable; call reset()")
 
-        requested = np.asarray(action, dtype=float)
-        if requested.shape != (3,):
-            raise ValueError(f"action must have shape (3,), got {requested.shape}")
+        requested = np.asarray(action, dtype=float).reshape(-1)
+        expected = action_dimension(self.action_layout)
+        if requested.shape != (expected,):
+            raise ValueError(
+                f"action must have shape ({expected},), got {requested.shape}"
+            )
         if not np.all(np.isfinite(requested)):
             raise ValueError("action must contain only finite values")
         commanded, action_was_clipped = self._project_action(requested)
@@ -320,12 +410,24 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             termination_reason = None
         self._episode_done = terminated or truncated
 
-        reward, reward_terms = self._reward(
-            previous_range=previous_range,
-            current_range=current_range,
-            commanded=commanded,
+        zem_m = self._predicted_miss(self._remaining_time_s())
+        breakdown = compute_reward(
+            previous_potential=self._phi,
+            zem_m=zem_m,
+            previous_range_m=previous_range,
+            current_range_m=current_range,
+            min_range_m=self.min_range_m,
+            achieved_lateral_m_s2=achieved,
+            legacy_commanded_m_s2=commanded,
+            action_limit_m_s2=self.action_limit_m_s2,
+            dt=cfg.dt,
             outcome=outcome,
+            config=self.reward_config,
         )
+        self._phi = breakdown.potential
+        self._episode_legacy_reward += breakdown.legacy_total
+        reward_terms = breakdown.env_terms()
+
         observation, physical = self._observation()
         info = self._info(
             physical=physical,
@@ -337,19 +439,43 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             action_was_clipped=action_was_clipped,
             reward_terms=reward_terms,
         )
+        info["legacy_reward"] = breakdown.legacy_total
+        info["legacy_episode_reward"] = self._episode_legacy_reward
         info["target_action_commanded_m_s2"] = np.asarray(
             target_command, dtype=float
         ).reshape(3).copy()
         info["target_action_achieved_m_s2"] = (
             self.target.last_achieved_lateral_accel.copy()
         )
-        return observation, reward, terminated, truncated, info
+        return observation, breakdown.total, terminated, truncated, info
+
+    def _remaining_time_s(self) -> float:
+        return max(self.config.max_time - self.time_s, 0.0)
+
+    def _predicted_miss(self, remaining_time_s: float) -> float:
+        if self.pursuer is None or self.target is None:
+            raise RuntimeError("environment has not been reset")
+        relative_position = self.target.state.position - self.pursuer.state.position
+        relative_velocity = self.target.state.velocity - self.pursuer.state.velocity
+        return predicted_miss_m(
+            relative_position,
+            relative_velocity,
+            remaining_time_s,
+            self.config.intercept_radius,
+            self.reward_config.zem_safeguards(),
+        )
 
     def _project_action(self, requested: np.ndarray) -> tuple[np.ndarray, bool]:
-        magnitude = float(np.linalg.norm(requested))
+        if self.pursuer is None:
+            raise RuntimeError("environment has not been reset")
+        if self.action_layout == ACTION_LAYOUT_LATERAL2:
+            world = lateral_to_world(requested, self.pursuer.state.velocity)
+        else:
+            world = requested.copy()
+        magnitude = float(np.linalg.norm(world))
         if magnitude <= self.action_limit_m_s2:
-            return requested.copy(), False
-        return requested * (self.action_limit_m_s2 / magnitude), True
+            return world, False
+        return world * (self.action_limit_m_s2 / magnitude), True
 
     def _range(self) -> float:
         if self.pursuer is None or self.target is None:
@@ -384,21 +510,38 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
     def _observation(
         self,
     ) -> tuple[np.ndarray, dict[str, np.ndarray | float]]:
+        if self.pursuer is None or self.target is None:
+            raise RuntimeError("environment has not been reset")
         los_unit, los_rate, range_m, closing_velocity = self._kinematics()
-        observation = np.concatenate(
-            (
-                los_unit,
-                np.tanh(los_rate / LOS_RATE_SCALE_RAD_S),
-                np.array(
-                    [
-                        range_m / (range_m + RANGE_SCALE_M),
-                        np.tanh(
-                            closing_velocity / CLOSING_SPEED_SCALE_M_S
-                        ),
-                    ]
-                ),
-            )
+        height_above_ground_m = (
+            self.pursuer.state.altitude() - self.ground_altitude_m
         )
+        nonnegative_height_m = max(height_above_ground_m, 0.0)
+        altitude_rate_m_s = float(self.pursuer.state.velocity[2])
+        # Decision: use post-clamp achieved lateral accel. Before the first
+        # step this is identically zero (entity default) — not maneuver command.
+        target_turn_rate = compute_target_turn_rate_rad_s(
+            self.target.state.velocity,
+            self.target.last_achieved_lateral_accel,
+        )
+        parts: list[np.ndarray] = [
+            los_unit,
+            np.tanh(los_rate / LOS_RATE_SCALE_RAD_S),
+            np.array(
+                [
+                    range_m / (range_m + RANGE_SCALE_M),
+                    np.tanh(closing_velocity / CLOSING_SPEED_SCALE_M_S),
+                    nonnegative_height_m
+                    / (nonnegative_height_m + ALTITUDE_SCALE_M),
+                    np.tanh(altitude_rate_m_s / ALTITUDE_RATE_SCALE_M_S),
+                ]
+            ),
+        ]
+        if self.use_target_turn_rate_obs:
+            parts.append(
+                np.tanh(target_turn_rate / TARGET_TURN_RATE_SCALE_RAD_S)
+            )
+        observation = np.concatenate(parts)
         observation = np.clip(
             observation,
             self.observation_space.low,
@@ -411,6 +554,9 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             "los_rate_rad_s": los_rate.copy(),
             "range_m": range_m,
             "closing_velocity_m_s": closing_velocity,
+            "height_above_ground_m": height_above_ground_m,
+            "altitude_rate_m_s": altitude_rate_m_s,
+            "target_turn_rate_rad_s": target_turn_rate.copy(),
         }
         return observation, physical
 
@@ -422,34 +568,6 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self.target.state.altitude() <= self.ground_altitude_m:
             return "target_ground_impact"
         return None
-
-    def _reward(
-        self,
-        *,
-        previous_range: float,
-        current_range: float,
-        commanded: np.ndarray,
-        outcome: str,
-    ) -> tuple[float, dict[str, float]]:
-        reward_cfg = self.reward_config
-        progress = (previous_range - current_range) / reward_cfg.progress_scale_m
-        normalized_effort = (
-            float(np.linalg.norm(commanded)) / self.action_limit_m_s2
-        ) ** 2
-        effort = -reward_cfg.effort_weight * self.config.dt * normalized_effort
-        terminal = 0.0
-        if outcome == "hit":
-            terminal = reward_cfg.intercept_bonus
-        elif outcome == "miss":
-            terminal = -reward_cfg.miss_penalty
-        elif outcome == "timeout":
-            terminal = -reward_cfg.timeout_penalty
-        terms = {
-            "progress": float(progress),
-            "effort": float(effort),
-            "terminal": float(terminal),
-        }
-        return float(sum(terms.values())), terms
 
     def _info(
         self,
@@ -476,5 +594,8 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             "action_commanded_m_s2": commanded.copy(),
             "action_achieved_m_s2": achieved.copy(),
             "action_was_clipped": action_was_clipped,
+            "action_layout": self.action_layout,
             "reward_terms": reward_terms.copy(),
+            "legacy_reward": reward_terms.get("legacy_total", 0.0),
+            "legacy_episode_reward": self._episode_legacy_reward,
         }

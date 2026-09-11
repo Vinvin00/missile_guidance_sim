@@ -1,0 +1,29 @@
+{
+  "branch": "outputs/observation_target_turn_rate",
+  "flag": "use_target_turn_rate_obs=True (13-D; not use_los_rate_obs \u2014 LOS rate already in base 10-D)",
+  "step1_group_a_regression": {
+    "classification": "a_noise_boundary_variance",
+    "rationale": "Only weave_7g_090hz flipped HIT\u2192MISS (2.737m\u21926.090m, +3.35m over 5m intercept radius). All NoManeuver stayed hits. Frozen 10-D lineage also went 4/6\u21923/6 GA hits CP3\u2192CP4 (weave_3g_055hz HIT\u2192MISS). Same pattern without turn-rate feature \u2192 not (c) bug; not unique capacity tradeoff (b). Borderline weave around radius.",
+    "flip_case": "weave_7g_090hz",
+    "turn_cp3_to_cp4": {
+      "weave_7g_090hz": {
+        "cp3_miss_m": 2.737,
+        "cp3_hit": true,
+        "cp4_miss_m": 6.09,
+        "cp4_hit": false
+      }
+    },
+    "frozen_same_pattern": {
+      "ga_hits_cp3": 4,
+      "ga_hits_cp4": 3,
+      "flip_case": "weave_3g_055hz"
+    },
+    "code_change": null
+  },
+  "classical_pn_constant_turn_ceiling_m": {
+    "constant_turn_left_3g": 972.531,
+    "constant_turn_right_5g": 1194.198,
+    "constant_turn_left_7g": 2164.508,
+    "source": "outputs/constant_turn_feasibility_diagnostic.json"
+  }
+}
