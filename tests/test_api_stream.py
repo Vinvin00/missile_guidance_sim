@@ -33,10 +33,12 @@ def test_catalog_exposes_generic_grounded_profiles():
         for profile in catalog["vehicle_profiles"]
         if profile["role"] == "target"
     )
-    assert target_speed["value"] == pytest.approx(500.0)
-    assert target_speed["reference_min"] == pytest.approx(300.0)
-    assert target_speed["reference_max"] == pytest.approx(600.0)
-    assert "NPS-GUIDANCE-2000" in target_speed["source_ids"]
+    assert target_speed["value"] == pytest.approx(240.0)
+    assert target_speed["reference_min"] == pytest.approx(200.0)
+    assert target_speed["reference_max"] == pytest.approx(300.0)
+    assert "FOI-ADMIRE-2005" in target_speed["source_ids"]
+    assert "AIAA-CLIMB-2024" in target_speed["source_ids"]
+    assert "NPS-GUIDANCE-2000" not in target_speed["source_ids"]
     live_controls = []
     for profile in catalog["vehicle_profiles"]:
         for parameter_name, parameter in profile["parameters"].items():
@@ -70,7 +72,7 @@ def test_websocket_streams_ordered_rl_rollout():
         assert started["data_source"] == "synthetic"
         assert started["applied_parameters"] == {
             "interceptor.speed": 700.0,
-            "target.speed": 500.0,
+            "target.speed": 240.0,
         }
         assert started["dt_s"] == pytest.approx(0.02)
         assert started["frame_count"] > 2
@@ -166,13 +168,13 @@ def test_live_speed_overrides_are_echoed_without_reshaping_rollout():
         stream_id="overridden",
         parameter_overrides={
             "interceptor.speed": 600.0,
-            "target.speed": 600.0,
+            "target.speed": 200.0,
         },
     )
 
     assert overridden.applied_parameters == {
         "interceptor.speed": 600.0,
-        "target.speed": 600.0,
+        "target.speed": 200.0,
     }
     assert len(overridden.frames) == len(default.frames)
     assert overridden.closest_approach_m == pytest.approx(

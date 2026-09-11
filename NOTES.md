@@ -1,5 +1,21 @@
 # NOTES
 
+## 2026-09-11 — Target B fighter-class re-grounding
+
+- Chose direction **(a)**: Target B stays an ADMIRE-scale fighter/attack
+  airframe; speed dropped from missile-class **500 m/s** to **240 m/s**
+  (review range **200–300**, step 5). Mass 9,100 kg / wing 45 m² / Cd
+  0.035 / Cn_max 1.1 / 9 g unchanged.
+- Speed sources: `FOI-ADMIRE-2005`, `AIAA-CLIMB-2024` (242 m/s example →
+  240), `GENERIC-MISSILE-1994` (Mach 0.7 aircraft/target),
+  `PN-FUZZY-2020` (300 m/s upper edge). Removed `NPS-GUIDANCE-2000` from
+  Target B speed (kept only as Interceptor/geometry anchor in the doc).
+- Docs + catalog + setup note updated. UI reads catalog dynamically so
+  SET/HUD/sliders pick up 240 without hardcoded frontend constants.
+- RL rollout stream unchanged: frozen eval kinematics ignore catalog
+  speed; assumption confirmed (loader echoes overrides only).
+- Guardrails: viz branch only; no physics/guidance/rl/training edits.
+
 ## 2026-09-11 — wire RL baseline rollouts into WS stream
 
 - Mock path was `api/mock_stream.build_mock_trajectory` →

@@ -133,9 +133,10 @@ export function SetupScreen({ onRun }) {
             </div>
           ))}
           <p className="setup-note">
-            Values are synthesized from public reference ranges. The transport
-            and playback contract is live; checkpoint evaluation remains
-            intentionally disconnected.
+            Values are synthesized from public reference ranges. Target B is a
+            fighter/attack-aircraft class surrogate (speed aligned with its
+            mass/area/g-limit). Live preview streams captured RL rollouts;
+            catalog scalars are review metadata and live-control echoes.
           </p>
         </div>
       </div>

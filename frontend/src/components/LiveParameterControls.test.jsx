@@ -35,12 +35,12 @@ const catalog = {
       role: 'target',
       parameters: {
         speed: {
-          value: 500,
+          value: 240,
           unit: 'm/s',
-          reference_min: 300,
-          reference_max: 600,
+          reference_min: 200,
+          reference_max: 300,
           live_control: true,
-          control_step: 10,
+          control_step: 5,
         },
       },
     },

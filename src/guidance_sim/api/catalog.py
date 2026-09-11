@@ -158,16 +158,17 @@ CATALOG = CatalogResponse(
             role="target",
             parameters={
                 "speed": _parameter(
-                    500.0,
+                    240.0,
                     "m/s",
+                    200.0,
                     300.0,
-                    600.0,
                     "synthesized",
-                    "NPS-GUIDANCE-2000",
+                    "FOI-ADMIRE-2005",
+                    "AIAA-CLIMB-2024",
+                    "GENERIC-MISSILE-1994",
                     "PN-FUZZY-2020",
-                    "PN-TRAJECTORY-2022",
                     live_control=True,
-                    control_step=10.0,
+                    control_step=5.0,
                 ),
                 "mass": _parameter(
                     9_100.0,
