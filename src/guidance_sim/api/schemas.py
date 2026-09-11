@@ -120,3 +120,56 @@ class StreamError(StrictModel):
     type: Literal["stream.error"] = "stream.error"
     code: str
     detail: str
+
+
+GuidanceManeuverKind = Literal["none", "constant_turn", "weave"]
+GuidanceOutcome = Literal["ongoing", "hit", "miss", "timeout"]
+
+
+class GuidanceManeuverSpec(StrictModel):
+    """Target maneuver for a custom (non-``case_name``) live session."""
+
+    kind: GuidanceManeuverKind = "none"
+    accel_g: float = 0.0
+    frequency_hz: float = 0.0
+    phase_rad: float = 0.0
+
+
+class GuidanceSessionStartRequest(StrictModel):
+    """Start a live-inference session.
+
+    Either ``case_name`` (one of the frozen fixed evaluation cases) or a full
+    explicit ``pursuer``/``target`` initial state must be given, not both.
+    """
+
+    case_name: str | None = None
+    pursuer: BodyState | None = None
+    target: BodyState | None = None
+    target_maneuver: GuidanceManeuverSpec = Field(default_factory=GuidanceManeuverSpec)
+    seed: int = 91_000
+
+
+class GuidanceStepRequest(StrictModel):
+    session_id: str
+
+
+class GuidanceFrame(StrictModel):
+    """One live step of policy-in-the-loop inference.
+
+    Field names mirror ``TrajectoryFrame`` deliberately -- this is the same
+    physical content, computed live via the frozen RL policy and the
+    existing ``InterceptionEnv`` stepping code instead of replayed from a
+    captured rollout file.
+    """
+
+    session_id: str
+    sequence: int
+    time_s: float
+    pursuer: BodyState
+    target: BodyState
+    range_m: float
+    pursuer_accel_cmd_m_s2: Vector3
+    pursuer_accel_achieved_m_s2: Vector3
+    terminated: bool
+    outcome: GuidanceOutcome
+    hit: bool

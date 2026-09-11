@@ -5,14 +5,18 @@ from __future__ import annotations
 import asyncio
 from uuid import uuid4
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
+from guidance_sim.api import live_guidance
 from guidance_sim.api.catalog import get_catalog
 from guidance_sim.api.rollout_stream import build_rollout_trajectory
 from guidance_sim.api.schemas import (
     CatalogResponse,
+    GuidanceFrame,
+    GuidanceSessionStartRequest,
+    GuidanceStepRequest,
     StreamCompleted,
     StreamError,
     StreamStartRequest,
@@ -54,6 +58,66 @@ def health() -> dict[str, str]:
 @app.get("/api/catalog", response_model=CatalogResponse)
 def catalog() -> CatalogResponse:
     return get_catalog()
+
+
+@app.post("/api/guidance/session", response_model=GuidanceFrame)
+def start_guidance_session(request: GuidanceSessionStartRequest) -> dict[str, object]:
+    """Start a live RL-policy-in-the-loop session and return its initial frame.
+
+    Additive to the existing captured-rollout ``/ws/trajectory`` stream: this
+    runs the frozen checkpoint live, one step at a time, instead of replaying
+    a pre-captured episode.
+    """
+
+    try:
+        return live_guidance.start_session(
+            case_name=request.case_name,
+            pursuer_position_m=(
+                tuple(
+                    getattr(request.pursuer.position_m, axis) for axis in "xyz"
+                )
+                if request.pursuer is not None
+                else None
+            ),
+            pursuer_velocity_m_s=(
+                tuple(
+                    getattr(request.pursuer.velocity_m_s, axis) for axis in "xyz"
+                )
+                if request.pursuer is not None
+                else None
+            ),
+            target_position_m=(
+                tuple(getattr(request.target.position_m, axis) for axis in "xyz")
+                if request.target is not None
+                else None
+            ),
+            target_velocity_m_s=(
+                tuple(getattr(request.target.velocity_m_s, axis) for axis in "xyz")
+                if request.target is not None
+                else None
+            ),
+            maneuver_kind=request.target_maneuver.kind,
+            maneuver_accel_g=request.target_maneuver.accel_g,
+            maneuver_frequency_hz=request.target_maneuver.frequency_hz,
+            maneuver_phase_rad=request.target_maneuver.phase_rad,
+            seed=request.seed,
+        )
+    except live_guidance.LiveGuidanceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/guidance/step", response_model=GuidanceFrame)
+def step_guidance_session(request: GuidanceStepRequest) -> dict[str, object]:
+    """Advance one live session by one policy step and one physics step."""
+
+    try:
+        return live_guidance.step_session(request.session_id)
+    except live_guidance.SessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"unknown or expired session: {exc}"
+        ) from exc
+    except live_guidance.LiveGuidanceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.websocket("/ws/trajectory")
