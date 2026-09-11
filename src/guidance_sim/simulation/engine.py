@@ -12,10 +12,12 @@ from typing import List, Optional
 
 import numpy as np
 
+from guidance_sim.estimation.base import Estimator
 from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.physics.entities import PointMassEntity
 from guidance_sim.physics.integrator import IntegratorType
 from guidance_sim.physics.maneuvers import ManeuverProfile
+from guidance_sim.sensors.measurement import Sensor
 
 
 @dataclass
@@ -51,15 +53,42 @@ class Simulation:
         guidance_law: GuidanceLaw,
         target_maneuver: ManeuverProfile,
         config: Optional[SimulationConfig] = None,
+        sensor: Optional[Sensor] = None,
+        estimator: Optional[Estimator] = None,
+        rng: Optional[np.random.Generator] = None,
     ):
+        if (sensor is None) ^ (estimator is None):
+            raise ValueError("sensor and estimator must both be provided or both omitted")
         self.pursuer = pursuer
         self.target = target
         self.guidance_law = guidance_law
         self.target_maneuver = target_maneuver
         self.config = config if config is not None else SimulationConfig()
+        self.sensor = sensor
+        self.estimator = estimator
+        self.rng = rng if rng is not None else np.random.default_rng(0)
 
     def _range(self) -> float:
         return float(np.linalg.norm(self.target.state.position - self.pursuer.state.position))
+
+    def _target_state_for_guidance(self, t: float):
+        """Perfect truth, or filtered estimate when a seeker chain is attached."""
+        if self.sensor is None or self.estimator is None:
+            return self.target.state
+
+        measurement = self.sensor.measure(
+            t, self.pursuer.state, self.target.state, self.rng
+        )
+        self.estimator.update(measurement, self.pursuer.state, self.config.dt)
+        try:
+            estimated_state, _accel = self.estimator.estimate()
+            return estimated_state
+        except RuntimeError:
+            # Cold start: no valid measurement yet — fall back to truth for
+            # the first sample so the run is well-defined; subsequent ticks
+            # use the filter. Callers that need a strict no-truth mode should
+            # seed the estimator with an initial_target.
+            return self.target.state
 
     def run(self) -> SimulationResult:
         cfg = self.config
@@ -98,8 +127,9 @@ class Simulation:
                 autopilot_tau=cfg.autopilot_tau,
             )
 
+            target_for_guidance = self._target_state_for_guidance(t)
             pursuer_accel_cmd = self.guidance_law.compute_command(
-                self.pursuer.state, self.target.state, cfg.dt
+                self.pursuer.state, target_for_guidance, cfg.dt
             )
             self.pursuer.step(
                 cfg.dt,
