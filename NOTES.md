@@ -1,5 +1,33 @@
 # NOTES
 
+## 2026-09-11 — wire RL baseline rollouts into WS stream
+
+- Mock path was `api/mock_stream.build_mock_trajectory` →
+  `api/main.trajectory_stream` (`/ws/trajectory`). Replaced that call with
+  `api/rollout_stream.build_rollout_trajectory`.
+- Capture (read-only vs training worktree): `scripts/capture_rl_rollout.py`
+  loads `outputs/CURRENT_RL_BASELINE.json` →
+  `rl_checkpoint_05.zip`, runs one fixed-eval episode, writes
+  `outputs/rl_rollouts/{case}.json`. Captured Group A hits:
+  `no_maneuver_demo` (miss 1.229 m) and `weave_5g_070hz` (miss 4.117 m).
+- Scenario map: `crossing-intercept`/`head-on-intercept` →
+  `no_maneuver_demo`; `evasive-climb` → `weave_5g_070hz`. ConstantTurn has
+  no baseline hit (Group B 0/3), so it reuses the NoManeuver demo.
+- Schema unchanged: `pursuer_accel_cmd_m_s2` /
+  `pursuer_accel_achieved_m_s2` filled from env `action_commanded_m_s2` /
+  `action_achieved_m_s2` (post radial clip / post lag+clamp). Terminal
+  sample zeroed to match `SimulationResult` intercept convention.
+  `DataSource` remains `Literal["synthetic"]` (no schema edit); health
+  root string says `rl_rollout` for operators.
+- Live speed overrides still validated/echoed; they no longer reshape the
+  path (frozen rollout). Guidance-law selector is protocol-only.
+- Left `mock_stream.py` in tree for frontend trial-overlay helpers; WS
+  path no longer calls it.
+- Gotcha: per-step `|achieved|` can exceed `|commanded|` under autopilot
+  lag (achieved tracks a delayed command). Both stay ≤ structural 25 g.
+- Verification: capture scripts hit-confirmed; pytest on viz suite after
+  swap. Visual smoke: restart `:8000` and RUN PREVIEW NoManeuver.
+
 ## 2026-09-10 — visualization scope finalize (speed, labels, accel WS)
 
 - Target B speed reframed as missile-class: catalog **500 m/s** (range

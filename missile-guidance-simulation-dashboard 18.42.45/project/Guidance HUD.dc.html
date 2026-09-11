@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+html, body { margin: 0; padding: 0; background: #0a0a0a; }
+body { font-family: Barlow, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: #f2f2f2; text-decoration: none; }
+a:hover { color: #ff2d16; }
+input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 1px; background: rgba(255,255,255,0.18); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 2px; height: 14px; margin-top: -7px; background: #f2f2f2; }
+::selection { background: #ff2d16; color: #0a0a0a; }
+</style>
+</helmet>
+<div style="position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr); width: 100%; height: 100vh; background: #0a0a0a; color: #f2f2f2; overflow: hidden;">
+
+  <nav style="display: flex; flex-direction: column; align-items: center; gap: 2px; border-right: 1px solid rgba(255,255,255,0.1); padding: 14px 0;">
+    <div style="width: 18px; height: 18px; margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.5); transform: rotate(45deg);"></div>
+    <sc-for list="{{ screens }}" as="s" hint-placeholder-count="5">
+      <button type="button" onClick="{{ s.select }}" title="{{ s.title }}" style="display: grid; gap: 6px; justify-items: center; width: 64px; padding: 12px 0; border: 0; border-left: 1px solid transparent; background: transparent; color: inherit; font-family: inherit; cursor: pointer; transition: opacity 160ms linear; opacity: {{ s.op }};" style-hover="opacity: 1;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em;">{{ s.code }}</span>
+        <span style="width: 4px; height: 4px; background: {{ s.dot }};"></span>
+      </button>
+    </sc-for>
+    <div style="flex: 1;"></div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.14em; color: #6b6b6b; writing-mode: vertical-rl;">3-DOF</span>
+  </nav>
+
+  <div style="position: relative; min-width: 0;">
+
+    <header style="position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 46px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+      <div style="display: flex; align-items: baseline; gap: 16px;">
+        <span style="font-size: 12px; font-weight: 500; letter-spacing: 0.34em; text-transform: uppercase;">GUIDANCE SIM</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #6b6b6b; text-transform: uppercase;">{{ screenTitle }}</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 22px;">
+        <div style="display: flex; align-items: center; gap: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #8a8a8a; text-transform: uppercase;">
+          <span>SYNTHETIC STREAM</span>
+          <span style="width: 5px; height: 5px; background: {{ linkColor }};"></span>
+          <span style="color: #f2f2f2;">{{ streamStatus }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+          <button type="button" onClick="{{ setView3d }}" style="border: 0; background: transparent; padding: 4px 10px; color: #f2f2f2; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; cursor: pointer;" style-hover="color: #ff2d16;">3D</button>
+          <span style="width: 1px; height: 12px; background: rgba(255,255,255,0.14);"></span>
+          <button type="button" onClick="{{ setView2d }}" style="border: 0; background: transparent; padding: 4px 10px; color: #6b6b6b; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; cursor: pointer;" style-hover="color: #ff2d16;">2D</button>
+        </div>
+      </div>
+    </header>
+
+    <div ref="{{ sceneRef }}" style="position: absolute; inset: 46px 0 0 0; z-index: 0; background: #0a0a0a;"></div>
+
+    <div style="position: absolute; inset: 46px 0 0 0; z-index: 1; pointer-events: none; background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.03), transparent 60%);"></div>
+
+    <sc-if value="{{ isHud }}" hint-placeholder-val="{{ true }}">
+      <div style="position: absolute; inset: 46px 0 0 0; z-index: 2; pointer-events: none;">
+
+        <section style="position: absolute; top: 22px; left: 22px; display: grid; gap: 14px; width: 232px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">MISSION CLOCK</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 34px; font-weight: 300; letter-spacing: -0.01em; line-height: 1;">T{{ clock }}</span>
+          <div style="height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="display: grid; gap: 10px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">RANGE</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">{{ rangeTxt }}</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">CLOSING V</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">{{ closingTxt }}</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">TIME TO GO</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">{{ tgoTxt }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section style="position: absolute; top: 22px; right: 22px; display: grid; gap: 14px; width: 236px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">GUIDANCE</span>
+          <div style="display: grid; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 5px; height: 5px; background: #f2f2f2;"></span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.06em;">{{ lawStatus }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 5px; height: 5px; background: rgba(255,255,255,0.22);"></span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.06em; color: #6b6b6b;">RL AGENT STANDBY</span>
+            </div>
+          </div>
+          <div style="height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="display: grid; gap: 8px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">LATERAL G</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 20px; color: {{ gColor }};">{{ gTxt }}</span>
+            </div>
+            <div style="position: relative; height: 3px; background: rgba(255,255,255,0.1);">
+              <div style="position: absolute; inset: 0 auto 0 0; background: {{ gColor }}; width: {{ gPct }};"></div>
+              <div style="position: absolute; top: -3px; bottom: -3px; left: 80%; width: 1px; background: rgba(255,255,255,0.35);"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">
+              <span>0</span>
+              <span>{{ gWarnTxt }}</span>
+              <span>25 G LIMIT</span>
+            </div>
+          </div>
+        </section>
+
+        <section style="position: absolute; bottom: 86px; left: 22px; display: grid; gap: 12px; width: 258px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">ENTITIES</span>
+          <div style="display: grid; gap: 7px;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 5px; height: 5px; background: #f2f2f2;"></span>
+              <span style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;">INTERCEPTOR A</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-family: 'IBM Plex Mono', monospace;">
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">ALT</span>
+                <span style="font-size: 13px;">{{ altI }}</span>
+              </div>
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">SPD</span>
+                <span style="font-size: 13px;">{{ spdI }}</span>
+              </div>
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">MASS</span>
+                <span style="font-size: 13px;">200</span>
+              </div>
+            </div>
+          </div>
+          <div style="height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="display: grid; gap: 7px;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <span style="width: 5px; height: 5px; background: rgba(255,255,255,0.4);"></span>
+              <span style="font-size: 11px; letter-spacing: 0.16em; color: #b5b5b5; text-transform: uppercase;">TARGET B</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-family: 'IBM Plex Mono', monospace; color: #b5b5b5;">
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">ALT</span>
+                <span style="font-size: 13px;">{{ altT }}</span>
+              </div>
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">SPD</span>
+                <span style="font-size: 13px;">{{ spdT }}</span>
+              </div>
+              <div style="display: grid; gap: 3px;">
+                <span style="font-size: 9px; letter-spacing: 0.1em; color: #6b6b6b;">G LIM</span>
+                <span style="font-size: 13px;">9.0</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section style="position: absolute; bottom: 86px; right: 22px; display: grid; gap: 14px; width: 236px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">SOLUTION</span>
+          <div style="display: grid; gap: 4px;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 38px; font-weight: 300; line-height: 1; color: {{ pkColor }};">{{ pkTxt }}</span>
+            <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">INTERCEPT PROBABILITY</span>
+          </div>
+          <div style="height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="display: grid; gap: 9px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">PRED. MISS</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">{{ missTxt }}</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">LOS RATE</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">{{ losTxt }}</span>
+            </div>
+          </div>
+        </section>
+
+        <sc-if value="{{ alertOn }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; top: 22px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 9px 18px; border: 1px solid {{ alertColor }}; background: rgba(10,10,10,0.82);">
+            <span style="width: 6px; height: 6px; background: {{ alertColor }};"></span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.22em; color: {{ alertColor }};">{{ alertText }}</span>
+          </div>
+        </sc-if>
+
+        <div style="position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.16em; color: #565656;">DRAG TO ORBIT · SCROLL TO ZOOM · Z-UP · SCENE UNITS KM</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 46px 0 62px 0; z-index: 3; overflow: auto; background: rgba(10,10,10,0.92); backdrop-filter: blur(4px);">
+        <div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 0; min-height: 100%; border-top: 0;">
+          <div style="display: grid; align-content: start; gap: 22px; padding: 24px 28px 40px; border-right: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: grid; gap: 12px;">
+              <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">SCENARIO</span>
+              <sc-for list="{{ scenarios }}" as="sc" hint-placeholder-count="3">
+                <button type="button" onClick="{{ sc.select }}" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; width: 100%; padding: 11px 0; border: 0; border-top: 1px solid rgba(255,255,255,0.1); background: transparent; color: inherit; font-family: inherit; text-align: left; cursor: pointer;" style-hover="border-color: rgba(255,255,255,0.4);">
+                  <span style="display: grid; gap: 6px;">
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                      <span style="width: 5px; height: 5px; background: {{ sc.dot }};"></span>
+                      <span style="font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: {{ sc.fg }};">{{ sc.label }}</span>
+                    </span>
+                    <span style="font-size: 12px; color: #8a8a8a; padding-left: 15px;">{{ sc.description }}</span>
+                  </span>
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; color: #6b6b6b; white-space: nowrap;">{{ sc.meta }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <div style="display: grid; gap: 12px;">
+              <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">GUIDANCE LAW</span>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: rgba(255,255,255,0.1);">
+                <sc-for list="{{ laws }}" as="lw" hint-placeholder-count="3">
+                  <button type="button" onClick="{{ lw.select }}" style="display: grid; gap: 6px; padding: 13px 14px; border: 0; background: #0a0a0a; color: inherit; font-family: inherit; text-align: left; cursor: pointer;" style-hover="background: #101010;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em; color: {{ lw.fg }};">{{ lw.code }}</span>
+                    <span style="font-size: 12px; color: #8a8a8a;">{{ lw.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display: grid; gap: 14px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">LIVE PARAMETERS</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #565656;">300 MS RESTREAM</span>
+              </div>
+              <sc-for list="{{ sliders }}" as="sl" hint-placeholder-count="2">
+                <label style="display: grid; gap: 10px;">
+                  <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+                    <span style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;">{{ sl.label }}</span>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px;">{{ sl.valueTxt }}</span>
+                  </span>
+                  <input type="range" min="{{ sl.min }}" max="{{ sl.max }}" step="{{ sl.step }}" value="{{ sl.value }}" onChange="{{ sl.onInput }}" style="width: 100%; height: 14px; margin: 0;" />
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #565656;">GROUNDED RANGE {{ sl.rangeTxt }}</span>
+                </label>
+              </sc-for>
+            </div>
+
+            <button type="button" onClick="{{ runPreview }}" style="justify-self: start; padding: 14px 34px; border: 1px solid rgba(255,255,255,0.35); background: transparent; color: #f2f2f2; font-family: inherit; font-size: 11px; font-weight: 500; letter-spacing: 0.26em; text-transform: uppercase; cursor: pointer;" style-hover="border-color: #ff2d16; color: #ff2d16;">RUN SYNTHETIC PREVIEW</button>
+          </div>
+
+          <div style="display: grid; align-content: start; gap: 22px; padding: 24px 28px 40px;">
+            <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">VEHICLE PROFILES</span>
+            <sc-for list="{{ profiles }}" as="pf" hint-placeholder-count="2">
+              <div style="display: grid; gap: 14px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                  <span style="font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase;">{{ pf.name }}</span>
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #6b6b6b; text-transform: uppercase;">{{ pf.role }}</span>
+                </div>
+                <div style="display: grid; gap: 9px;">
+                  <sc-for list="{{ pf.rows }}" as="rw" hint-placeholder-count="5">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+                      <span style="font-size: 11px; letter-spacing: 0.1em; color: #8a8a8a; text-transform: uppercase;">{{ rw.k }}</span>
+                      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px;">{{ rw.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <p style="margin: 0; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 14px; font-size: 12px; line-height: 1.6; color: #8a8a8a; max-width: 42ch;">Values are synthesized from public reference ranges. The transport and playback contract is live; checkpoint evaluation remains intentionally disconnected.</p>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isTrials }}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 46px 0 62px 0; z-index: 3; pointer-events: none;">
+        <section style="position: absolute; top: 22px; left: 22px; display: grid; gap: 14px; width: 244px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">TRIAL OVERLAY</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 300; line-height: 1;">{{ trialHits }}<span style="color: #565656;">/{{ trialTotal }}</span></span>
+          <span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">MOCK INTERCEPTS</span>
+          <div style="height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="display: grid; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="width: 14px; height: 1px; background: #f2f2f2;"></span>
+              <span style="font-size: 11px; letter-spacing: 0.1em; color: #b5b5b5; text-transform: uppercase;">INTERCEPT</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="width: 14px; height: 1px; background: #ff2d16;"></span>
+              <span style="font-size: 11px; letter-spacing: 0.1em; color: #b5b5b5; text-transform: uppercase;">MISS</span>
+            </div>
+          </div>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #565656;">OPACITY BY EPISODE INDEX</span>
+        </section>
+        <section style="position: absolute; top: 22px; right: 22px; display: grid; gap: 12px; width: 220px; padding: 16px 18px; background: rgba(10,10,10,0.66); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08);">
+          <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">DISPERSION</span>
+          <div style="display: grid; gap: 9px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">MEAN MISS</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">4.8 m</span></div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">P95 MISS</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">21.4 m</span></div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="font-size: 10px; letter-spacing: 0.14em; color: #8a8a8a; text-transform: uppercase;">EPISODES</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">30</span></div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isTrain }}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 46px 0 62px 0; z-index: 3; overflow: auto; background: #0a0a0a;">
+        <div style="display: grid; align-content: start; gap: 40px; max-width: 1100px; padding: 44px 40px 60px;">
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: rgba(255,255,255,0.1);">
+            <sc-for list="{{ trainMetrics }}" as="m" hint-placeholder-count="4">
+              <div style="display: grid; gap: 10px; padding: 22px 20px; background: #0a0a0a;">
+                <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.22em; color: #8a8a8a; text-transform: uppercase;">{{ m.k }}</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 300; line-height: 1;">{{ m.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <figure style="display: grid; gap: 14px; margin: 0;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">REWARD PER EPISODE</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #565656;">MOCK LOG</span>
+            </div>
+            <svg viewBox="0 0 400 140" preserveAspectRatio="none" style="display: block; width: 100%; height: 220px; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);" role="img" aria-label="Reward per episode">
+              <polyline points="{{ rewardPoly }}" fill="none" stroke="#f2f2f2" stroke-width="1"></polyline>
+              <polyline points="{{ rewardMean }}" fill="none" stroke="#ff2d16" stroke-width="1"></polyline>
+            </svg>
+            <figcaption style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #565656;">WHITE: EPISODE REWARD · RED: 20-EPISODE MEAN</figcaption>
+          </figure>
+          <p style="margin: 0; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 14px; font-size: 12px; line-height: 1.6; color: #8a8a8a; max-width: 60ch;">Synthetic training history loaded through <span style="font-family: 'IBM Plex Mono', monospace;">loadTrainingLog()</span>. Swap that one function to point at a real episode log later. Do not read these curves as trained-policy results.</p>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isReplay }}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 46px 0 62px 0; z-index: 3; overflow: auto; background: #0a0a0a;">
+        <div style="display: grid; align-content: start; gap: 26px; max-width: 760px; padding: 30px 28px 56px;">
+          <div style="display: grid; gap: 14px;">
+            <span style="font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: #8a8a8a; text-transform: uppercase;">LAST SESSION</span>
+            <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b5b5b5; max-width: 56ch;">Load a saved JSON trajectory into the viewer and playback controls. The built-in sample is synthetic; a real RL log uses the same schema.</p>
+          </div>
+          <div style="display: grid; gap: 1px; background: rgba(255,255,255,0.1);">
+            <sc-for list="{{ sessions }}" as="ss" hint-placeholder-count="3">
+              <button type="button" onClick="{{ ss.load }}" style="display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 24px; padding: 18px 20px; border: 0; background: #0a0a0a; color: inherit; font-family: inherit; text-align: left; cursor: pointer;" style-hover="background: #101010;">
+                <span style="display: grid; gap: 5px;">
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em;">{{ ss.id }}</span>
+                  <span style="font-size: 12px; color: #8a8a8a;">{{ ss.detail }}</span>
+                </span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: {{ ss.color }};">{{ ss.outcome }}</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #565656;">{{ ss.miss }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 1px; justify-self: start; width: max-content; background: rgba(255,255,255,0.1);">
+            <button type="button" style="padding: 14px 26px; border: 0; background: #0a0a0a; color: #f2f2f2; font-family: inherit; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; white-space: nowrap; cursor: pointer;" style-hover="color: #ff2d16;">LOAD JSON FILE</button>
+            <button type="button" style="padding: 14px 26px; border: 0; background: #0a0a0a; color: #8a8a8a; font-family: inherit; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; white-space: nowrap; cursor: pointer;" style-hover="color: #ff2d16;">LOAD MOCK SESSION</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="position: absolute; bottom: 0; left: 0; right: 0; z-index: 4; display: grid; grid-template-columns: auto auto minmax(120px, 1fr) auto auto; align-items: center; gap: 20px; height: 62px; padding: 0 22px; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(10,10,10,0.78); backdrop-filter: blur(6px);">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <button type="button" onClick="{{ togglePlay }}" aria-label="Play or pause" style="display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: #f2f2f2; cursor: pointer;" style-hover="color: #ff2d16;">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="{{ playIconPath }}" fill="currentColor"></path></svg>
+        </button>
+        <button type="button" onClick="{{ reset }}" aria-label="Reset" style="display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: #8a8a8a; cursor: pointer;" style-hover="color: #ff2d16;">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 6.5a4.5 4.5 0 1 1 1.6 3.44" stroke="currentColor" stroke-width="1.1"></path><path d="M1 3.2v3.3h3.3" stroke="currentColor" stroke-width="1.1"></path></svg>
+        </button>
+      </div>
+      <span style="min-width: 52px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; color: #8a8a8a;">{{ clock }}</span>
+      <div style="position: relative; display: flex; align-items: center; height: 34px;">
+        <div style="position: absolute; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.14);"></div>
+        <div style="position: absolute; left: 0; height: 1px; background: #f2f2f2; width: {{ progress }};"></div>
+        <div style="position: absolute; top: 10px; bottom: 10px; width: 1px; background: #f2f2f2; left: {{ progress }};"></div>
+        <input type="range" min="0" max="1000" value="{{ scrub }}" onChange="{{ onScrub }}" aria-label="Trajectory time" style="position: relative; width: 100%; margin: 0; opacity: 0; cursor: ew-resize; height: 34px;" />
+      </div>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; color: #565656;">{{ durationTxt }}</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 9px; letter-spacing: 0.2em; color: #565656; text-transform: uppercase;">RATE</span>
+        <sc-for list="{{ rates }}" as="r" hint-placeholder-count="4">
+          <button type="button" onClick="{{ r.select }}" style="border: 0; background: transparent; padding: 4px 2px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; color: {{ r.color }};" style-hover="color: #ff2d16;">{{ r.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;alertState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;none&quot;,&quot;lock&quot;,&quot;glimit&quot;,&quot;lost&quot;,&quot;error&quot;,&quot;prelaunch&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mission state&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hud&quot;,&quot;setup&quot;,&quot;trials&quot;,&quot;train&quot;,&quot;replay&quot;],&quot;default&quot;:&quot;hud&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mission state&quot;},&quot;showGrid&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Scene&quot;}}">
+const DT = 0.05, DUR = 10.0, G = 9.81;
+const smooth = (u) => u * u * (3 - 2 * u);
+
+function buildFrames() {
+  const alt = 3300, range0 = 6000, lat = 1100;
+  const hr = Math.sqrt(range0 * range0 - lat * lat);
+  const p0 = [0, 0, alt - 180], t0 = [hr, lat, alt];
+  const hd = (-82 * Math.PI) / 180, ts = 240;
+  const tv = [ts * Math.cos(hd), ts * Math.sin(hd), 0];
+  const n = Math.round(DUR / DT) + 1, out = [];
+  for (let i = 0; i < n; i++) {
+    const t = i * DT, u = t / DUR;
+    const tp = [t0[0] + tv[0] * t, t0[1] + tv[1] * t, t0[2]];
+    const arc = Math.sin(Math.PI * u), cf = smooth(u);
+    const pp = [
+      p0[0] + cf * (tp[0] - p0[0]),
+      p0[1] + cf * (tp[1] - p0[1]) + 420 * arc,
+      p0[2] + cf * (tp[2] - p0[2]) + 115 * arc,
+    ];
+    out.push({ t, p: pp, q: tp });
+  }
+  for (let i = 0; i < n; i++) {
+    const a = out[Math.max(i - 1, 0)], b = out[Math.min(i + 1, n - 1)];
+    const dt = b.t - a.t || DT;
+    out[i].pv = [0, 1, 2].map((k) => (b.p[k] - a.p[k]) / dt);
+    out[i].tv = [0, 1, 2].map((k) => (b.q[k] - a.q[k]) / dt);
+    out[i].r = Math.hypot(...[0, 1, 2].map((k) => b.q[k] - b.p[k]));
+  }
+  for (let i = 0; i < n; i++) {
+    const a = out[Math.max(i - 1, 0)], b = out[Math.min(i + 1, n - 1)];
+    const dt = b.t - a.t || DT;
+    out[i].pa = [0, 1, 2].map((k) => (b.pv[k] - a.pv[k]) / dt);
+  }
+  // Match mock_stream.py: frame 0 velocities are pinned to the catalog speeds,
+  // interceptor along the initial line of sight.
+  const los0 = [0, 1, 2].map((k) => out[0].q[k] - out[0].p[k]);
+  const lm = Math.hypot(...los0);
+  out[0].pv = los0.map((c) => (c / lm) * 700);
+  const tm = Math.hypot(...out[0].tv) || 1;
+  out[0].tv = out[0].tv.map((c) => (c * 240) / tm);
+  return out;
+}
+
+const FRAMES = buildFrames();
+const RATES = [0.25, 0.5, 1, 2];
+const SCREENS = [
+  { id: 'hud', code: 'HUD', title: 'Live engagement' },
+  { id: 'setup', code: 'SET', title: 'Scenario setup' },
+  { id: 'trials', code: 'TRL', title: 'All trials overlay' },
+  { id: 'train', code: 'TRN', title: 'Training' },
+  { id: 'replay', code: 'RPL', title: 'Session replay' },
+];
+
+const SCENARIOS = [
+  { id: 'crossing-intercept', label: 'CROSSING INTERCEPT', description: 'Target B crosses the interceptor line of sight.', meta: '6.0 KM · 3.3 KM ALT · 10.0 S' },
+  { id: 'head-on-intercept', label: 'HEAD-ON INTERCEPT', description: 'Interceptor A and Target B close nearly nose-to-nose.', meta: '6.0 KM · 3.3 KM ALT · 7.0 S' },
+  { id: 'evasive-climb', label: 'EVASIVE CLIMBING TURN', description: 'Target B adds a bounded climbing weave.', meta: '6.0 KM · 3.3 KM ALT · 12.0 S' },
+];
+const LAWS = [
+  { id: 'pn', code: 'PN', label: 'Proportional Navigation' },
+  { id: 'apn', code: 'APN', label: 'Augmented PN' },
+  { id: 'ogl', code: 'OGL', label: 'Optimal Guidance' },
+];
+const SLIDERS = [
+  { id: 'interceptor.speed', label: 'INTERCEPTOR A SPEED', unit: 'm/s', min: 600, max: 1000, step: 10, def: 700 },
+  { id: 'target.speed', label: 'TARGET B SPEED', unit: 'm/s', min: 200, max: 300, step: 5, def: 240 },
+];
+const PROFILES = [
+  { name: 'INTERCEPTOR A', role: 'interceptor', rows: [
+    { k: 'MASS', v: '200 kg' }, { k: 'REFERENCE AREA', v: '0.050 m²' },
+    { k: 'DRAG COEFFICIENT', v: '0.300' }, { k: 'MAX NORMAL FORCE Cn', v: '5.000' },
+    { k: 'MANEUVER LIMIT', v: '25 g' },
+  ] },
+  { name: 'TARGET B', role: 'target', rows: [
+    { k: 'MASS', v: '9,100 kg' }, { k: 'REFERENCE AREA', v: '45 m²' },
+    { k: 'DRAG COEFFICIENT', v: '0.035' }, { k: 'MAX NORMAL FORCE Cn', v: '1.100' },
+    { k: 'MANEUVER LIMIT', v: '9 g' },
+  ] },
+];
+const SESSIONS = [
+  { id: 'SESS-0412 · PN · CROSSING', detail: 'Recorded 09-08 14:22 · 201 frames', outcome: 'INTERCEPT', miss: '3.2 m' },
+  { id: 'SESS-0411 · APN · EVASIVE', detail: 'Recorded 09-08 13:57 · 241 frames', outcome: 'INTERCEPT', miss: '2.1 m' },
+  { id: 'SESS-0409 · PN · EVASIVE', detail: 'Recorded 09-07 18:04 · 241 frames', outcome: 'MISS', miss: '38.7 m' },
+];
+const TRIAL_TOTAL = 30;
+const TRIAL_MISS = (k) => k % 7 === 3;
+const TRIAL_HITS = Array.from({ length: TRIAL_TOTAL }, (_, k) => k).filter((k) => !TRIAL_MISS(k)).length;
+
+const REWARD = (() => {
+  const n = 120, ep = [];
+  let seed = 7;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < n; i++) {
+    const base = -180 + 480 * (1 - Math.exp(-i / 34));
+    ep.push(base + (rand() - 0.5) * 130);
+  }
+  const lo = Math.min(...ep), hi = Math.max(...ep);
+  const map = (v) => 136 - ((v - lo) / (hi - lo)) * 132;
+  const pt = (i, v) => (i * (400 / (n - 1))).toFixed(1) + ',' + map(v).toFixed(1);
+  const mean = ep.map((_, i) => {
+    const w = ep.slice(Math.max(0, i - 19), i + 1);
+    return w.reduce((a, b) => a + b, 0) / w.length;
+  });
+  return { poly: ep.map((v, i) => pt(i, v)).join(' '), mean: mean.map((v, i) => pt(i, v)).join(' ') };
+})();
+
+class Component extends DCLogic {
+  state = { t: 0, playing: true, rate: 1, screen: 'hud', view: '3d' };
+
+  componentDidMount() {
+    this.last = performance.now();
+    this.tick = () => {
+      const now = performance.now();
+      const dt = Math.min((now - this.last) / 1000, 0.1);
+      this.last = now;
+      if (this.state.playing) {
+        let t = this.state.t + dt * this.state.rate;
+        if (t >= DUR) { t = DUR; this.setState({ t, playing: false }); }
+        else this.setState({ t });
+      }
+      this.raf = requestAnimationFrame(this.tick);
+    };
+    this.raf = requestAnimationFrame(this.tick);
+    if (this.props.startScreen && this.props.startScreen !== 'hud') {
+      this.setState({ screen: this.props.startScreen, playing: false });
+    }
+    this.initScene();
+  }
+
+  componentWillUnmount() {
+    cancelAnimationFrame(this.raf);
+    if (this.ro) this.ro.disconnect();
+    if (this.renderer) this.renderer.dispose();
+  }
+
+  frame() {
+    const i = Math.min(Math.round(this.state.t / DT), FRAMES.length - 1);
+    return FRAMES[i];
+  }
+
+  async initScene() {
+    const host = this.sceneHost;
+    if (!host) return;
+    const THREE = await import('https://esm.sh/three@0.160.0');
+    const { OrbitControls } = await import('https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+    const S = 1 / 1000;
+    const toScene = (p) => new THREE.Vector3((p[0] - 3000) * S, (p[2] - 3120) * S, -p[1] * S);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0a0a0a');
+    scene.fog = new THREE.Fog('#0a0a0a', 12, 30);
+    const cam = new THREE.PerspectiveCamera(42, 1, 0.01, 200);
+    cam.position.set(1.6, 2.1, 6.2);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    host.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+    this.renderer = renderer;
+    const controls = new OrbitControls(cam, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.07;
+    controls.minDistance = 2; controls.maxDistance = 26;
+    controls.target.set(0, 0.25, -0.4);
+
+    const grid = new THREE.GridHelper(40, 80, 0x333333, 0x1c1c1c);
+    grid.position.y = -3.1;
+    grid.visible = this.props.showGrid !== false;
+    scene.add(grid);
+    this.grid = grid;
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+    dir.position.set(4, 9, 6); scene.add(dir);
+
+    const mkLine = (pts, color, opacity) => {
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+      const l = new THREE.Line(g, m); scene.add(l); return l;
+    };
+    const pPts = FRAMES.map((f) => toScene(f.p));
+    const tPts = FRAMES.map((f) => toScene(f.q));
+    mkLine(pPts, 0xffffff, 0.22);
+    mkLine(tPts, 0xffffff, 0.13);
+    const pTrail = mkLine(pPts.slice(0, 2), 0xffffff, 0.95);
+    const tTrail = mkLine(tPts.slice(0, 2), 0xff2d16, 0.75);
+
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(0.075, 0.3, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4 })
+    );
+    scene.add(cone);
+    const tgt = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.1),
+      new THREE.MeshStandardMaterial({ color: 0xff2d16, emissive: 0xff2d16, emissiveIntensity: 0.5 })
+    );
+    scene.add(tgt);
+    const losGeom = new THREE.BufferGeometry().setFromPoints([pPts[0], tPts[0]]);
+    scene.add(new THREE.Line(losGeom, new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 })));
+
+    let ts = 91;
+    const rnd = () => ((ts = (ts * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const trialLines = [];
+    for (let k = 0; k < TRIAL_TOTAL; k++) {
+      const hit = !TRIAL_MISS(k);
+      const jx = (rnd() - 0.5) * 0.9, jy = (rnd() - 0.5) * 0.55, jz = (rnd() - 0.5) * 0.9;
+      const pts = pPts.map((p, i) => {
+        const w = Math.sin((Math.PI * i) / (pPts.length - 1));
+        return new THREE.Vector3(p.x + jx * w, p.y + jy * w, p.z + jz * w);
+      });
+      if (!hit) pts[pts.length - 1].x += 0.35;
+      const l = mkLine(pts, hit ? 0xffffff : 0xff2d16, 0.1 + 0.35 * (k / 30));
+      l.visible = false;
+      trialLines.push(l);
+    }
+    this.setTrialsVisible = (on) => {
+      trialLines.forEach((l) => { l.visible = on; });
+      pTrail.visible = !on; cone.visible = !on; tgt.visible = !on;
+    };
+
+    const resize = () => {
+      const w = host.clientWidth || 1, h = host.clientHeight || 1;
+      renderer.setSize(w, h);
+      cam.aspect = w / h; cam.updateProjectionMatrix();
+    };
+    this.ro = new ResizeObserver(resize); this.ro.observe(host); resize();
+
+    const loop = () => {
+      const i = Math.min(Math.round(this.state.t / DT), FRAMES.length - 1);
+      const f = FRAMES[i];
+      const pp = toScene(f.p), tp = toScene(f.q);
+      cone.position.copy(pp);
+      const v = new THREE.Vector3(f.pv[0], f.pv[2], -f.pv[1]).normalize();
+      cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v);
+      tgt.position.copy(tp);
+      pTrail.geometry.setFromPoints(pPts.slice(0, Math.max(i + 1, 2)));
+      tTrail.geometry.setFromPoints(tPts.slice(0, Math.max(i + 1, 2)));
+      losGeom.setFromPoints([pp, tp]);
+      if (this.grid) this.grid.visible = this.props.showGrid !== false;
+      const trials = this.state.screen === 'trials';
+      if (trials !== this.trialsOn) { this.trialsOn = trials; this.setTrialsVisible(trials); }
+      controls.update();
+      renderer.render(scene, cam);
+      this.sceneRaf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  renderVals() {
+    const f = this.frame(), st = this.state;
+    const spd = Math.hypot(...f.pv), tspd = Math.hypot(...f.tv);
+    const rel = [0, 1, 2].map((k) => f.tv[k] - f.pv[k]);
+    const los = [0, 1, 2].map((k) => f.q[k] - f.p[k]);
+    const r = Math.hypot(...los) || 1;
+    const closing = -(los[0] * rel[0] + los[1] * rel[1] + los[2] * rel[2]) / r;
+    const cross = [
+      los[1] * rel[2] - los[2] * rel[1],
+      los[2] * rel[0] - los[0] * rel[2],
+      los[0] * rel[1] - los[1] * rel[0],
+    ];
+    const relMag = Math.hypot(...rel) || 1;
+    const miss = Math.hypot(...cross) / relMag;
+    const losRate = Math.hypot(...cross) / (r * r);
+    const gLoad = Math.hypot(...f.pa) / G;
+    const gFrac = Math.min(gLoad / 25, 1);
+    const pk = Math.max(0, Math.min(99.4, 100 * (1 - Math.min(miss / 40, 1)) * (0.55 + 0.45 * (1 - r / 6000))));
+    const tgo = closing > 1 ? r / closing : 0;
+    const alertMode = this.props.alertState ?? 'auto';
+    let alert = null;
+    if (alertMode === 'auto') {
+      if (r < 260) alert = 'lock';
+      else if (gFrac > 0.8) alert = 'glimit';
+    } else if (alertMode !== 'none') alert = alertMode;
+    const ALERTS = {
+      lock: ['INTERCEPT LOCK · TERMINAL', '#ff2d16'],
+      glimit: ['G-LIMIT 82% · COMMAND SATURATED', '#ff2d16'],
+      lost: ['TRACK LOST · COASTING ON LAST SOLUTION', '#ff2d16'],
+      error: ['STREAM DISCONNECTED · WS 1006', '#ff2d16'],
+      prelaunch: ['PRE-LAUNCH HOLD · AWAITING RELEASE', '#f2f2f2'],
+    };
+    const a = alert ? ALERTS[alert] : null;
+    const num = (v, d) => v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+
+    return {
+      screens: SCREENS.map((s) => ({
+        ...s,
+        select: () => this.setState({ screen: s.id }),
+        op: s.id === st.screen ? 1 : 0.4,
+        dot: s.id === st.screen ? '#ff2d16' : 'rgba(255,255,255,0.5)',
+      })),
+      isSetup: st.screen === 'setup',
+      isTrials: st.screen === 'trials',
+      isTrain: st.screen === 'train',
+      isReplay: st.screen === 'replay',
+      scenarios: SCENARIOS.map((s) => ({
+        ...s,
+        select: () => this.setState({ scenario: s.id }),
+        dot: s.id === (st.scenario || 'crossing-intercept') ? '#ff2d16' : 'rgba(255,255,255,0.25)',
+        fg: s.id === (st.scenario || 'crossing-intercept') ? '#f2f2f2' : '#8a8a8a',
+      })),
+      laws: LAWS.map((l) => ({
+        ...l,
+        select: () => this.setState({ law: l.id }),
+        fg: l.id === (st.law || 'pn') ? '#f2f2f2' : '#6b6b6b',
+      })),
+      sliders: SLIDERS.map((sl) => {
+        const v = (st.params && st.params[sl.id]) ?? sl.def;
+        return {
+          ...sl,
+          value: v,
+          valueTxt: num(v, 0) + ' ' + sl.unit,
+          rangeTxt: sl.min + '\u2013' + sl.max + ' ' + sl.unit,
+          onInput: (e) => this.setState((s) => ({ params: { ...(s.params || {}), [sl.id]: Number(e.target.value) } })),
+        };
+      }),
+      profiles: PROFILES,
+      trialTotal: TRIAL_TOTAL,
+      trialHits: TRIAL_HITS,
+      runPreview: () => this.setState({ screen: 'hud', t: 0, playing: true }),
+      trainMetrics: [
+        { k: 'EPISODES', v: '1,240' },
+        { k: 'LATEST REWARD', v: '318' },
+        { k: 'ROLLING SUCCESS', v: '77%' },
+        { k: 'MEAN MISS', v: '4.8 m' },
+      ],
+      rewardPoly: REWARD.poly,
+      rewardMean: REWARD.mean,
+      sessions: SESSIONS.map((s) => ({
+        ...s,
+        load: () => this.setState({ screen: 'hud', t: 0, playing: true }),
+        color: s.outcome === 'INTERCEPT' ? '#f2f2f2' : '#ff2d16',
+      })),
+      rates: RATES.map((v) => ({
+        label: v + '\u00d7',
+        color: v === st.rate ? '#f2f2f2' : '#565656',
+        select: () => this.setState({ rate: v }),
+      })),
+      isHud: st.screen === 'hud',
+      screen: st.screen,
+      screenTitle: (SCREENS.find((s) => s.id === st.screen) || SCREENS[0]).title.toUpperCase(),
+      sceneRef: (el) => { this.sceneHost = el; },
+      streamStatus: alert === 'error' ? 'ERROR' : st.playing ? 'STREAMING' : 'READY',
+      linkColor: alert === 'error' ? '#ff2d16' : '#f2f2f2',
+      setView3d: () => {}, setView2d: () => {},
+      clock: '+' + num(st.t, 2) + 's',
+      durationTxt: num(DUR, 2) + 's',
+      progress: (st.t / DUR) * 100 + '%',
+      scrub: Math.round((st.t / DUR) * 1000),
+      onScrub: (e) => this.setState({ t: (Number(e.target.value) / 1000) * DUR, playing: false }),
+      togglePlay: () => this.setState((s) => ({ playing: !s.playing, t: s.t >= DUR ? 0 : s.t })),
+      reset: () => this.setState({ t: 0, playing: false }),
+      playIconPath: st.playing ? 'M3 2h2.6v9H3zM7.4 2H10v9H7.4z' : 'M3 1.8 11 6.5 3 11.2z',
+      rangeTxt: r >= 1000 ? num(r / 1000, 3) + ' km' : num(r, 0) + ' m',
+      closingTxt: num(closing, 0) + ' m/s',
+      tgoTxt: num(tgo, 2) + ' s',
+      lawStatus: 'PN ACTIVE · N=4',
+      gTxt: num(gLoad, 1) + ' G',
+      gPct: gFrac * 100 + '%',
+      gColor: gFrac > 0.8 ? '#ff2d16' : '#f2f2f2',
+      gWarnTxt: '20 WARN',
+      altI: num(f.p[2], 0),
+      spdI: num(spd, 0),
+      altT: num(f.q[2], 0),
+      spdT: num(tspd, 0),
+      pkTxt: num(pk, 1) + '%',
+      pkColor: pk > 90 ? '#ff2d16' : '#f2f2f2',
+      missTxt: num(miss, 1) + ' m',
+      losTxt: num(losRate * 1000, 2) + ' mrad/s',
+      alertOn: !!a,
+      alertText: a ? a[0] : '',
+      alertColor: a ? a[1] : '#f2f2f2',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from guidance_sim.api.catalog import get_catalog
-from guidance_sim.api.mock_stream import build_mock_trajectory
+from guidance_sim.api.rollout_stream import build_rollout_trajectory
 from guidance_sim.api.schemas import (
     CatalogResponse,
     StreamCompleted,
@@ -23,8 +23,9 @@ app = FastAPI(
     title="Guidance Simulation Visualization API",
     version="0.1.0",
     description=(
-        "Streams synthetic 3D trajectory previews. Checkpoint evaluation is "
-        "intentionally deferred until its format is stable."
+        "Streams captured RL baseline evaluation rollouts over the frozen "
+        "trajectory WebSocket schema. Offline capture only — no live "
+        "checkpoint evaluation in the request path."
     ),
 )
 app.add_middleware(
@@ -41,13 +42,13 @@ def root() -> dict[str, str]:
     return {
         "service": "guidance-sim-visualization",
         "docs": "/docs",
-        "trajectory_source": "synthetic",
+        "trajectory_source": "rl_rollout",
     }
 
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "trajectory_source": "synthetic"}
+    return {"status": "ok", "trajectory_source": "rl_rollout"}
 
 
 @app.get("/api/catalog", response_model=CatalogResponse)
@@ -75,7 +76,7 @@ async def trajectory_stream(websocket: WebSocket) -> None:
 
         stream_id = str(uuid4())
         try:
-            trajectory = build_mock_trajectory(
+            trajectory = build_rollout_trajectory(
                 request.scenario_id,
                 request.guidance_law,
                 stream_id,
@@ -88,6 +89,14 @@ async def trajectory_stream(websocket: WebSocket) -> None:
             )
             await websocket.send_json(error.model_dump(mode="json"))
             await websocket.close(code=1008)
+            return
+        except FileNotFoundError as exc:
+            error = StreamError(
+                code="rollout_unavailable",
+                detail=str(exc),
+            )
+            await websocket.send_json(error.model_dump(mode="json"))
+            await websocket.close(code=1011)
             return
         started = StreamStarted(
             stream_id=stream_id,
