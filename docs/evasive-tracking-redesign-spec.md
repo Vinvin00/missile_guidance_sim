@@ -384,6 +384,30 @@ old 9-case results don't carry over unchanged.
 
 ## 5. Does this resolve `weave_3g_055hz`?
 
+> **SUPERSEDED by the CP0 results below — do not act on this section.**
+> Both of its supporting arguments rest on the claim that `weave_3g_055hz`
+> is a bounded, mean-reverting oscillation that RL over-reacts to. CP0
+> falsified both halves. The weave at phase 0 is **not** mean-reverting (it
+> drifts at `−(A/ω)·cos φ`), and the over-reaction reading is dead on its
+> own data: RL's mean commanded lateral is 124.9 / 125.3 / 126.3 m/s² across
+> the three weave cases — indistinguishable, and on two of them it **hits**.
+> See `docs/rl-justification.md` §3.1 for the re-derivation.
+>
+> **The conclusion inverts.** The re-derived failure is a *sustained-lead*
+> failure against a target steadily opening lateral separation —
+> `weave_3g_055hz` is the only weave case whose drift carries the target
+> away from the interceptor's axis. Retiring `SinusoidalWeave` therefore
+> does **not** retire the weakness: break turn, vertical jink and Split-S
+> all produce far stronger sustained separation than an 8.5 m/s weave
+> drift, so the v1 maneuver set stresses this exact failure mode
+> *harder*, not less. CP1 should expect it to resurface amplified, and
+> should treat "can the policy hold a lead against sustained lateral
+> divergence" as a first-class thing to measure rather than a retired
+> question. Item 2 below (retain a bounded-perturbation case) is still
+> worth doing, but it no longer covers this regression — it tests a
+> different failure mode than the one actually observed.
+
+**Original text (retained for provenance, superseded above):**
 **Likely yes, as a side effect, but stated carefully:** `weave_3g_055hz`
 is one of the frozen `FIXED_EVALUATION_CASES`, built from `SinusoidalWeave`
 via `_case_maneuver`. If v1's maneuver library demotes standalone

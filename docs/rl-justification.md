@@ -49,12 +49,59 @@ intercept-boundary noise around a would-be hit.
 
 Evidence already in the shadow detailed metrics (no new simulation):
 classical PN/APN/OGL all **hit at ~16.4 s** (miss 0.2 / 4.5 / 1.5 m),
-while RL runs to **timeout at 25.00 s** with miss 7.4 m. RL’s mean
-commanded lateral accel on that case is **124.9 m/s²** versus PN’s
-**10.4 m/s²**, with peak command at the shared clamp (**245.2 m/s²**).
-In one line: the policy over-drove lateral command through the full
-budget and never closed inside 5 m, whereas PN intercepted cleanly ~8.6 s
-earlier.
+while RL runs to **timeout at 25.00 s** with miss 7.4 m.
+
+### 3.1 Correction (2026-09-12): the “over-drove the command” reading was wrong
+
+This section previously concluded that “the policy over-drove lateral
+command through the full budget and never closed inside 5 m.” CP0 of the
+evasive-tracking redesign forced a re-derivation, and **that causal story
+does not survive its own data.** RL’s mean commanded lateral accel is
+essentially identical across all three weave cases — **124.9, 125.3 and
+126.3 m/s²** — including the two it **hits**. Peak command is at the shared
+clamp (245.2 m/s²) for every mode on every weave case. High mean command is
+therefore a standing characteristic of this policy, not a failure mode
+specific to `weave_3g_055hz`; it cannot explain an outcome it is equally
+present in when the outcome is a hit.
+
+What actually separates the three cases is the weave's **steady drift
+component**, which the redesign spec's original analysis missed by assuming
+a weave is mean-reverting at every phase. Integrating `a(t) = A·sin(ωt+φ)`
+leaves a DC velocity offset; with the command direction being
+`cross(UP, v̂)`, the resulting lateral drift is `−(A/ω)·cos φ`:
+
+| Case | drift (m/s) | net Δy over 25 s | relative to interceptor axis | PN | RL |
+|---|---|---|---|---|---|
+| `weave_3g_055hz` | −8.51 | −137.7 m | **moves AWAY** | HIT 0.2 m | **MISS 7.4 m** |
+| `weave_5g_070hz` | −5.57 | −97.2 m | moves toward | HIT 2.1 m | HIT 4.1 m |
+| `weave_7g_090hz` | +6.07 | +85.8 m | moves toward | HIT 3.6 m | HIT 4.1 m |
+
+`weave_3g_055hz` is the **only** weave case whose drift carries the target
+*away* from the interceptor's axis (y −300 m → −438 m) rather than back
+across it, and it carries the **largest** drift magnitude of the three. It
+is also the case where **PN posts its tightest miss of any weave case**
+(0.2 m) — which is what you would expect, because a constant lateral drift
+makes the target look like a constant-velocity target on a slightly rotated
+heading, precisely the geometry PN is built for.
+
+The supporting timing evidence: on the two cases RL converts, it converges
+at essentially the same moment as PN (17.70 vs 17.62 s; 20.14 vs 20.02 s).
+It is not generally slower. It fails to converge only on the one case where
+a sustained lead is required against a target steadily opening lateral
+separation.
+
+A plausible mechanism, stated as a hypothesis rather than a result:
+`training_maneuver_factory` samples weave phase as `uniform(0, 2π)`, so
+`cos φ` is symmetric about zero and the drift term averages out across
+training episodes while varying widely within them. The policy would then
+see drift as unmodelled noise rather than as a consistent feature worth
+leading — which would explain a sustained-lead failure specifically. **This
+has not been tested** and would need a phase-stratified eval to confirm or
+kill; it is not a claim this document relies on.
+
+What does hold, and is enough for §4: the loss is real, it is not
+intercept-boundary noise, and it is **not** explained by command
+over-drive.
 
 ## 4. Justification for keeping RL
 
@@ -67,7 +114,7 @@ than a portfolio headline of “learned guidance wins”:
 > closest-approach edge on the softest time-budget-constrained
 > ConstantTurn (3 g: 832 m vs PN 975 m). It is **not** a replacement for
 > PN: classical remains better on harder turns and uniquely succeeds on
-> the resonant `weave_3g_055hz` case where this baseline misses.
+> the drift-dominated `weave_3g_055hz` case where this baseline misses.
 
 That is why RL stays in the project: as a **fair, information-matched
 comparison arm** and a demonstration that a learned policy can reach

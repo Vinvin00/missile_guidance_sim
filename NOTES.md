@@ -1,5 +1,37 @@
 # NOTES
 
+## 2026-09-12 — Re-derived the `weave_3g_055hz` diagnosis (no new runs)
+
+- Forced by the CP0 finding that a phase-0 weave drifts rather than
+  mean-reverts. Used only existing `outputs/shadow_comparison/` data plus
+  target-only integration; no policy retraining, no eval re-run.
+- **The "RL over-drove lateral command" explanation is falsified.** RL's
+  mean commanded lateral is 124.9 / 125.3 / 126.3 m/s² on the three weave
+  cases — indistinguishable — and it **hits** two of them. Peak command is
+  at the shared 245.2 m/s² clamp for every mode on every weave case. An
+  attribute equally present in the wins cannot explain the loss.
+- **Re-derived cause: a sustained-lead failure.** Weave drift in y is
+  `−(A/ω)·cos φ`. `weave_3g_055hz` is the only weave case whose drift moves
+  the target *away* from the interceptor's axis (−300 → −438 m) and it has
+  the largest drift magnitude (8.51 m/s). The other two drift back toward
+  the axis, which helps the intercept.
+- Corroborating: PN posts its **tightest** weave miss (0.2 m) on exactly
+  that case — expected, since constant lateral drift makes the target a
+  constant-velocity target on a rotated heading, PN's ideal geometry. And
+  RL converges at essentially the same time as PN on the two it hits
+  (17.70 vs 17.62 s; 20.14 vs 20.02 s), so it is not generally slower.
+- Untested hypothesis (flagged as such in the doc, not relied on):
+  `training_maneuver_factory` samples phase `uniform(0, 2π)`, so `cos φ` is
+  symmetric and drift averages out across training — the policy may see
+  drift as noise rather than a feature to lead. Needs a phase-stratified
+  eval to confirm or kill.
+- **Consequence for CP1 — the spec's §5 conclusion inverts.** Retiring
+  `SinusoidalWeave` does not retire this weakness: break turn / vertical
+  jink / Split-S all open far more sustained separation than an 8.5 m/s
+  weave drift, so v1 stresses this failure mode harder. Marked §5
+  SUPERSEDED in the spec; CP1 should measure sustained-lead capability
+  explicitly rather than treat the question as retired.
+
 ## 2026-09-12 — CP0: evasive maneuver library + tracking chain (no training)
 
 - Scope as gated: infrastructure only. No training run, no checkpoint, no
