@@ -28,7 +28,9 @@ Pointer file: [`outputs/CURRENT_RL_BASELINE.json`](outputs/CURRENT_RL_BASELINE.j
 
 Fixed-eval at promotion: **5/9 hits** (Group A NoManeuver+Weave **5/6**;
 Group B ConstantTurn **0/3**, miss plateau near classical PN under the
-25 s budget). The prior **10-D** reward-redesign lineage remains under
+25 s budget). Shadow comparison vs PN/APN/OGL:
+[`outputs/shadow_comparison/shadow_comparison_report.md`](outputs/shadow_comparison/shadow_comparison_report.md).
+The prior **10-D** reward-redesign lineage remains under
 `outputs/checkpoints/` for comparison (see that directory's README).
 
 **Phase 1: 3D physics core + PN baseline — done.**
@@ -183,7 +185,12 @@ extension) and isn't planned unless there's a specific reason to need it.
 Group A **5/6** hits; Group B ConstantTurn remains a known
 time-budget ceiling near classical PN (not a training bug — PN
 also fails all three ConstantTurn cases at `max_time=25 s`).
-PN-vs-RL shadow comparison is not yet run (next phase).
 
-_Baseline PN performance tables and the full PN-vs-ML harness write-up
-land here once Roadmap step 4 / shadow-mode comparison is complete._
+**Shadow comparison (2026-09-11):** PN / APN / OGL / RL on the same
+nine fixed-eval cases — report at
+[`outputs/shadow_comparison/shadow_comparison_report.md`](outputs/shadow_comparison/shadow_comparison_report.md)
+(raw: `.json` / `.csv`). Run:
+`python scripts/run_shadow_comparison.py`. Headline: classical wins
+most Group A weave/miss-distance cells; RL beats PN on ConstantTurn
+3 g (832 vs 975 m) but all modes still miss Group B inside 25 s;
+APN/OGL degrade on ConstantTurn vs PN (rotating `a_T`).

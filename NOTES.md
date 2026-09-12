@@ -1,5 +1,50 @@
 # NOTES
 
+## 2026-09-11 — Evasive tracking redesign spec (scoping only)
+
+- Wrote `docs/evasive-tracking-redesign-spec.md`: scoping document for a
+  future RL environment redesign (genuine evasion maneuvers + delayed/
+  estimated tracking). No code, environment, or training changes.
+- Corrects framing: `Simulation` already wires sensor/estimator end to
+  end for classical guidance; `InterceptionEnv`/`shadow_compare.py` do
+  not (they step entities directly against ground truth) — so this is
+  "route RL/shadow harness through the existing sensor path," not
+  net-new estimation infrastructure.
+- Proposes v1 maneuver set (break turn, vertical jink, randomized jink,
+  Split-S, sequences), demotes `SinusoidalWeave` to a retained
+  low-effort perturbation case, flags that `use_target_turn_rate_obs`
+  is privileged ground truth and must be dropped or reworked, and
+  proposes raising `max_time` 25s → 45s.
+- Every checkpoint (CP0–CP5) requires separate explicit sign-off before
+  running, same gating as prior CP1–CP5 lineages. No training started.
+
+## 2026-09-11 — RL justification doc (shadow results only)
+
+- Wrote `docs/rl-justification.md` from
+  `outputs/shadow_comparison/shadow_comparison_report.md` only — no new
+  evals, no physics/guidance/rl edits.
+- Claim framed as 2/9 clear wins, 3/9 clear losses, 4/9 comparable; keep
+  RL as comparable + narrow 3 g budget-edge arm, not “beats classical.”
+
+## 2026-09-11 — Shadow-mode PN/APN/OGL vs RL baseline
+
+- New read-only harness: `src/guidance_sim/evaluation/shadow_compare.py`
+  + `scripts/run_shadow_comparison.py`. Does **not** touch physics/,
+  guidance/, rl/ training, or `CURRENT_RL_BASELINE.json`.
+- Reuses `FIXED_EVALUATION_CASES` / `_case_*` / `PPOTrainingConfig`
+  (25 s, dt=0.02) from `rl.training`, classical action wrap from
+  `validate_reward.py`, and RL replay path from `evaluate_policy` /
+  `capture_rl_rollout.py`. All four modes step the same
+  `InterceptionEnv` so target trajectories match.
+- Artifacts: `outputs/shadow_comparison/shadow_comparison_report.md`,
+  `.json`, `.csv`.
+- Head-to-head (HIT miss-m): Group A classical mostly wins on weave;
+  RL sole Group A miss is `weave_3g_055hz` (7.4 m vs PN hit 0.2 m).
+  Group B all miss: PN 975/1194/2164 m; RL 832/1453/2515 m — RL beats
+  PN only on 3 g; APN/OGL much worse (rotating a_T). Confirms budget
+  ceiling diagnosis, not a training gap.
+- Tests: `tests/test_shadow_compare.py` (6). Full suite green after add.
+
 ## 2026-09-11 — WS data_source label: synthetic → rollout
 
 - `DataSource = Literal["synthetic", "rollout"]`. Live catalog +
