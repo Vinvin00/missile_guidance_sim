@@ -1,5 +1,49 @@
 # NOTES
 
+## 2026-09-12 — CP0: evasive maneuver library + tracking chain (no training)
+
+- Scope as gated: infrastructure only. No training run, no checkpoint, no
+  `CURRENT_RL_BASELINE.json` change. **CP1 not started.**
+- New maneuvers in `physics/maneuvers.py`: `BreakTurn` (t_go- or
+  time-triggered, commits once fired), `VerticalJink` (ramped pull-up/dive,
+  stops at `altitude_delta_m`), `SquareWaveJink` (optionally non-periodic;
+  reversal schedule drawn up front so `lateral_accel` stays a pure function
+  of `t`), `SplitS` (roll approximated as the lift vector rotating, since the
+  point-mass target carries no attitude state), `ManeuverSequence`.
+- Added an additive `ManeuverProfile.update_engagement(t, target, pursuer)`
+  hook (default no-op) so t_go-triggered maneuvers can see engagement
+  geometry without changing the `lateral_accel` signature every profile
+  implements.
+- `InterceptionEnv` gains `TrackingConfig`: per-episode sampled seeker
+  latency (20–80 ms) and update rate, `AlphaBetaFilter` estimate feeding
+  `_kinematics`/observations/ZEM shaping, plus two new obs channels
+  (`time_since_update_scaled`, `estimate_uncertainty_scaled`).
+- **Truth/estimate split enforced:** hit detection, `min_range_m`, and
+  `info["range_m"]` stay ground truth (downstream metrics/viz depend on it);
+  the estimate feeds observations and shaping only. Observed range is
+  reported separately as `observed_range_m`.
+- Tracking defaults **off** at the env level (spec said on) — flipping it on
+  broke 7 tests by changing the frozen 10-D obs contract that rollout
+  capture, shadow compare, live inference and the CP5 checkpoint all depend
+  on. CP1 turns it on via `PPOTrainingConfig`.
+- `use_target_turn_rate_obs` + tracking now raises: that channel is computed
+  from privileged ground-truth target acceleration.
+- **CP0 disproved four spec claims** — see the "CP0 results" section added to
+  `docs/evasive-tracking-redesign-spec.md`. Most consequential: the weave is
+  NOT bounded at every phase. Integrating `A·sin(ωt)` leaves a DC velocity
+  offset `A/ω`, so a phase-0 weave drifts (188 m / 20 s at 5 g) while a
+  phase-π/2 one stays in a ~14 m corridor. `weave_3g_055hz` — RL's only
+  Group A loss to PN — is precisely the phase-0, lowest-frequency, maximum-
+  drift case, so the "RL over-reacts to a bounded oscillation" story in
+  `docs/rl-justification.md` §3 needs re-deriving before it is reused.
+- Also corrected: staleness must be age-of-information (stamped from the
+  measurement's sample time), not time-since-delivery, which is identically
+  zero when the seeker runs at/above the control rate; and the spec's
+  {50, 100} Hz update rates both exceed this codebase's 50 Hz control loop,
+  so they are now {25, 50}.
+- Tests: `tests/test_evasive_maneuvers.py` (18), `tests/test_tracking_env.py`
+  (14). Full suite 134 green, no existing test modified.
+
 ## 2026-09-12 — WS scenario picker now runs a live episode, not a canned replay
 
 - Root cause of "the picker doesn't seem to control the target, path is

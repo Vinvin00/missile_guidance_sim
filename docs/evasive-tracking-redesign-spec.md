@@ -600,6 +600,68 @@ not pre-authorize any of it.
    the wrong regime for this interceptor and (b) motivate randomizing
    update rate/delay per episode, per §2.2.
 
+## CP0 results (2026-09-12) — corrections this spec needs
+
+CP0 ran as scoped: maneuver library implemented, tracking chain wired into
+`InterceptionEnv`, no training budget spent. **Gate passed** — but four
+claims above did not survive contact with integrated trajectories, and are
+corrected here rather than left standing.
+
+1. **§1.1 is wrong that `SinusoidalWeave` is bounded for every phase.**
+   Integrating `a(t) = A·sin(ωt)` once gives `v(t) = (A/ω)(1 − cos ωt)` — a
+   velocity with a **non-zero mean `A/ω`**. A weave starting at zero
+   acceleration (phase 0) therefore *drifts cross-track indefinitely*, it is
+   not mean-reverting. Measured over 20 s at 5 g: **188 m** at phase 0 vs
+   **14 m** at phase π/2, and the drift scales as `A/ω` exactly as that
+   algebra predicts (239 m at 0.55 Hz, 146 m at 0.9 Hz).
+   **Consequence for §5:** `weave_3g_055hz` — the single Group A case where
+   RL loses to PN — is the *phase-0, lowest-frequency* case, i.e. the
+   maximum-drift member of the eval set (`phase_rad=0.0`, 0.55 Hz). The
+   other two weave cases use phase π/3 and 2π/3. So RL's one Group A
+   regression is against the weave case carrying the largest steady
+   cross-track drift, not against a purely oscillatory perturbation. §5's
+   "RL over-reacts to a bounded mean-reverting oscillation" diagnosis is
+   built on a false premise for that specific case and should be re-derived
+   before it is cited again.
+2. **Not even the phase-π/2 weave is strictly mean-reverting.** Because the
+   command direction is recomputed from the *current* velocity each step,
+   the system is coupled rather than a clean double integral, leaving a slow
+   residual drift (9 m → 14 m across a 20 s window). The decision-relevant
+   comparison survives intact: a held break turn opens **>50×** the weave's
+   corridor, which is what justifies the §1.2 demotion.
+3. **§2.3's staleness feature must be age-of-information, not time since
+   delivery.** Timing from the delivery instant makes the channel
+   identically zero whenever the seeker runs at or above the control rate —
+   it never reports the latency the policy actually has to cover. It is now
+   stamped from the delivered measurement's own sample time, so it
+   sawtooths between a latency floor and a latency + update-gap ceiling.
+4. **§2.2's `{50, 100}` Hz update-rate set is wrong for this codebase.**
+   Those figures assume a 100 Hz control loop; training runs `dt=0.02`
+   (50 Hz), so both choices deliver a measurement every single step and the
+   update-gap half of staleness carries no information. Now `{25, 50}` Hz,
+   bracketing the control rate.
+
+Two further implementation decisions that depart from the text above:
+
+- **Tracking defaults to *off* at the `InterceptionEnv` level**, not on as
+  §2.1 proposed. Defaulting it on changes the observation contract for every
+  existing consumer of the frozen baseline (rollout capture, shadow compare,
+  the live-inference endpoint, the 10-D CP1–CP5 checkpoints) and broke seven
+  tests when tried. New training opts in explicitly via `PPOTrainingConfig`
+  at CP1; the capability ships now, the regime change is gated.
+- **§2.4 option (a) is implemented as a hard error:** combining
+  `use_target_turn_rate_obs` with tracking raises, rather than silently
+  serving one privileged ground-truth channel alongside a degraded estimate.
+
+**CP0 stop-condition checks, all passing:** new maneuver classes displace as
+claimed (break turn / vertical jink / Split-S all >1 km separation vs the
+straight-line baseline, weave <50 m); the tracking observation stream is
+finite and in-bounds across full episodes; staleness and uncertainty both
+vary within [0, 1] across an episode; and PN still intercepts a
+non-maneuvering target through the estimator, with ConstantTurn miss
+distance staying within an order of magnitude of its perfect-truth value.
+**CP1 is not started** and requires separate explicit sign-off.
+
 ## Review caveats
 
 - The Zarchan-derived figures in [1] are from secondary/course-summary
