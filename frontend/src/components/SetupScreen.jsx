@@ -109,7 +109,7 @@ export function SetupScreen({ onRun }) {
             onClick={onRun}
             disabled={!catalog || busy}
           >
-            {busy ? 'RECEIVING…' : 'RUN SYNTHETIC PREVIEW'}
+            {busy ? 'RECEIVING…' : 'RUN LIVE ENGAGEMENT'}
           </button>
           {error && <p className="error-message">{error}</p>}
         </div>

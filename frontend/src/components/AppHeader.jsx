@@ -29,7 +29,7 @@ export function AppHeader({ screen, projection, onProjection }) {
       </div>
       <div className="hud-header-right">
         <div className="stream-chip">
-          <span>SYNTHETIC STREAM</span>
+          <span>LIVE STREAM</span>
           <span
             className={linkError ? 'stream-dot is-error' : 'stream-dot'}
           />

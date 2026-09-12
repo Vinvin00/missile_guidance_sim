@@ -1,9 +1,9 @@
 """Generic visualization scenarios backed by public reference ranges.
 
 Picker labels use the RL-track taxonomy (NoManeuver / ConstantTurn /
-SinusoidalWeave). Scenario ids remain stable so mock geometries stay
-unchanged. ``source_ids`` map to the review table in
-``docs/scenario-parameter-sources.md``.
+SinusoidalWeave); each drives a distinct, randomized target maneuver in
+``guidance_sim.api.live_stream``. ``source_ids`` map to the review table
+in ``docs/scenario-parameter-sources.md``.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ CATALOG = CatalogResponse(
         ScenarioOption(
             id="crossing-intercept",
             label="NoManeuver",
-            description="RL-track NoManeuver preview (non-maneuvering target).",
+            description="Live NoManeuver engagement (non-maneuvering target).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=10.0,
@@ -56,7 +56,7 @@ CATALOG = CatalogResponse(
         ScenarioOption(
             id="head-on-intercept",
             label="ConstantTurn",
-            description="RL-track ConstantTurn preview (label only; mock path unchanged).",
+            description="Live ConstantTurn engagement (randomized turn g/direction).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=7.0,
@@ -64,7 +64,7 @@ CATALOG = CatalogResponse(
         ScenarioOption(
             id="evasive-climb",
             label="SinusoidalWeave",
-            description="RL-track SinusoidalWeave preview (bounded climbing weave).",
+            description="Live SinusoidalWeave engagement (randomized amplitude/frequency).",
             initial_range_m=6_000.0,
             altitude_m=3_300.0,
             duration_s=12.0,
@@ -74,17 +74,17 @@ CATALOG = CatalogResponse(
         GuidanceOption(
             id="pn",
             label="Proportional Navigation",
-            description="Synthetic trajectory shaped like the classical PN baseline.",
+            description="Live classical PN guidance driving the interceptor.",
         ),
         GuidanceOption(
             id="apn",
             label="Augmented PN",
-            description="Synthetic preview only; no live guidance evaluation yet.",
+            description="Live classical APN guidance driving the interceptor.",
         ),
         GuidanceOption(
             id="ogl",
             label="Optimal Guidance",
-            description="Synthetic preview only; no live guidance evaluation yet.",
+            description="Live classical optimal guidance driving the interceptor.",
         ),
     ],
     vehicle_profiles=[

@@ -1,5 +1,46 @@
 # NOTES
 
+## 2026-09-12 — WS scenario picker now runs a live episode, not a canned replay
+
+- Root cause of "the picker doesn't seem to control the target, path is
+  always the same, interceptor never misses": `rollout_stream.py` mapped
+  all 3 catalog scenarios to just **2** captured RL-rollout files
+  (`crossing-intercept`/`head-on-intercept` both replayed
+  `no_maneuver_demo`), `guidance_law` was explicitly discarded
+  (`del guidance_law`), and live speed sliders were validated/echoed but
+  never reshaped the frozen frames. Those 2 files were also both Group A
+  checkpoint *wins*, so nothing evasive/hard was ever shown.
+- New `src/guidance_sim/api/live_stream.py` replaces it as the
+  `/ws/trajectory` data source: each request runs a fresh
+  `InterceptionEnv` episode. Scenario → target maneuver family is now
+  real (`crossing-intercept`→NoManeuver, `head-on-intercept`→ConstantTurn,
+  `evasive-climb`→SinusoidalWeave), randomized in magnitude/direction/
+  phase per episode; `guidance_law` (PN/APN/OGL) actually drives the
+  interceptor via the same classical-law wrap `shadow_compare.py` uses;
+  `interceptor.speed`/`target.speed` overrides reshape the initial
+  conditions instead of being cosmetic. No seed pinned by default, so
+  replaying the same scenario twice gives two different engagements.
+- `rollout_stream.py` and its tests are left in place, unused by
+  `main.py` now — read-only fixed-case replay may still be useful for
+  debugging against a known captured episode, not deleted outright.
+- `guidance_sim.rl` (physics/training/environment) untouched — this only
+  rewires which code the WS handler calls and what it's allowed to see.
+- Frontend copy updated to stop calling this "synthetic"
+  (`AppHeader.jsx`: "SYNTHETIC STREAM"→"LIVE STREAM",
+  `SetupScreen.jsx`: "RUN SYNTHETIC PREVIEW"→"RUN LIVE ENGAGEMENT") and
+  catalog scenario/guidance descriptions updated to match.
+- Tests: rewrote `tests/test_api_stream.py`'s rollout-replay assertions
+  (fixed closest-approach value, "overrides don't reshape", "guidance_law
+  ignored") for the new contract, added regression tests that two runs
+  of one scenario differ and that scenarios drive distinct target
+  maneuvers. Full suite green (102 backend, 19 frontend).
+- Not done yet: RL is still only reachable via the separate
+  `/api/guidance/session` REST endpoint, not wired into this picker; and
+  target behavior is still limited to NoManeuver/ConstantTurn/
+  SinusoidalWeave — genuinely evasive maneuvers are the separate,
+  larger `docs/evasive-tracking-redesign-spec.md` retrain, not touched
+  here.
+
 ## 2026-09-11 — Evasive tracking redesign spec (scoping only)
 
 - Wrote `docs/evasive-tracking-redesign-spec.md`: scoping document for a

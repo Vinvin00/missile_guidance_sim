@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from guidance_sim.api import live_guidance
 from guidance_sim.api.catalog import get_catalog
-from guidance_sim.api.rollout_stream import build_rollout_trajectory
+from guidance_sim.api.live_stream import build_live_trajectory
 from guidance_sim.api.schemas import (
     CatalogResponse,
     GuidanceFrame,
@@ -27,9 +27,11 @@ app = FastAPI(
     title="Guidance Simulation Visualization API",
     version="0.1.0",
     description=(
-        "Streams captured RL baseline evaluation rollouts over the frozen "
-        "trajectory WebSocket schema. Offline capture only — no live "
-        "checkpoint evaluation in the request path."
+        "Streams a freshly simulated engagement per request over the "
+        "trajectory WebSocket schema: the selected scenario drives the "
+        "target's maneuver, the selected guidance law drives the "
+        "interceptor, live speed overrides reshape the initial conditions, "
+        "and each run draws a new random seed."
     ),
 )
 app.add_middleware(
@@ -46,13 +48,13 @@ def root() -> dict[str, str]:
     return {
         "service": "guidance-sim-visualization",
         "docs": "/docs",
-        "trajectory_source": "rl_rollout",
+        "trajectory_source": "live_simulation",
     }
 
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "trajectory_source": "rl_rollout"}
+    return {"status": "ok", "trajectory_source": "live_simulation"}
 
 
 @app.get("/api/catalog", response_model=CatalogResponse)
@@ -140,7 +142,7 @@ async def trajectory_stream(websocket: WebSocket) -> None:
 
         stream_id = str(uuid4())
         try:
-            trajectory = build_rollout_trajectory(
+            trajectory = build_live_trajectory(
                 request.scenario_id,
                 request.guidance_law,
                 stream_id,
@@ -153,14 +155,6 @@ async def trajectory_stream(websocket: WebSocket) -> None:
             )
             await websocket.send_json(error.model_dump(mode="json"))
             await websocket.close(code=1008)
-            return
-        except FileNotFoundError as exc:
-            error = StreamError(
-                code="rollout_unavailable",
-                detail=str(exc),
-            )
-            await websocket.send_json(error.model_dump(mode="json"))
-            await websocket.close(code=1011)
             return
         started = StreamStarted(
             stream_id=stream_id,
