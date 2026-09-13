@@ -135,15 +135,64 @@ def _spearman_rho(xs: list[float], ys: list[float]) -> float:
     return float(np.sum(rx * ry) / denom)
 
 
-def test_miss_distance_degrades_with_seeker_noise(tmp_path: Path):
+def test_estimator_velocity_degrades_with_seeker_noise():
     """
-    Regression gate for Priority 1: miss distance must degrade
-    near-monotonically with seeker noise (Spearman > 0, high ≫ low).
+    Replaces the original Priority-1 gate, which asserted that *miss distance*
+    degrades by >50 m with seeker noise.
 
-    A small dip at low noise vs the zero-noise filter floor is allowed —
-    zero-noise α-β still has lag, and mild noise can occasionally help a
-    single engagement. The overall trend must still worsen with noise.
+    That result did not survive a properly-tuned estimator. It was largely an
+    artifact of deriving target velocity by differencing noisy positions with
+    a beta/dt gain: at these rates that turned seeker noise into 69-416 m/s of
+    velocity error across the sweep's scales, which is what actually wrecked
+    the intercepts. Taking velocity from the seeker's own az/el/range rate
+    channels instead cuts that ~10x, and PN's miss then stays ~3-5 m across
+    the whole sweep (see NOTES 2026-09-13).
+
+    What remains true, and is the honest invariant to gate on, is that the
+    *estimate* still degrades monotonically with noise. Miss robustness is
+    now a property of the guidance loop, not evidence that noise is harmless.
     """
+
+    truth_velocity = np.array([-200.0, 0.0, 0.0])
+    pursuer = State(position=[0.0, 0.0, 3_000.0], velocity=[350.0, 0.0, 0.0])
+    target_position = np.array([7_000.0, 300.0, 3_300.0])
+    dt = 0.01
+
+    errors = []
+    for scale in NOISE_SCALES:
+        rng = np.random.default_rng(3)
+        sensor = Sensor(
+            SensorConfig(update_rate_hz=100.0, noise=SeekerNoiseConfig().scaled(scale))
+        )
+        filt = AlphaBetaFilter(alpha=0.2)
+        samples = []
+        for step in range(400):
+            t = step * dt
+            target = State(
+                position=target_position + truth_velocity * t,
+                velocity=truth_velocity,
+            )
+            filt.update(sensor.measure(t, pursuer, target, rng), pursuer, dt)
+            if step > 150 and filt._initialized:
+                samples.append(
+                    float(np.linalg.norm(filt.estimate()[0].velocity - truth_velocity))
+                )
+        errors.append(float(np.mean(samples)))
+        print(f"noise_scale={scale}: mean velocity error={errors[-1]:.2f} m/s")
+
+    rho = _spearman_rho(list(NOISE_SCALES), errors)
+    assert errors[0] < 1e-6, f"zero-noise estimate must be exact: {errors}"
+    assert errors[-1] > errors[0] + 5.0, (
+        f"expected high noise to worsen the velocity estimate: {errors}"
+    )
+    assert rho >= 0.6, (
+        f"velocity error vs noise not monotonic (Spearman={rho:.3f}): {errors}"
+    )
+
+
+def test_miss_distance_stays_bounded_across_the_noise_sweep(tmp_path: Path):
+    """With the rate-based estimator, PN holds intercept across the sweep."""
+
     n_seeds = 7
     medians = []
     rows = []
@@ -155,12 +204,8 @@ def test_miss_distance_degrades_with_seeker_noise(tmp_path: Path):
             rows.append((scale, i, m))
         print(f"noise_scale={scale}: median_miss={med:.3f} m  misses={misses}")
 
-    rho = _spearman_rho(list(NOISE_SCALES), medians)
-    assert medians[-1] > medians[0] + 50.0, (
-        f"expected high noise to worsen miss substantially: {medians}"
-    )
-    assert rho >= 0.6, (
-        f"miss vs noise not near-monotonic (Spearman={rho:.3f}): {medians}"
+    assert max(medians) < 50.0, (
+        f"miss should stay near-intercept across the sweep now: {medians}"
     )
 
     csv_path = tmp_path / "miss_vs_noise.csv"

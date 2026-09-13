@@ -25,11 +25,27 @@ from guidance_sim.sensors.measurement import Measurement, spherical_to_relative
 
 
 class AlphaBetaFilter(Estimator):
-    def __init__(self, alpha: float = 0.5, initial_target: Optional[State] = None):
+    def __init__(
+        self,
+        alpha: float = 0.5,
+        initial_target: Optional[State] = None,
+        *,
+        use_measured_rates: bool = True,
+        velocity_gain: float = 0.3,
+    ):
         if not (0.0 < alpha < 1.0):
             raise ValueError("alpha must be in (0, 1)")
+        if not (0.0 < velocity_gain <= 1.0):
+            raise ValueError("velocity_gain must be in (0, 1]")
         self.alpha = float(alpha)
         self.beta = (alpha * alpha) / (2.0 - alpha)
+        # When the seeker reports az/el/range rates, deriving velocity from
+        # them beats differencing noisy positions: the beta/dt term amplifies
+        # position residual by beta/dt (order 4 at these rates), turning ~18 m
+        # of position noise into ~75 m/s of velocity error, whereas 1 mrad/s
+        # of angle-rate noise at 7 km is only ~7 m/s of tangential error.
+        self.use_measured_rates = bool(use_measured_rates)
+        self.velocity_gain = float(velocity_gain)
         self._pos: Optional[np.ndarray] = None
         self._vel: Optional[np.ndarray] = None
         self._accel = np.zeros(3)
@@ -106,7 +122,11 @@ class AlphaBetaFilter(Estimator):
         assert self._pos is not None and self._vel is not None
         residual = measured_pos - self._pos
         self._pos = self._pos + self.alpha * residual
-        if dt > 1e-12:
+
+        measured_velocity = self._velocity_from_rates(measurement, pursuer_state, range_)
+        if measured_velocity is not None:
+            self._vel = self._vel + self.velocity_gain * (measured_velocity - self._vel)
+        elif dt > 1e-12:
             self._vel = self._vel + (self.beta / dt) * residual
 
         # Inflate a simple diagonal proxy when residual is large.
@@ -119,6 +139,32 @@ class AlphaBetaFilter(Estimator):
                 ]
             )
         )
+
+    def _velocity_from_rates(
+        self,
+        measurement: Measurement,
+        pursuer_state: State,
+        range_: float,
+    ) -> Optional[np.ndarray]:
+        """Absolute target velocity from the seeker's own rate channels."""
+
+        if not self.use_measured_rates:
+            return None
+        if (
+            measurement.azimuth_rate is None
+            or measurement.elevation_rate is None
+            or measurement.range_rate is None
+        ):
+            return None
+        relative_velocity = _spherical_rates_to_velocity(
+            measurement.azimuth,
+            measurement.elevation,
+            float(range_),
+            measurement.azimuth_rate,
+            measurement.elevation_rate,
+            measurement.range_rate,
+        )
+        return relative_velocity + pursuer_state.velocity
 
     def estimate(self) -> Tuple[State, np.ndarray]:
         if not self._initialized or self._pos is None or self._vel is None:

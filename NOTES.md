@@ -1,5 +1,55 @@
 # NOTES
 
+## 2026-09-13 — Alpha-beta velocity from the seeker's own rate channels
+
+The filter derived target velocity by differencing noisy Cartesian position
+fixes with a `beta/dt` gain. At the tracking rates this project actually
+uses (25–50 Hz) that gain is order 4, so ~18 m of position noise became
+~75 m/s of velocity error — enough to corrupt the LOS rate the guidance law
+depends on.
+
+The seeker was already publishing azimuth/elevation/range *rates* with
+~1 mrad/s noise, and the filter used them exactly once, at initialisation,
+then threw them away. `AlphaBetaFilter` now takes velocity from those
+channels (`use_measured_rates=True`, `velocity_gain=0.3`), falling back to
+the `beta/dt` residual term when a seeker reports no rates.
+
+Measured on a break-turn target at 25 Hz / 40 ms latency:
+
+| | position err | velocity err | LOS-rate err |
+|---|---|---|---|
+| original (alpha=0.5, position differencing) | 12.9 m | 77.8 m/s | 0.66x signal |
+| alpha=0.2 only | 12.9 m | 18.3 m/s | 0.16x signal |
+| alpha=0.2 + measured rates | 13.0 m | **8.8 m/s** | **0.08x signal** |
+
+Position accuracy is unchanged; this is purely a velocity-channel fix.
+
+### This invalidates a documented Priority-1 result
+
+`test_miss_distance_degrades_with_seeker_noise` asserted that closed-loop
+miss degrades by >50 m under seeker noise. With the fixed filter it does
+not: PN holds 3.4–4.6 m median miss at *every* noise scale in the sweep.
+
+I checked for truth leakage before accepting this and there is none —
+velocity error still scales linearly with noise scale (0 → 27 m/s at
+scale 8), just with a ~10x smaller coefficient. The old filter turned the
+sweep's noise scales into 69–416 m/s of velocity error, and that is what
+actually wrecked the intercepts. **The "miss degrades with seeker noise"
+finding was substantially an artifact of the mistuned estimator, not an
+intrinsic property of seeker noise at these levels.**
+
+The test is split rather than loosened:
+
+- `test_estimator_velocity_degrades_with_seeker_noise` gates the invariant
+  that survives — the *estimate* still degrades monotonically with noise
+  (Spearman >= 0.6, exact at zero noise).
+- `test_miss_distance_stays_bounded_across_the_noise_sweep` asserts the new
+  property — PN holds intercept across the sweep.
+
+**Still outstanding:** `scripts/run_seeker_noise_sweep.py` outputs and any
+doc text citing the original degradation figure were produced with the old
+filter and need re-running or annotating.
+
 ## 2026-09-13 — CP1–CP5 evasive lineage: negative result, stop condition fired
 
 - Ran the full five-checkpoint evasive + delayed-tracking lineage into an
