@@ -1,0 +1,442 @@
+{
+  "guidance": "PN N=4.0",
+  "n_cases": 50,
+  "max_time_s": 45.0,
+  "tracking_enabled": true,
+  "eval_seed": 91000,
+  "hit_rate": 0.78,
+  "mean_miss_m": 121.78806907996166,
+  "median_miss_m": 3.912561913967515,
+  "by_maneuver": {
+    "break_turn": {
+      "n": 13,
+      "hits": 6,
+      "hit_rate": 0.46153846153846156,
+      "median_miss_m": 6.55091281014191,
+      "mean_miss_m": 457.2130077282281
+    },
+    "vertical_jink": {
+      "n": 13,
+      "hits": 12,
+      "hit_rate": 0.9230769230769231,
+      "median_miss_m": 3.448304375316283,
+      "mean_miss_m": 4.112133739733211
+    },
+    "random_jink": {
+      "n": 12,
+      "hits": 10,
+      "hit_rate": 0.8333333333333334,
+      "median_miss_m": 4.464974400640973,
+      "mean_miss_m": 4.7109383310511115
+    },
+    "bounded_weave": {
+      "n": 12,
+      "hits": 11,
+      "hit_rate": 0.9166666666666666,
+      "median_miss_m": 3.241438244049042,
+      "mean_miss_m": 2.970446245164414
+    }
+  },
+  "cases": [
+    {
+      "name": "heldout_00_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.5172530853436497,
+      "final_time_s": 22.679999999999605
+    },
+    {
+      "name": "heldout_01_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.448304375316283,
+      "final_time_s": 22.599999999999607
+    },
+    {
+      "name": "heldout_02_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.526610771415561,
+      "final_time_s": 16.29999999999974
+    },
+    {
+      "name": "heldout_03_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 6.001163112096605,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_04_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 6.55091281014191,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_05_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.686619806206933,
+      "final_time_s": 22.9199999999996
+    },
+    {
+      "name": "heldout_06_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.314230523240222,
+      "final_time_s": 17.79999999999971
+    },
+    {
+      "name": "heldout_07_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.45043855602582,
+      "final_time_s": 15.89999999999975
+    },
+    {
+      "name": "heldout_08_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.6361905930701495,
+      "final_time_s": 28.01999999999949
+    },
+    {
+      "name": "heldout_09_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.8640691786266324,
+      "final_time_s": 27.279999999999507
+    },
+    {
+      "name": "heldout_10_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 1.7229453671620387,
+      "final_time_s": 16.159999999999744
+    },
+    {
+      "name": "heldout_11_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 1.2899118871609838,
+      "final_time_s": 14.97999999999977
+    },
+    {
+      "name": "heldout_12_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 1210.0984149546935,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_13_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.9435669306045327,
+      "final_time_s": 19.859999999999665
+    },
+    {
+      "name": "heldout_14_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.403338029866384,
+      "final_time_s": 18.399999999999697
+    },
+    {
+      "name": "heldout_15_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.7620732281021185,
+      "final_time_s": 15.939999999999749
+    },
+    {
+      "name": "heldout_16_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 1196.5852200114418,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_17_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.649187123329742,
+      "final_time_s": 24.31999999999957
+    },
+    {
+      "name": "heldout_18_random_jink",
+      "maneuver": "random_jink",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 8.55466529005003,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_19_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.15311833954319,
+      "final_time_s": 16.919999999999728
+    },
+    {
+      "name": "heldout_20_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 1091.7181344501555,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_21_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": false,
+      "outcome": "miss",
+      "miss_distance_m": 12.874368153483406,
+      "final_time_s": 33.55999999999965
+    },
+    {
+      "name": "heldout_22_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 1.4626031883158042,
+      "final_time_s": 15.259999999999764
+    },
+    {
+      "name": "heldout_23_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.329758148554894,
+      "final_time_s": 16.83999999999973
+    },
+    {
+      "name": "heldout_24_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.897408893427298,
+      "final_time_s": 26.69999999999952
+    },
+    {
+      "name": "heldout_25_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.367090553594857,
+      "final_time_s": 28.61999999999948
+    },
+    {
+      "name": "heldout_26_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.219530360104101,
+      "final_time_s": 13.11999999999981
+    },
+    {
+      "name": "heldout_27_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.8087033893160376,
+      "final_time_s": 12.699999999999818
+    },
+    {
+      "name": "heldout_28_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.4983578569403075,
+      "final_time_s": 19.419999999999675
+    },
+    {
+      "name": "heldout_29_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.6372547325840077,
+      "final_time_s": 19.13999999999968
+    },
+    {
+      "name": "heldout_30_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.7434125657078985,
+      "final_time_s": 17.519999999999715
+    },
+    {
+      "name": "heldout_31_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 0.7206023141499134,
+      "final_time_s": 15.619999999999756
+    },
+    {
+      "name": "heldout_32_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.3599472116143585,
+      "final_time_s": 18.2199999999997
+    },
+    {
+      "name": "heldout_33_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.4748685781504394,
+      "final_time_s": 14.059999999999789
+    },
+    {
+      "name": "heldout_34_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.708466853796999,
+      "final_time_s": 16.33999999999974
+    },
+    {
+      "name": "heldout_35_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 0.6947779387301972,
+      "final_time_s": 14.539999999999779
+    },
+    {
+      "name": "heldout_36_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 890.0014083903101,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_37_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.8817379655464332,
+      "final_time_s": 17.899999999999707
+    },
+    {
+      "name": "heldout_38_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.870921623193389,
+      "final_time_s": 15.259999999999764
+    },
+    {
+      "name": "heldout_39_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.927714934507733,
+      "final_time_s": 16.85999999999973
+    },
+    {
+      "name": "heldout_40_break_turn",
+      "maneuver": "break_turn",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.1416287281941586,
+      "final_time_s": 31.099999999999426
+    },
+    {
+      "name": "heldout_41_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 2.9297926352033787,
+      "final_time_s": 16.679999999999733
+    },
+    {
+      "name": "heldout_42_random_jink",
+      "maneuver": "random_jink",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 9.83941483833785,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_43_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.8693177915656207,
+      "final_time_s": 16.659999999999734
+    },
+    {
+      "name": "heldout_44_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 832.3518683643015,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_45_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.686641654803392,
+      "final_time_s": 21.53999999999963
+    },
+    {
+      "name": "heldout_46_random_jink",
+      "maneuver": "random_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 3.1651205614230538,
+      "final_time_s": 18.439999999999696
+    },
+    {
+      "name": "heldout_47_bounded_weave",
+      "maneuver": "bounded_weave",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 1.6377753022198496,
+      "final_time_s": 17.83999999999971
+    },
+    {
+      "name": "heldout_48_break_turn",
+      "maneuver": "break_turn",
+      "hit": false,
+      "outcome": "timeout",
+      "miss_distance_m": 693.4123551173307,
+      "final_time_s": 45.000000000001435
+    },
+    {
+      "name": "heldout_49_vertical_jink",
+      "maneuver": "vertical_jink",
+      "hit": true,
+      "outcome": "hit",
+      "miss_distance_m": 4.014236929081706,
+      "final_time_s": 24.439999999999568
+    }
+  ]
+}

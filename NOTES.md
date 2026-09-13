@@ -1,5 +1,82 @@
 # NOTES
 
+## 2026-09-13 — CP1–CP5 evasive lineage: negative result, stop condition fired
+
+- Ran the full five-checkpoint evasive + delayed-tracking lineage into an
+  isolated `outputs/evasive_delayed_tracking/`. `CURRENT_RL_BASELINE.json`
+  untouched; no promotion.
+- Config: v1 maneuvers (break turn / vertical jink / randomized jink /
+  retained bounded weave; Split-S held for CP5 per plan), tracking on,
+  `max_time=45 s` with `t_go_max_s` now derived from it, 12-D obs, no
+  privileged turn-rate channel.
+- **Result: 0/50 held-out hits at every checkpoint**, and mean miss got
+  *worse* monotonically: 1231 → 1221 → 4110 → 3989 → 4672 m; mean reward
+  −50.8 → −79.7. The `convergence_warning` stop condition fired at CP2,
+  CP3, CP4 and CP5.
+- **Classical reference on the identical held-out set: PN 78% hits (39/50),
+  median miss 3.9 m** (`outputs/evasive_delayed_tracking/pn_baseline.json`,
+  PN consuming the same estimator output the policy sees, so it is
+  information-matched). Break turn is the discriminator: PN 6/13 there vs
+  11–12/13 on the other kinds. So the task is demonstrably solvable in this
+  regime — this is an RL training failure, not an impossible environment.
+- **Sample-budget problem the spec missed.** Raising the budget to 45 s
+  (spec §4) cut episodes per checkpoint roughly in half at the unchanged
+  20,480-timestep cadence: `ep_len_mean` ≈ 2010 steps, so CP1 saw only
+  ~10 episodes. There is a trap in it — a policy that never intercepts
+  runs the *full* 45 s every episode, so it earns less experience per
+  timestep than a competent one and is penalised for being bad.
+- Compute is not the binding constraint that the "compute-bounded 20,480"
+  figure assumed: 20,480 timesteps trains in ~13 s on this machine.
+- 40 of 50 held-out episodes end in timeout, the other 10 in ground impact
+  — worth a look on its own, since the evasive ICs start at 5.2–6.5 km.
+- **CP5 is not a promotable baseline and must not be treated as one.**
+  Lineage archived to `outputs/evasive_delayed_tracking_attempt01/` with a
+  README recording both defects found below.
+
+### Ablation: tracking was the whole story, the maneuvers were fine
+
+Each arm trained from scratch at 204,800 steps (10x the checkpoint cadence):
+
+| arm | maneuvers | tracking | result |
+|---|---|---|---|
+| A | evasive | on | 0/20 hits, median 557 m |
+| B | evasive | **off** | **7/20 hits, median 8.6 m** |
+| C | old | on | 0/9 hits, median 3977 m |
+| D | old | **off** | **5/9 hits, median 4.9 m** |
+
+- Arm D reproduces the frozen lineage's known **5/9**, which validates the
+  harness. Arm B shows the new evasion maneuvers are learnable. Both
+  tracking arms score zero regardless of maneuver difficulty, so the
+  maneuver redesign was never the blocker.
+
+### Two defects, both fixed
+
+1. **Estimator gain mistuned for this codebase's rates.** `alpha=0.5` is
+   Zarchan's 100 Hz figure; at 25–50 Hz the `beta/dt` velocity gain (~4.2)
+   turns ~18 m of position residual into **~75 m/s** of velocity error on a
+   ~200 m/s target, corrupting LOS rate by **0.66x its own magnitude**.
+   Position error was fine (~14 m) the whole time, which is why CP0's
+   position-only check passed it. Sweep: alpha 0.2 gives velocity error
+   18 m/s and LOS-rate error 0.16x; 0.05 over-smooths and degrades again.
+   **Fixed: `TrackingConfig.alpha` 0.5 → 0.2.** Same class of error as the
+   CP0 update-rate finding: a spec constant transplanted from a 100 Hz loop.
+2. **Miss penalty saturated.** `miss_penalty * tanh(min_range / 1000 m)` has
+   gradient 0.0099 at 3 km and 0.0002 at 5 km. From a 7 km start an
+   untrained policy misses by 1–5 km — entirely inside that dead zone, with
+   nothing to pull it back. That is why the lineage *degraded* monotonically
+   rather than merely stalling. **Fixed: scale → 3000 m** (gradient 0.133 at
+   a 5 km miss, ~650x more signal).
+3. Also raised `timesteps_per_checkpoint` 20,480 → 204,800 for this lineage.
+
+**Post-fix confirmation (same 204,800-step budget):** evasive + tracking goes
+from 0/20 (median 557 m) to **2/20 (median 35.4 m)**. Real improvement, but
+still short of the tracking-off arm's 7/20 / 8.6 m — so a residual tracking
+cost remains and should not be papered over.
+
+Note the shaping term reporting a constant 27.11 across checkpoints is
+expected, not a bug: potential-based shaping telescopes, so its undiscounted
+episode sum is policy-independent by construction.
+
 ## 2026-09-12 — Re-derived the `weave_3g_055hz` diagnosis (no new runs)
 
 - Forced by the CP0 finding that a phase-0 weave drifts rather than

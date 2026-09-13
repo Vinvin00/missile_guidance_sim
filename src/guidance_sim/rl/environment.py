@@ -151,7 +151,13 @@ class TrackingConfig:
     # endpoint) keeps working untouched. New training opts in explicitly via
     # PPOTrainingConfig, which defaults it on.
     enabled: bool = False
-    alpha: float = 0.5
+    # CP1 finding: alpha=0.5 is Zarchan's figure for a 100 Hz tracker. At the
+    # 25-50 Hz rates this codebase runs, the beta/dt velocity gain (~4.2)
+    # multiplies ~18 m of position residual into ~75 m/s of velocity noise --
+    # against a ~200 m/s target, and it corrupts LOS rate by ~0.66x its own
+    # magnitude. Sweeping alpha puts the optimum near 0.2 (velocity error
+    # 18 m/s, LOS-rate error 0.16x); 0.05 over-smooths and gets worse again.
+    alpha: float = 0.2
     latency_range_s: tuple[float, float] = (0.02, 0.08)
     # CP0 finding: the spec's {50, 100} Hz assumed a 100 Hz control loop, but
     # training runs at dt=0.02 (50 Hz). A seeker at or above the control rate

@@ -17,11 +17,11 @@ the frozen training distribution.
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 import json
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Any, Callable, Protocol, Sequence
 
 import gymnasium as gym
 import numpy as np
@@ -49,8 +49,15 @@ from guidance_sim.rl.domain_randomization import (
 )
 from guidance_sim.rl.environment import (
     InterceptionEnv,
+    TrackingConfig,
     observation_names,
 )
+from guidance_sim.rl.evasive_scenarios import (
+    build_held_out_cases,
+    evasive_initial_conditions,
+    evasive_maneuver_factory,
+)
+from guidance_sim.rl.reward import RewardConfig
 from guidance_sim.simulation.engine import SimulationConfig
 
 
@@ -78,6 +85,15 @@ class PPOTrainingConfig:
     action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2
     # Off by default: preserves CP1–CP4 obs contract. New experiment branch only.
     use_target_turn_rate_obs: bool = False
+    # Evasive-redesign lineage: real evasion maneuvers + delayed/estimated
+    # tracking. Off by default so the frozen lineage above is untouched;
+    # `evasive_redesign_config()` turns both on together.
+    use_evasive_maneuvers: bool = False
+    tracking: TrackingConfig = field(default_factory=TrackingConfig)
+    # Miss-penalty grading scale. The terminal penalty is
+    # miss_penalty * tanh(min_range / scale), so beyond ~3x the scale it is
+    # flat and supplies no gradient at all.
+    miss_tanh_scale_m: float = 1_000.0
 
     def __post_init__(self) -> None:
         if self.total_checkpoints != 5:
@@ -99,7 +115,8 @@ class PPOTrainingConfig:
     @property
     def observation_names(self) -> tuple[str, ...]:
         return observation_names(
-            use_target_turn_rate_obs=self.use_target_turn_rate_obs
+            use_target_turn_rate_obs=self.use_target_turn_rate_obs,
+            use_tracking_obs=self.tracking.enabled,
         )
 
     @property
@@ -114,10 +131,66 @@ class PPOTrainingConfig:
             autopilot_tau=self.autopilot_tau,
         )
 
+    def reward_config(self) -> RewardConfig:
+        """Reward config with the ZEM horizon pinned to the episode budget.
+
+        ``t_go_max_s`` and ``max_time`` are independently settable and were
+        both left at 25.0, so changing the budget alone would silently leave
+        the ZEM potential saturating at the old horizon. Deriving one from the
+        other removes that footgun.
+        """
+
+        return RewardConfig(
+            t_go_max_s=self.max_time,
+            miss_tanh_scale_m=self.miss_tanh_scale_m,
+        )
+
+
+EVASIVE_MAX_TIME_S = 45.0
+EVASIVE_MISS_TANH_SCALE_M = 3_000.0
+EVASIVE_TIMESTEPS_PER_CHECKPOINT = 204_800
+
+
+def evasive_redesign_config(**overrides: Any) -> PPOTrainingConfig:
+    """Config for the evasive + delayed-tracking lineage (CP1 onward).
+
+    Turns on, together: the v1 evasion maneuver set, the seeker/estimator
+    chain, and the extended time budget. The privileged turn-rate observation
+    stays off -- it is ground-truth target acceleration, which no seeker can
+    measure, and the env refuses to serve it alongside tracking.
+    """
+
+    settings: dict[str, Any] = {
+        "use_evasive_maneuvers": True,
+        "tracking": TrackingConfig(enabled=True),
+        # An evasion maneuver the interceptor structurally cannot recover from
+        # inside the budget tests the budget, not evasion handling. 45 s
+        # matches the existing grounded figure in run_seeker_noise_sweep.py.
+        "max_time": EVASIVE_MAX_TIME_S,
+        "use_target_turn_rate_obs": False,
+        # The first attempt died in the flat tail of the miss penalty: from a
+        # 7 km start an untrained policy misses by 1-5 km, where tanh(r/1000)
+        # has a gradient of ~0.001 and nothing pulls it back. 3 km keeps the
+        # whole from-scratch operating range on a live slope.
+        "miss_tanh_scale_m": EVASIVE_MISS_TANH_SCALE_M,
+        # Episodes here run ~1.8x longer than the frozen lineage's, so the
+        # inherited 20,480 cadence bought only ~10 episodes per checkpoint.
+        # Compute is not the constraint it was: this trains in ~2 minutes.
+        "timesteps_per_checkpoint": EVASIVE_TIMESTEPS_PER_CHECKPOINT,
+    }
+    settings.update(overrides)
+    return PPOTrainingConfig(**settings)
+
 
 @dataclass(frozen=True)
 class EvaluationCase:
-    """One immutable member of the fixed Phase-2 evaluation set."""
+    """One member of an evaluation set.
+
+    The frozen Phase-2 cases are fully described by the scalar fields. Cases
+    drawn from a richer maneuver library (break turn, vertical jink, ...)
+    cannot be, so they may instead carry explicit builders; when set, those
+    take precedence over the scalar fields.
+    """
 
     name: str
     target_position_m: tuple[float, float, float]
@@ -126,6 +199,10 @@ class EvaluationCase:
     maneuver_accel_g: float = 0.0
     frequency_hz: float = 0.0
     phase_rad: float = 0.0
+    maneuver_builder: Callable[[np.random.Generator], ManeuverProfile] | None = None
+    initial_condition_builder: (
+        Callable[[np.random.Generator], tuple[State, State]] | None
+    ) = None
 
 
 FIXED_EVALUATION_CASES: tuple[EvaluationCase, ...] = (
@@ -417,6 +494,9 @@ def training_maneuver_factory(rng: np.random.Generator) -> ManeuverProfile:
 def _case_initial_conditions(
     case: EvaluationCase,
 ):
+    if case.initial_condition_builder is not None:
+        return case.initial_condition_builder
+
     def sample(_rng: np.random.Generator) -> tuple[State, State]:
         return (
             State(
@@ -433,6 +513,9 @@ def _case_initial_conditions(
 
 
 def _case_maneuver(case: EvaluationCase):
+    if case.maneuver_builder is not None:
+        return case.maneuver_builder
+
     def make(_rng: np.random.Generator) -> ManeuverProfile:
         if case.maneuver == "none":
             return NoManeuver()
@@ -458,7 +541,10 @@ def make_training_vec_env(
     run_seed = config.seed + 10_000 * (checkpoint_index - 1)
     set_random_seed(run_seed)
     n_action = action_dimension(config.action_layout)
-    if config.domain_randomization:
+    if config.use_evasive_maneuvers:
+        initial_condition_sampler = evasive_initial_conditions
+        maneuver_factory = evasive_maneuver_factory
+    elif config.domain_randomization:
         initial_condition_sampler = randomized_initial_conditions
         maneuver_factory = randomized_maneuver_factory
     else:
@@ -468,10 +554,12 @@ def make_training_vec_env(
     def make_env() -> gym.Env:
         physical_env = InterceptionEnv(
             config=config.simulation_config(),
+            reward_config=config.reward_config(),
             initial_condition_sampler=initial_condition_sampler,
             maneuver_factory=maneuver_factory,
             action_layout=config.action_layout,
             use_target_turn_rate_obs=config.use_target_turn_rate_obs,
+            tracking=config.tracking,
         )
         return gym.wrappers.RescaleAction(
             physical_env,
@@ -561,6 +649,8 @@ def evaluate_policy(
     seed: int = 91_000,
     action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
     use_target_turn_rate_obs: bool = False,
+    tracking: TrackingConfig | None = None,
+    reward_config: RewardConfig | None = None,
 ) -> EvaluationSummary:
     """Evaluate a policy on the immutable, ordered scenario set."""
 
@@ -570,10 +660,12 @@ def evaluate_policy(
     for case_index, case in enumerate(cases):
         physical_env = InterceptionEnv(
             config=config,
+            reward_config=reward_config,
             initial_condition_sampler=_case_initial_conditions(case),
             maneuver_factory=_case_maneuver(case),
             action_layout=action_layout,
             use_target_turn_rate_obs=use_target_turn_rate_obs,
+            tracking=tracking,
         )
         env = gym.wrappers.RescaleAction(
             physical_env,
@@ -1062,11 +1154,22 @@ def run_checkpoint(
     finally:
         vec_env.close()
 
+    # The evasive lineage is graded on a held-out set drawn from a disjoint
+    # seed stream, so a pass is evidence of generalization rather than a
+    # resample of the training distribution.
+    evaluation_cases = (
+        build_held_out_cases()
+        if config.use_evasive_maneuvers
+        else FIXED_EVALUATION_CASES
+    )
     evaluation = evaluate_policy(
         model,
+        cases=evaluation_cases,
         simulation_config=config.simulation_config(),
         action_layout=config.action_layout,
         use_target_turn_rate_obs=config.use_target_turn_rate_obs,
+        tracking=config.tracking,
+        reward_config=config.reward_config(),
     )
     total_episodes = _count_csv_rows(episode_csv_path)
     curve = _curve_summary(callback.rows, total_episodes)
