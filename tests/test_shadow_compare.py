@@ -38,10 +38,16 @@ def test_fixed_eval_matrix_matches_rl_groups():
     assert PPOTrainingConfig().max_time == 25.0
 
 
-def test_baseline_pointer_is_checkpoint_05():
+def test_baseline_pointer_is_evasive_zemtgo10_seed3_checkpoint_06():
+    """Promoted 2026-09-14: evasive lineage, tracking-based obs, no turn-rate."""
+
     pointer = load_rl_baseline_pointer(BASELINE_POINTER)
-    assert pointer["model_path"].endswith("rl_checkpoint_05.zip")
-    assert pointer["use_target_turn_rate_obs"] is True
+    assert pointer["model_path"].endswith(
+        "evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip"
+    )
+    assert pointer["use_target_turn_rate_obs"] is False
+    assert pointer["tracking_enabled"] is True
+    assert pointer["observation_dim"] == 12
     model = REPO_ROOT / pointer["model_path"]
     assert model.is_file()
 

@@ -1,27 +1,60 @@
 {
   "status": "current_baseline",
-  "promoted_at": "2026-09-11",
-  "branch_name": "observation_target_turn_rate",
-  "description": "Recurrent PPO with 13-D observation (base 10-D LOS kinematics + target turn-rate channels). Flag: use_target_turn_rate_obs=True. Note: LOS rate was already in the base 10-D vector; this branch adds target body turn-rate from achieved lateral accel, not a second LOS-rate channel.",
-  "model_path": "outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip",
-  "metadata_path": "outputs/observation_target_turn_rate/rl_checkpoint_05.json",
-  "eval_path": "outputs/observation_target_turn_rate/rl_checkpoint_05_eval.json",
-  "progress_path": "outputs/observation_target_turn_rate/training_progress.md",
-  "observation_dim": 13,
-  "use_target_turn_rate_obs": true,
+  "promoted_at": "2026-09-14",
+  "branch_name": "evasive_zemtgo10_seed3",
+  "description": "Recurrent PPO, 12-D observation (10-D LOS kinematics + tracking staleness/uncertainty; no privileged target turn-rate). Trained against the v1 evasion maneuver library (break_turn, vertical_jink, random_jink, bounded_weave) under a delayed/estimated alpha-beta tracking chain (seeker rates feed the velocity channel; see estimation/alpha_beta.py), not ground-truth target state. This supersedes observation_target_turn_rate below on a different, harder, more realistic problem -- that lineage saw exact target turn-rate and a single non-evasive maneuver family; this one sees only estimated tracking and four evasion kinds. Root-cause chain that made this lineage trainable: RewardConfig.t_go_max_s was decoupled from max_time (was leaking a farmable heading-wobble reward via the ZEM shaping potential's lookahead, see NOTES.md 2026-09-14 'Root cause of the shaping_gamma / effort_weight failures'), then extended to CP6 (config nominally caps at 5 checkpoints; run_checkpoint()'s upper bound was relaxed for this experiment, PPOTrainingConfig.total_checkpoints itself is unchanged).",
+  "model_path": "outputs/evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip",
+  "metadata_path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06.json",
+  "eval_path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06_eval.json",
+  "progress_path": "outputs/evasive_zemtgo10_seed3/training_progress.md",
+  "observation_dim": 12,
+  "use_target_turn_rate_obs": false,
+  "tracking_enabled": true,
+  "max_time_s": 45.0,
   "action_layout": "lateral2",
-  "cumulative_timesteps": 102400,
-  "fixed_eval_summary": {
-    "hits": "5/9",
-    "group_a_hits": "5/6",
-    "group_b_hits": "0/3",
-    "mean_miss_m": 535.81,
-    "median_miss_m": 4.117,
-    "group_b_mean_miss_m": 1599.73
+  "cumulative_timesteps": 1228800,
+  "seed": 43500777,
+  "reward_config_deltas_from_default": {
+    "zem_t_go_max_s": 10.0,
+    "note": "shaping_gamma=1.0, effort_weight=5.0, miss_tanh_scale_m=3000.0 all left at evasive_redesign_config() lineage defaults; zem_t_go_max_s is the only deliberate change from the pre-fix lineage."
+  },
+  "held_out_eval_50_case": {
+    "path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06_eval.json",
+    "hits": "41/50",
+    "hit_rate": 0.82,
+    "median_miss_m": 3.9,
+    "p90_miss_m": 7.1,
+    "max_miss_m": 7.9
+  },
+  "held_out_eval_300_case": {
+    "path": "outputs/evasive_largeeval_300/seed3_cp6.json",
+    "hits": "242/300",
+    "hit_rate": 0.807,
+    "median_miss_m": 4.2,
+    "p90_miss_m": 6.7,
+    "p99_miss_m": 13.7,
+    "max_miss_m": 15.4,
+    "note": "This is the statistically load-bearing number, not the 50-case figure above -- it was run specifically to check whether the 50-case result was noise. It wasn't: hit rate held at 80.7%."
+  },
+  "classical_pn_reference_300_case": {
+    "path": "outputs/evasive_largeeval_300/pn_baseline.json",
+    "hits": "218/300",
+    "hit_rate": 0.727,
+    "median_miss_m": 4.0,
+    "p90_miss_m": 57.2,
+    "p99_miss_m": 1208.7,
+    "max_miss_m": 1347.2,
+    "note": "PN consumes the same estimator output the policy sees (information-matched), not ground truth. Fails structurally on break_turn (41/75) and random_jink (41/75); when it fails, it fails by hundreds to >1000 m."
+  },
+  "significance": {
+    "z_vs_pn_hit_rate_n300": 2.32,
+    "approx_p_two_tailed": 0.02,
+    "note": "Two other seeds pushed through the same config to CP6 did not replicate this hit-rate margin at n=300 (seed4: 73.7%, z=0.28 vs PN, a tie; seed2: 65.3%, z=-1.94, marginally below PN). This is a promotion of one specific checkpoint, not a claim that the zem_t_go_max_s config reliably beats PN on hit rate -- see NOTES.md 2026-09-14 for the full three-seed comparison. What IS consistent across all three seeds, unexceptioned, at both n=50 and n=300: every RL checkpoint's worst miss stayed under 18 m, categorically better than PN's catastrophic-loss tail."
   },
   "supersedes": {
-    "lineage": "reward_redesign_10dim_lateral2",
-    "previous_best_note": "Prior active lineage lived under outputs/checkpoints/ (10-D obs, use_target_turn_rate_obs=false). Kept for comparison; not deleted.",
-    "previous_checkpoint_dir": "outputs/checkpoints/"
+    "lineage": "observation_target_turn_rate",
+    "previous_best_note": "Prior baseline used privileged ground-truth target turn-rate and a single fixed target path (no evasion, no sensor delay/noise) -- this was the original bug report that started the evasive-tracking redesign (docs/evasive-tracking-redesign-spec.md). Kept for comparison; not deleted.",
+    "previous_model_path": "outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip",
+    "previous_metadata_path": "outputs/observation_target_turn_rate/rl_checkpoint_05.json"
   }
 }

@@ -48,7 +48,11 @@ from guidance_sim.rl.actions import (
     action_dimension,
     world_to_lateral,
 )
-from guidance_sim.rl.environment import InterceptionEnv, _default_pursuer_vehicle
+from guidance_sim.rl.environment import (
+    InterceptionEnv,
+    TrackingConfig,
+    _default_pursuer_vehicle,
+)
 from guidance_sim.rl.training import PPOTrainingConfig
 
 _PN_N = 4.0
@@ -182,14 +186,28 @@ def build_live_trajectory(
     policy = None
     use_turn_rate_obs = False
     action_layout = ACTION_LAYOUT_LATERAL2
+    tracking = TrackingConfig()
+    max_time_s = PPOTrainingConfig().max_time
     if guidance_law == "rl":
         from guidance_sim.ml.policy_inference import get_shared_policy
 
         policy = get_shared_policy()
         use_turn_rate_obs = policy.baseline.use_target_turn_rate_obs
         action_layout = policy.baseline.action_layout
+        # Must match the baseline's own training-time obs contract exactly
+        # (TrackingConfig(enabled=True)'s other fields are already the
+        # lineage defaults evasive_redesign_config trained against) -- a
+        # tracking-enabled baseline fed an env built with tracking off (or
+        # vice versa) is a hard obs-shape crash, not a silent degradation.
+        tracking = TrackingConfig(enabled=policy.baseline.tracking_enabled)
+        # The evasive lineage trained on a 45s budget, not the frozen
+        # lineage's 25s default -- serving it under the old default would
+        # truncate genuine in-progress intercepts as spurious timeouts.
+        # Classical guidance laws below are unaffected (max_time_s only
+        # changes inside this `if guidance_law == "rl"` branch).
+        max_time_s = policy.baseline.max_time_s
 
-    config = PPOTrainingConfig().simulation_config()
+    config = replace(PPOTrainingConfig().simulation_config(), max_time=max_time_s)
     env = InterceptionEnv(
         config=config,
         initial_condition_sampler=_initial_condition_sampler(applied_parameters),
@@ -198,6 +216,7 @@ def build_live_trajectory(
         ),
         action_layout=action_layout,
         use_target_turn_rate_obs=use_turn_rate_obs,
+        tracking=tracking,
         pursuer_vehicle=(
             replace(_default_pursuer_vehicle(), max_load_factor=g_limit)
             if (g_limit := _SCENARIO_PURSUER_G_LIMIT.get(scenario_id))

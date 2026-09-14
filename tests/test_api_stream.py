@@ -327,12 +327,14 @@ def test_g_limited_turn_scenario_pn_misses_augmented_laws_hit():
 
 
 def test_training_endpoint_serves_the_baseline_run_log():
+    """Promoted 2026-09-14: evasive_zemtgo10_seed3, CP1-CP6."""
+
     body = TestClient(app).get("/api/training").json()
 
     assert body["source"] == "training-run"
-    assert body["branch_name"] == "observation_target_turn_rate"
-    assert len(body["episodes"]) == 80
-    assert [e["episode"] for e in body["episodes"]] == list(range(1, 81))
-    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5}
+    assert body["branch_name"] == "evasive_zemtgo10_seed3"
+    assert len(body["episodes"]) == 703
+    assert [e["episode"] for e in body["episodes"]] == list(range(1, 704))
+    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5, 6}
     final = body["checkpoints"][-1]
-    assert (final["checkpoint"], final["hits"], final["cases"]) == (5, 5, 9)
+    assert (final["checkpoint"], final["hits"], final["cases"]) == (6, 41, 50)
