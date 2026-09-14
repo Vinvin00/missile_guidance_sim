@@ -7,7 +7,7 @@
 #
 # aero-spec-rag is expected as a sibling directory (see README):
 #   Physics Sim Project/
-#     missile-sim-viz/      <- this repo, and this file
+#     missile_guidance_sim/ <- this repo, and this file
 #     aero-spec-rag/
 #
 # Set AERO_SPEC_RAG_DIR to override the path if your layout differs, e.g.:

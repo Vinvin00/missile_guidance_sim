@@ -5,6 +5,8 @@ import { useSimulationStore } from '../store/useSimulationStore'
 
 function websocketUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
+  const apiBase = import.meta.env.VITE_API_BASE_URL
+  if (apiBase) return `${apiBase.replace(/^http/, 'ws').replace(/\/$/, '')}/ws/trajectory`
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws/trajectory`
 }

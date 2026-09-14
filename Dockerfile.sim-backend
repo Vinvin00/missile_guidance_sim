@@ -1,5 +1,5 @@
-# Guidance simulation visualization API: FastAPI + WebSocket, streaming
-# captured trajectory rollouts. See src/guidance_sim/api/main.py.
+# Guidance simulation API: FastAPI + WebSocket trajectory streaming and live
+# RL-policy inference sessions. See src/guidance_sim/api/main.py.
 
 FROM python:3.12-slim
 
@@ -7,13 +7,18 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# CPU-only torch keeps the image ~1 GB smaller than the default CUDA wheel.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.3,<3.0"
 COPY requirements.txt ./
 RUN pip install --no-cache-dir \
+    "numpy>=1.26" \
+    "scipy>=1.11" \
+    "gymnasium>=1.0,<2.0" \
+    "stable-baselines3>=2.7,<3.0" \
+    "sb3-contrib>=2.7,<3.0" \
     "fastapi>=0.116,<1.0" \
     "uvicorn[standard]>=0.35,<1.0" \
-    "pydantic>=2.11,<3.0" \
-    "httpx2>=2.0,<3.0" \
-    "numpy>=1.26"
+    "pydantic>=2.11,<3.0"
 
 COPY src ./src
 COPY outputs ./outputs
