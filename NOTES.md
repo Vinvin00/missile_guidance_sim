@@ -1,3 +1,52 @@
+## 2026-09-14 — third seed (seed4) to CP6: 80%, breaks the tie
+
+`evasive_zemtgo10_seed4` (seed 61803399), from scratch straight through
+CP1-CP6, as the tie-breaker between seed3 (82%, real breakthrough at CP5)
+and seed2 (68%, plateaued since CP4).
+
+| | CP1 | CP2 | CP3 | CP4 | CP5 | CP6 |
+|---|---|---|---|---|---|---|
+| seed3 | 16% | 12% | 42% | 12% | 74% | **82%** |
+| seed2 | 8% | 18% | 28% | 66% | 62% | 68% |
+| seed4 | 28% | 32% | **74%** | 80% | 74% | **80%** |
+
+seed4 breaks through a checkpoint earlier than seed3 (CP3 vs CP5) and holds
+75-80% from CP3 onward -- the cleanest convergence of the three.
+
+**Three-seed CP6 comparison, all against the same held-out set:**
+
+| | hits | median miss | p90 miss | max miss |
+|---|---|---|---|---|
+| seed3 | 41/50 (82%) | 3.9 m | 7.1 m | 7.9 m |
+| seed4 | 40/50 (80%) | 4.4 m | 7.0 m | 13.3 m |
+| seed2 | 34/50 (68%) | 4.8 m | 7.2 m | 12.4 m |
+| PN (info-matched) | 39/50 (78%) | 3.9 m | 832.4 m | 1210.1 m |
+
+**Tie broken: 2 of 3 seeds land at 80-82%, at or above PN; the third holds
+68%, below PN but still far above every pre-`zem_t_go_max_s` lineage's ~22%
+ceiling.** Mean across seeds (76.7%) roughly matches PN's 78%; median (80%)
+exceeds it. `zem_t_go_max_s=10` at CP6 is now a reproducible, if
+seed-variable, match for the classical baseline on hit rate alone.
+
+**The tail behavior is the more unambiguous win and holds across all three
+seeds without exception:** every RL checkpoint's worst held-out miss is
+under 14 m; PN's worst miss on the same set is 832-1210 m (catastrophic
+loss, mostly on break-turn cases it never acquires). The RL policy has
+never once, across three independent training runs, produced a
+catastrophic loss on this held-out set. That is a categorical difference
+in failure mode, not just a mean-hit-rate coin flip, and it's the strongest
+single claim this investigation supports.
+
+**Still not promoted.** `CURRENT_RL_BASELINE.json` untouched. Open before
+promotion: (a) the held-out set is only 50 cases, so individual seed hit
+rates carry real binomial noise (a 68-82% spread across 3 seeds at n=50 is
+plausible given noise alone -- CP1-CP4 noise finding above applies here
+too, though the tail-miss result is far larger than any plausible noise
+margin); (b) no seed has been pushed past CP6 to check for a further
+plateau or decline; (c) still evaluated only on the fixed 4-maneuver-kind
+held-out distribution used throughout this lineage, not a broader stress
+test.
+
 ## 2026-09-14 — seed2 pushed to CP6: 68%, confirms the config but not the magnitude
 
 Pushed `evasive_zemtgo10_seed2` to CP6 (resumed from its own CP5, seed
