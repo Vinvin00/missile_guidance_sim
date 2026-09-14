@@ -63,6 +63,49 @@ small sample; worth a held-out re-eval with a couple more seeds, or a look
 at why CP5 specifically jumps, before treating any single checkpoint as
 promotable.
 
+### Why CP5 jumps: mostly noise pre-CP5, real learning within CP5
+
+Checked the on-policy training curve behind seed3's CP1-CP5 sawtooth
+(28%→4%→20%→24%→74%) against `training_episodes.csv`. Two separate effects,
+not one:
+
+**CP1-CP4 is measurement noise, not real regression.** Trailing-30-episode
+on-policy hit rate at each checkpoint boundary:
+
+| CP | ep # | trailing-30 on-policy hit rate | held-out eval |
+|---|---|---|---|
+| 1 | ~96 | 0.20 | 28% |
+| 2 | ~192 | 0.20 | **4%** |
+| 3 | ~298 | 0.23 | 20% |
+| 4 | ~411 | 0.30 | 24% |
+
+The underlying policy is flat-to-slowly-rising around 20-30% the whole time;
+CP2's 4% is a single unlucky 50-case binomial draw of a true ~20% policy,
+not a real dip. Same pattern confirmed in `zemtgo10` seed1, seed2, and
+`effort8`: every lineage's CP2-CP4 "collapse" checkpoints land mid-trough of
+a noisy but not-actually-regressing on-policy curve. **The STOP CONDITION
+firing at every one of these was spurious**, on top of the already-known
+Group A/B bug (evasive maneuver kinds match neither group) -- both the code
+bug and the underlying metric noise point the same way: ignore it for this
+lineage.
+
+**CP5 is real, not noise.** Trailing-30 at the CP5 boundary is 0.73,
+matching the held-out 74% almost exactly, and the climb from CP4's ~0.30 to
+CP5's ~0.73 happens continuously across CP5's own ~140-episode training
+window (rolling hit rate: 0.27 at ep389 -> 0.50 at ep439 -> 0.73 at ep519 ->
+0.77 at ep539), not as a step at the checkpoint boundary. This is genuine,
+fast skill acquisition concentrated late in training -- CP5 got a full
+204,800-step budget and used most of it to go from "occasionally connects"
+to "usually connects." The curve was still near its peak (0.73-0.77, not
+clearly flat) when CP5's budget ran out.
+
+**Implication:** the lineage was not converged at CP5; a CP6+ extension is
+the natural next experiment if the goal is closing the remaining PN gap,
+since nothing here suggests a plateau. Also: per-checkpoint held-out eval
+(n=50) is noisy enough that any single checkpoint's number should not be
+read as "the" result without the training-curve context above -- true for
+every lineage in this file, not just seed3.
+
 ## 2026-09-14 — evasive_zemtgo10_effort8 aborted mid-CP1; daemon-restarted
 
 Prior launch (~09:22 Rome) died at ~16 384 / 204 800 timesteps with empty
