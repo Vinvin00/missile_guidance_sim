@@ -7,6 +7,7 @@ import { PlaybackControls } from './components/PlaybackControls'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
+import { SpecGroundingPanel } from './components/SpecGroundingPanel'
 import { TrainingDashboard } from './components/TrainingDashboard'
 import { TrialsOverlay } from './components/TrialsOverlay'
 import { loadTrajectoryLog, loadTrialSet } from './data/trajectoryData'
@@ -106,6 +107,7 @@ export default function App() {
         {screen === 'replay' && (
           <SessionReplayPanel onReplay={handleReplay} />
         )}
+        {screen === 'spec' && <SpecGroundingPanel />}
         <PlaybackControls />
       </div>
     </div>

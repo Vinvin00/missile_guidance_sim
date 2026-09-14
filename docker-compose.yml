@@ -1,0 +1,54 @@
+# Local demo stack: the guidance-sim backend, the aero-spec-rag grounding
+# backend, and the viewer frontend, wired together for one-command startup.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:5173
+#
+# aero-spec-rag is expected as a sibling directory (see README):
+#   Physics Sim Project/
+#     missile-sim-viz/      <- this repo, and this file
+#     aero-spec-rag/
+#
+# Set AERO_SPEC_RAG_DIR to override the path if your layout differs, e.g.:
+#   AERO_SPEC_RAG_DIR=/path/to/aero-spec-rag docker compose up --build
+
+services:
+  sim-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.sim-backend
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  rag-backend:
+    build:
+      context: ${AERO_SPEC_RAG_DIR:-../aero-spec-rag}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_AERO_RAG_API_URL: http://localhost:8001
+    ports:
+      - "5173:80"
+    depends_on:
+      sim-backend:
+        condition: service_healthy
+      rag-backend:
+        condition: service_healthy
