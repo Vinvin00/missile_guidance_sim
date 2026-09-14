@@ -1,3 +1,54 @@
+## 2026-09-14 — 300-case held-out eval: the picture narrows, one seed still wins
+
+`scripts/eval_checkpoint_large_heldout.py` (new) re-evaluates a trained
+checkpoint against `build_held_out_cases(n_cases=N)` for any N -- the
+sequence is a deterministic extension of the same seed stream, so the
+original 50 cases are indices 0-49 of a larger set, not replaced. Ran all
+three seeds' CP6 checkpoints, plus a matched PN baseline
+(`run_evasive_pn_baseline.py --cases 300`), on **300 cases** (6x the
+original), output at `outputs/evasive_largeeval_300/`.
+
+| | n=50 (original) | n=300 | z vs PN (n=300) |
+|---|---|---|---|
+| seed3 CP6 | 82% | **80.7%** | **+2.32 (p~0.02, significant)** |
+| seed4 CP6 | 80% | 73.7% | +0.28 (not significant -- ties PN) |
+| seed2 CP6 | 68% | 65.3% | -1.94 (p~0.05, marginally below PN) |
+| PN (info-matched) | 78% | 72.7% | -- |
+
+**seed4's apparent win over PN does not survive the larger set** -- it drops
+from 80% to 73.7%, statistically indistinguishable from PN's 72.7%
+(z=0.28). PN itself also drops (78%->72.7%), confirming the original 50-case
+set was a mildly favorable draw for PN too, not just noise in the RL
+numbers. **seed3 is the one result that holds up under more statistical
+power**: 80.7% vs PN's 72.7% at n=300, z=2.32, genuinely significant. seed2
+stays the weakest of the three, now marginally *below* PN rather than just
+"lower."
+
+**The tail-safety result is unchanged and gets stronger with more samples:**
+
+| | n=300 hits | median | p90 | p99 | max |
+|---|---|---|---|---|---|
+| seed3 CP6 | 242/300 | 4.2 m | 6.7 m | 13.7 m | 15.4 m |
+| seed4 CP6 | 221/300 | 4.3 m | 7.8 m | 14.2 m | 18.0 m |
+| seed2 CP6 | 196/300 | 4.6 m | 8.6 m | 13.6 m | 17.2 m |
+| PN | 218/300 | 4.0 m | 57.2 m | **1208.7 m** | **1347.2 m** |
+
+At n=300, PN's per-maneuver breakdown shows exactly where the catastrophic
+tail lives: `break_turn` 41/75 and `random_jink` 41/75 (55% each) vs
+`bounded_weave` 69/75 and `vertical_jink` 67/75 (89-92%) -- PN structurally
+cannot track roughly half of the break-turn and random-jink cases, and when
+it fails it fails by hundreds to over a thousand metres. Every RL
+checkpoint's worst miss across all 300 cases stays under 18 m. This claim
+is now backed by 6x the sample and remains exception-free.
+
+**Revised bottom line for promotion:** only `evasive_zemtgo10_seed3` CP6
+has a statistically defensible win over PN on hit rate (n=300, p~0.02);
+seed4 is a tie, seed2 trails. All three retain the categorical tail-safety
+advantage. If promotion is pursued, `evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip`
+is the candidate, not "the zem_t_go_max_s config" generically -- the
+seed-to-seed spread (65-81% at n=300) is real, not sampling noise, per the
+z-scores above. `CURRENT_RL_BASELINE.json` still untouched.
+
 ## 2026-09-14 — third seed (seed4) to CP6: 80%, breaks the tie
 
 `evasive_zemtgo10_seed4` (seed 61803399), from scratch straight through
