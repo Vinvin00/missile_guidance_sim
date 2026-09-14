@@ -1,3 +1,32 @@
+## 2026-09-14 — seed2 pushed to CP6: 68%, confirms the config but not the magnitude
+
+Pushed `evasive_zemtgo10_seed2` to CP6 (resumed from its own CP5, seed
+77000001) as the confirming test for seed3's CP6 breakthrough below.
+
+| | CP4 | CP5 | CP6 |
+|---|---|---|---|
+| seed3 | 24% | 74% | **82%** |
+| seed2 | 66% | 62% | 68% |
+
+**Does not replicate seed3's CP4->CP5 jump.** seed2 found a good policy by
+CP4 and has stayed in a 62-68% band ever since -- CP6 is a small, noisy
+uptick on a plateau, not a second breakthrough. Full seed2 numbers: CP6
+34/50, median miss 4.8 m, p90 7.2 m, max 12.4 m (vs PN 39/50, median 3.9 m).
+
+**What this confirms:** `zem_t_go_max_s=10` reliably lands checkpoints in
+the 60-82% band by CP6 across two independent seeds -- both now competitive
+with PN's 78%, both far above every earlier lineage's ~22% ceiling. That
+part replicates cleanly.
+
+**What this does not resolve:** whether seed3's 82% is the achievable
+ceiling for this config or a favorable outlier. Two seeds landed in
+genuinely different regimes (one plateaued ~65%, one broke through to
+~80%) despite identical config, so the honest read is "this config reaches
+competitive-with-PN performance, magnitude has real seed-to-seed variance
+we have not bounded" -- not "this config reaches 82%." A third seed pushed
+to CP6, or a repeat with a larger held-out set, would be needed to say
+more.
+
 ## 2026-09-14 — evasive_zemtgo10_seed3 CP6: 41/50 (82%), beats PN
 
 CP6 (`outputs/evasive_zemtgo10_seed3/`, resumed from CP5's own
