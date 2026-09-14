@@ -1,9 +1,10 @@
 export const SCREENS = [
-  { id: 'hud', code: 'HUD', title: 'Live engagement' },
-  { id: 'setup', code: 'SET', title: 'Scenario setup' },
-  { id: 'trials', code: 'TRL', title: 'All trials overlay' },
-  { id: 'train', code: 'TRN', title: 'Training' },
-  { id: 'replay', code: 'RPL', title: 'Session replay' },
+  { id: 'hud', code: 'HUD', label: 'Live', title: 'Live engagement' },
+  { id: 'setup', code: 'SET', label: 'Setup', title: 'Scenario setup' },
+  { id: 'trials', code: 'TRL', label: 'Trials', title: 'All trials overlay' },
+  { id: 'train', code: 'TRN', label: 'Training', title: 'Training' },
+  { id: 'replay', code: 'RPL', label: 'Replay', title: 'Session replay' },
+  { id: 'rag', code: 'RAG', label: 'Spec RAG', title: 'Spec grounding' },
 ]
 
 export function AppNav({ screen, onSelect }) {
@@ -22,7 +23,7 @@ export function AppNav({ screen, onSelect }) {
             onClick={() => onSelect(item.id)}
           >
             <span className="rail-code">{item.code}</span>
-            <span className="rail-dot" />
+            <span className="rail-label">{item.label}</span>
           </button>
         )
       })}

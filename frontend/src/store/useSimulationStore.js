@@ -1,11 +1,29 @@
 import { create } from 'zustand'
 
+import { loadTrialSet } from '../data/trajectoryData'
+
+// Vehicle profiles plus the engagement geometry group, as { prefix, name, parameters }.
+export function parameterGroups(catalog) {
+  return [
+    ...(catalog?.vehicle_profiles ?? []).map((profile) => ({
+      prefix: profile.role,
+      name: profile.name,
+      parameters: profile.parameters,
+    })),
+    {
+      prefix: 'engagement',
+      name: 'Engagement',
+      parameters: catalog?.engagement_parameters ?? {},
+    },
+  ]
+}
+
 function liveParameterValues(catalog, currentValues) {
   const values = {}
-  for (const profile of catalog.vehicle_profiles) {
-    for (const [name, parameter] of Object.entries(profile.parameters)) {
+  for (const group of parameterGroups(catalog)) {
+    for (const [name, parameter] of Object.entries(group.parameters)) {
       if (!parameter.live_control) continue
-      const id = `${profile.role}.${name}`
+      const id = `${group.prefix}.${name}`
       const current = currentValues[id]
       values[id] =
         current >= parameter.reference_min &&
@@ -19,12 +37,16 @@ function liveParameterValues(catalog, currentValues) {
 
 export const useSimulationStore = create((set, get) => ({
   catalog: null,
-  selectedScenarioId: 'crossing-intercept',
+  selectedScenarioId: 'evasive-climb',
   selectedGuidanceLaw: 'pn',
   parameterValues: {},
   viewMode: 'single',
+  cameraMode: 'overview',
   trialCount: 30,
   trialSet: null,
+  trialsLoading: false,
+  trainingPlayMode: 'all',
+  trialsRequestId: 0,
   activeDataSource: 'rollout',
   streamStatus: 'idle',
   streamMeta: null,
@@ -59,7 +81,15 @@ export const useSimulationStore = create((set, get) => ({
       }
     }),
 
-  selectScenario: (scenarioId) => set({ selectedScenarioId: scenarioId }),
+  selectScenario: (scenarioId) =>
+    set((state) => ({
+      selectedScenarioId: scenarioId,
+      parameterValues: {
+        ...state.parameterValues,
+        ...(state.catalog?.scenarios.find((s) => s.id === scenarioId)
+          ?.parameter_defaults ?? {}),
+      },
+    })),
   selectGuidanceLaw: (guidanceLaw) =>
     set({ selectedGuidanceLaw: guidanceLaw }),
   setLiveParameter: (parameterId, value) =>
@@ -74,12 +104,35 @@ export const useSimulationStore = create((set, get) => ({
       viewMode,
       isPlaying: false,
     }),
+  setCameraMode: (cameraMode) => set({ cameraMode }),
   setTrialCount: (trialCount) => set({ trialCount }),
   setTrialSet: (trialSet) => set({ trialSet }),
+  setTrainingPlayMode: (trainingPlayMode) => set({ trainingPlayMode }),
+  // Real frozen-RL-policy rollouts around the current setup; latest request wins.
+  loadTrials: async () => {
+    const { selectedScenarioId, parameterValues, trialCount } = get()
+    const requestId = get().trialsRequestId + 1
+    set({ trialsRequestId: requestId, trialsLoading: true, trialSet: null })
+    try {
+      const trialSet = await loadTrialSet({
+        scenarioId: selectedScenarioId,
+        parameterOverrides: parameterValues,
+        count: trialCount,
+      })
+      if (get().trialsRequestId === requestId) {
+        set({ trialSet, trialsLoading: false })
+      }
+    } catch (error) {
+      if (get().trialsRequestId === requestId) {
+        set({ trialsLoading: false, error: error.message })
+      }
+    }
+  },
 
   beginStream: () =>
     set({
       activeDataSource: 'rollout',
+      cameraMode: 'overview',
       streamStatus: 'connecting',
       streamMeta: null,
       streamResult: null,
@@ -115,6 +168,7 @@ export const useSimulationStore = create((set, get) => ({
 
   loadReplay: (trajectoryLog) =>
     set({
+      cameraMode: 'overview',
       selectedScenarioId: trajectoryLog.scenario_id,
       selectedGuidanceLaw: trajectoryLog.guidance_law,
       activeDataSource: trajectoryLog.source,

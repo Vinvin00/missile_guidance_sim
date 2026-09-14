@@ -12,7 +12,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from guidance_sim.estimation.base import Estimator
+from guidance_sim.estimation.alpha_beta import AlphaBetaFilter
 from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.physics.entities import PointMassEntity
 from guidance_sim.physics.integrator import IntegratorType
@@ -54,7 +54,7 @@ class Simulation:
         target_maneuver: ManeuverProfile,
         config: Optional[SimulationConfig] = None,
         sensor: Optional[Sensor] = None,
-        estimator: Optional[Estimator] = None,
+        estimator: Optional[AlphaBetaFilter] = None,
         rng: Optional[np.random.Generator] = None,
     ):
         if (sensor is None) ^ (estimator is None):

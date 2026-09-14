@@ -12,6 +12,8 @@ const STATUS_LABEL = {
 export function AppHeader({ screen, projection, onProjection }) {
   const streamStatus = useSimulationStore((state) => state.streamStatus)
   const isPlaying = useSimulationStore((state) => state.isPlaying)
+  const cameraMode = useSimulationStore((state) => state.cameraMode)
+  const setCameraMode = useSimulationStore((state) => state.setCameraMode)
   const title =
     (SCREENS.find((item) => item.id === screen) || SCREENS[0]).title.toUpperCase()
 
@@ -34,6 +36,31 @@ export function AppHeader({ screen, projection, onProjection }) {
             className={linkError ? 'stream-dot is-error' : 'stream-dot'}
           />
           <span className="stream-status">{status}</span>
+        </div>
+        <div className="projection-toggle" role="group" aria-label="Camera">
+          <button
+            type="button"
+            className={cameraMode === 'overview' ? 'is-active' : ''}
+            onClick={() => setCameraMode('overview')}
+          >
+            3/4
+          </button>
+          <span className="projection-rule" aria-hidden="true" />
+          <button
+            type="button"
+            className={cameraMode === 'pursuer' ? 'is-active' : ''}
+            onClick={() => setCameraMode('pursuer')}
+          >
+            INTERCEPTOR
+          </button>
+          <span className="projection-rule" aria-hidden="true" />
+          <button
+            type="button"
+            className={cameraMode === 'target' ? 'is-active' : ''}
+            onClick={() => setCameraMode('target')}
+          >
+            TARGET
+          </button>
         </div>
         <div className="projection-toggle" role="group" aria-label="Projection">
           <button

@@ -3,14 +3,12 @@ import { useSimulationStore } from '../store/useSimulationStore'
 export function TrialsOverlay({ onTrialCountChange }) {
   const trialSet = useSimulationStore((state) => state.trialSet)
   const trialCount = useSimulationStore((state) => state.trialCount)
+  const trialsLoading = useSimulationStore((state) => state.trialsLoading)
   const setTrialCount = useSimulationStore((state) => state.setTrialCount)
   const trials = trialSet?.trials ?? []
   const successes = trials.filter((trial) => trial.success).length
   const misses = trials
-    .map((trial) => {
-      const last = trial.frames?.at(-1)
-      return last?.range_m
-    })
+    .map((trial) => trial.closest_approach_m)
     .filter((value) => value != null)
   const meanMiss =
     misses.length > 0
@@ -32,7 +30,9 @@ export function TrialsOverlay({ onTrialCountChange }) {
             /{trials.length || trialCount}
           </span>
         </span>
-        <span className="pk-label">MOCK INTERCEPTS</span>
+        <span className="pk-label">
+          {trialsLoading ? 'RUNNING RL ROLLOUTS…' : 'RL POLICY INTERCEPTS'}
+        </span>
         <div className="panel-rule" />
         <div className="trial-legend-list">
           <div>
@@ -44,12 +44,12 @@ export function TrialsOverlay({ onTrialCountChange }) {
             <span>MISS</span>
           </div>
         </div>
-        <span className="muted-mono">OPACITY BY EPISODE INDEX</span>
+        <span className="muted-mono">DISPERSED AROUND SETUP GEOMETRY</span>
         <label className="trial-count-hud">
-          <span>MOCK EPISODES</span>
+          <span>RL EPISODES</span>
           <select
             value={trialCount}
-            aria-label="Mock episodes"
+            aria-label="RL episodes"
             onChange={(event) => {
               const nextCount = Number(event.target.value)
               setTrialCount(nextCount)

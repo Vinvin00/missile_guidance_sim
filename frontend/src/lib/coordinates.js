@@ -12,6 +12,14 @@ export function toScenePoint(position, horizontalOrigin = { x: 0, y: 0 }) {
   ]
 }
 
+/**
+ * Convert a simulation-space vector (velocity, etc.) to Three axes, same
+ * remap as toScenePoint but without the horizontal origin offset.
+ */
+export function toSceneVector(vector) {
+  return [vector.x, vector.z, -vector.y]
+}
+
 export function engagementOrigin(firstFrame) {
   if (!firstFrame) return { x: 0, y: 0 }
   return {

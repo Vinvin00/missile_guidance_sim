@@ -14,26 +14,27 @@ beforeEach(() => {
 })
 
 describe('TrialsOverlay', () => {
-  it('shows mock intercept counts for the trial set', () => {
+  it('shows RL intercept counts for the trial set', () => {
     useSimulationStore.setState({
       trialSet: {
         trials: [
-          { episode: 1, success: true, frames: [{ range_m: 2 }] },
-          { episode: 2, success: false, frames: [{ range_m: 40 }] },
+          { episode: 1, success: true, closest_approach_m: 2, frames: [] },
+          { episode: 2, success: false, closest_approach_m: 40, frames: [] },
         ],
       },
     })
     render(<TrialsOverlay />)
 
     expect(screen.getByText('/2')).toBeTruthy()
-    expect(screen.getByText('MOCK EPISODES')).toBeTruthy()
+    expect(screen.getByText('RL EPISODES')).toBeTruthy()
+    expect(screen.getByText('21.0 m')).toBeTruthy()
   })
 
-  it('notifies the parent when the mock trial count changes', () => {
+  it('notifies the parent when the trial count changes', () => {
     const onTrialCountChange = vi.fn()
     render(<TrialsOverlay onTrialCountChange={onTrialCountChange} />)
 
-    fireEvent.change(screen.getByLabelText('Mock episodes'), {
+    fireEvent.change(screen.getByLabelText('RL episodes'), {
       target: { value: '50' },
     })
 

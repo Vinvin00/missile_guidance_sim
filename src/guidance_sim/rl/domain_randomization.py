@@ -23,13 +23,13 @@ from guidance_sim.physics.maneuvers import (
 def randomized_initial_conditions(
     rng: np.random.Generator,
 ) -> tuple[State, State]:
-    """Wider speed / geometry sampling than the frozen training distribution."""
+    """Harder geometry/speed sampling: closer starts, faster targets."""
 
-    target_range_m = float(rng.uniform(4_000.0, 12_000.0))
+    target_range_m = float(rng.uniform(2_000.0, 7_000.0))
     lateral_offset_m = float(rng.uniform(-2_000.0, 2_000.0))
     target_altitude_m = float(rng.uniform(2_500.0, 4_500.0))
     pursuer_altitude_m = float(rng.uniform(2_500.0, 3_500.0))
-    target_speed_m_s = float(rng.uniform(120.0, 280.0))
+    target_speed_m_s = float(rng.uniform(180.0, 320.0))
     pursuer_speed_m_s = float(rng.uniform(300.0, 420.0))
     heading_error_rad = float(np.deg2rad(rng.uniform(-15.0, 15.0)))
     return (
@@ -49,19 +49,19 @@ def randomized_initial_conditions(
 
 
 def randomized_maneuver_factory(rng: np.random.Generator) -> ManeuverProfile:
-    """Wider maneuver-type mix: still NoManeuver / ConstantTurn / Weave."""
+    """Harder maneuver mix: still NoManeuver / ConstantTurn / Weave, higher g."""
 
     profile_index = int(rng.integers(0, 3))
     if profile_index == 0:
         return NoManeuver()
 
-    magnitude_m_s2 = float(rng.uniform(1.0, 10.0) * G0)
+    magnitude_m_s2 = float(rng.uniform(4.0, 12.0) * G0)
     if profile_index == 1:
         turn_sign = -1.0 if float(rng.random()) < 0.5 else 1.0
         return ConstantTurn(accel=turn_sign * magnitude_m_s2)
 
     return SinusoidalWeave(
         amplitude=magnitude_m_s2,
-        frequency_hz=float(rng.uniform(0.2, 1.5)),
+        frequency_hz=float(rng.uniform(0.4, 2.0)),
         phase=float(rng.uniform(0.0, 2.0 * np.pi)),
     )

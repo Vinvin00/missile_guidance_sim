@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { loadTrainingLog } from '../data/trainingData'
 import { summarizeTrainingLog } from '../lib/trainingStats'
+import { useSimulationStore } from '../store/useSimulationStore'
 
 function rollingMeanPolyline(points, windowSize = 20) {
   if (!points.length) return ''
@@ -20,15 +21,22 @@ function rollingMeanPolyline(points, windowSize = 20) {
     .join(' ')
 }
 
+const NO_ENTRIES = []
+
 export function TrainingDashboard() {
-  const [entries, setEntries] = useState([])
+  const [log, setLog] = useState(null)
   const [error, setError] = useState(null)
+  const trainingPlayMode = useSimulationStore((state) => state.trainingPlayMode)
+  const setTrainingPlayMode = useSimulationStore(
+    (state) => state.setTrainingPlayMode,
+  )
+  const trialsLoading = useSimulationStore((state) => state.trialsLoading)
 
   useEffect(() => {
     let cancelled = false
     loadTrainingLog()
       .then((loaded) => {
-        if (!cancelled) setEntries(loaded)
+        if (!cancelled) setLog(loaded)
       })
       .catch((loadError) => {
         if (!cancelled) setError(loadError.message)
@@ -38,6 +46,9 @@ export function TrainingDashboard() {
     }
   }, [])
 
+  const entries = log?.episodes ?? NO_ENTRIES
+  const checkpoints = log?.checkpoints ?? []
+  const finalEval = checkpoints.at(-1)
   const stats = summarizeTrainingLog(entries)
   const rewardPoly = stats.points
     .map((point) => `${(point.x * 4).toFixed(1)},${(point.y * 1.36).toFixed(1)}`)
@@ -46,13 +57,6 @@ export function TrainingDashboard() {
     () => rollingMeanPolyline(stats.points),
     [stats.points],
   )
-  const meanMissValues = entries
-    .map((entry) => entry.miss_m ?? entry.miss)
-    .filter((value) => typeof value === 'number')
-  const meanMiss =
-    meanMissValues.length > 0
-      ? meanMissValues.reduce((a, b) => a + b, 0) / meanMissValues.length
-      : null
 
   const metrics = [
     { k: 'EPISODES', v: stats.episodeCount.toLocaleString() },
@@ -62,8 +66,8 @@ export function TrainingDashboard() {
       v: `${Math.round(stats.rollingSuccessRate * 100)}%`,
     },
     {
-      k: 'MEAN MISS',
-      v: meanMiss == null ? '—' : `${meanMiss.toFixed(1)} m`,
+      k: 'FINAL EVAL HITS',
+      v: finalEval ? `${finalEval.hits}/${finalEval.cases}` : '—',
     },
   ]
 
@@ -79,10 +83,36 @@ export function TrainingDashboard() {
           ))}
         </div>
 
+        <div className="reward-head">
+          <span className="panel-kicker">
+            {trialsLoading ? 'RUNNING RL ROLLOUTS…' : 'ROLLOUT VIEW'}
+          </span>
+          <div className="projection-toggle" role="group" aria-label="Rollout view mode">
+            <button
+              type="button"
+              aria-pressed={trainingPlayMode === 'all'}
+              className={trainingPlayMode === 'all' ? 'is-active' : ''}
+              onClick={() => setTrainingPlayMode('all')}
+            >
+              ALL AT ONCE
+            </button>
+            <button
+              type="button"
+              aria-pressed={trainingPlayMode === 'sequential'}
+              className={trainingPlayMode === 'sequential' ? 'is-active' : ''}
+              onClick={() => setTrainingPlayMode('sequential')}
+            >
+              ONE BY ONE · 4X
+            </button>
+          </div>
+        </div>
+
         <figure className="reward-chart">
           <div className="reward-head">
             <span className="panel-kicker">REWARD PER EPISODE</span>
-            <span className="muted-mono">MOCK LOG</span>
+            <span className="muted-mono">
+              {log ? log.branch_name.toUpperCase() : 'LOADING…'}
+            </span>
           </div>
           <svg
             viewBox="0 0 400 140"
@@ -90,32 +120,50 @@ export function TrainingDashboard() {
             role="img"
             aria-label="Reward per episode"
           >
-            <title>Mock reward-per-episode line</title>
+            <title>Training reward-per-episode line</title>
             <polyline
               points={rewardPoly}
               fill="none"
-              stroke="#f2f2f2"
-              strokeWidth="1"
+              stroke="#cfd4db"
+              strokeWidth="1.2"
             />
             <polyline
               points={meanPoly}
               fill="none"
-              stroke="#ff2d16"
-              strokeWidth="1"
+              stroke="#ff5238"
+              strokeWidth="1.8"
             />
           </svg>
           <figcaption>
-            WHITE: EPISODE REWARD · RED: 20-EPISODE MEAN
+            <span className="chart-key is-episode">Episode reward</span>
+            <span className="chart-key is-mean">20-episode mean</span>
           </figcaption>
         </figure>
 
+        <div className="profile-rows">
+          <span className="panel-kicker">FIXED EVAL PER CHECKPOINT</span>
+          {checkpoints.map((cp) => (
+            <div key={cp.checkpoint} className="metric-row">
+              <span>
+                CP{String(cp.checkpoint).padStart(2, '0')} ·{' '}
+                {(cp.timesteps / 1000).toFixed(0)}K STEPS
+              </span>
+              <strong>
+                {cp.hits}/{cp.cases} HITS · MEDIAN MISS{' '}
+                {cp.median_miss_m.toFixed(1)} M
+              </strong>
+            </div>
+          ))}
+        </div>
+
         {error && <p className="error-message">{error}</p>}
-        <p className="setup-note">
-          Synthetic training history loaded through{' '}
-          <code>loadTrainingLog()</code>. Swap that one function to point at a
-          real episode log later. Do not read these curves as trained-policy
-          results.
-        </p>
+        {log && (
+          <p className="setup-note">
+            Real PPO training episodes and fixed 9-case evaluations for{' '}
+            <code>{log.model_path}</code>, the checkpoint the RL guidance law
+            and trials overlay fly.
+          </p>
+        )}
       </div>
     </div>
   )

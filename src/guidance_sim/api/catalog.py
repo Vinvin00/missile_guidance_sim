@@ -69,24 +69,83 @@ CATALOG = CatalogResponse(
             altitude_m=3_300.0,
             duration_s=12.0,
         ),
+        ScenarioOption(
+            id="g-limited-turn",
+            label="ConstantTurn vs 10 g",
+            description=(
+                "An 8 g turning target against an interceptor that can only "
+                "pull 10 g: Proportional Navigation reacts too late and "
+                "misses, while Augmented PN and Optimal Guidance anticipate "
+                "the turn and hit."
+            ),
+            initial_range_m=7_000.0,
+            altitude_m=3_300.0,
+            duration_s=8.0,
+            parameter_defaults={"engagement.target_maneuver_g": 8.0},
+            pursuer_g_limit=10.0,
+        ),
     ],
     guidance_laws=[
         GuidanceOption(
             id="pn",
             label="Proportional Navigation",
-            description="Live classical PN guidance driving the interceptor.",
+            description=(
+                "Steers toward where the target will be by watching how fast "
+                "the sightline to it is swinging, and turning to stop that "
+                "swing. Simple and effective, but reacts late to a hard turn."
+            ),
         ),
         GuidanceOption(
             id="apn",
             label="Augmented PN",
-            description="Live classical APN guidance driving the interceptor.",
+            description=(
+                "Same idea as Proportional Navigation, but also factors in the "
+                "target's own turning to lead it better, so it handles a "
+                "maneuvering target more accurately."
+            ),
         ),
         GuidanceOption(
             id="ogl",
             label="Optimal Guidance",
-            description="Live classical optimal guidance driving the interceptor.",
+            description=(
+                "Plans the interceptor's path to minimize the predicted miss "
+                "distance at intercept, instead of just reacting turn by turn."
+            ),
+        ),
+        GuidanceOption(
+            id="rl",
+            label="RL Policy",
+            description=(
+                "A neural network trained by trial and error (reinforcement "
+                "learning) to steer the interceptor, instead of the classical "
+                "formulas above. Uses a frozen, pre-trained checkpoint."
+            ),
         ),
     ],
+    # Operator-set geometry, not reference data: no source_ids.
+    engagement_parameters={
+        "initial_range": _parameter(
+            7_000.0, "m", 2_000.0, 15_000.0, "illustrative",
+            live_control=True, control_step=250.0,
+        ),
+        "lateral_offset": _parameter(
+            0.0, "m", -4_000.0, 4_000.0, "illustrative",
+            live_control=True, control_step=100.0,
+        ),
+        "altitude_delta": _parameter(
+            300.0, "m", -1_500.0, 1_500.0, "illustrative",
+            live_control=True, control_step=50.0,
+        ),
+        # 180 = flying straight at the interceptor, 90/270 = crossing.
+        "target_heading": _parameter(
+            180.0, "deg", 0.0, 360.0, "illustrative",
+            live_control=True, control_step=5.0,
+        ),
+        "target_maneuver_g": _parameter(
+            5.0, "g", 0.0, 9.0, "illustrative",
+            live_control=True, control_step=0.5,
+        ),
+    },
     vehicle_profiles=[
         VehicleProfile(
             name="Interceptor A",
@@ -95,8 +154,8 @@ CATALOG = CatalogResponse(
                 "speed": _parameter(
                     700.0,
                     "m/s",
-                    600.0,
-                    1_000.0,
+                    400.0,
+                    1_200.0,
                     "synthesized",
                     "GENERIC-MISSILE-1994",
                     "NPS-GUIDANCE-2000",
@@ -161,8 +220,8 @@ CATALOG = CatalogResponse(
                 "speed": _parameter(
                     240.0,
                     "m/s",
-                    200.0,
-                    300.0,
+                    150.0,
+                    450.0,
                     "synthesized",
                     "FOI-ADMIRE-2005",
                     "AIAA-CLIMB-2024",
@@ -235,6 +294,8 @@ def get_live_parameters() -> dict[str, ParameterValue]:
         for parameter_name, parameter in profile.parameters.items():
             if parameter.live_control:
                 controls[f"{profile.role}.{parameter_name}"] = parameter
+    for parameter_name, parameter in CATALOG.engagement_parameters.items():
+        controls[f"engagement.{parameter_name}"] = parameter
     return controls
 
 

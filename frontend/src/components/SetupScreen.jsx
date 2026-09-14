@@ -70,11 +70,6 @@ export function SetupScreen({ onRun }) {
                     </span>
                     <span className="scenario-desc">{scenario.description}</span>
                   </span>
-                  <span className="scenario-meta">
-                    {(scenario.initial_range_m / 1000).toFixed(1)} KM ·{' '}
-                    {(scenario.altitude_m / 1000).toFixed(1)} KM ALT ·{' '}
-                    {scenario.duration_s.toFixed(1)} S
-                  </span>
                 </button>
               )
             })}
@@ -95,6 +90,7 @@ export function SetupScreen({ onRun }) {
                   >
                     <span className="law-code">{law.id.toUpperCase()}</span>
                     <span className="law-label">{law.label}</span>
+                    <span className="law-desc">{law.description}</span>
                   </button>
                 )
               })}
@@ -135,8 +131,9 @@ export function SetupScreen({ onRun }) {
           <p className="setup-note">
             Values are synthesized from public reference ranges. Target B is a
             fighter/attack-aircraft class surrogate (speed aligned with its
-            mass/area/g-limit). Live preview streams captured RL rollouts;
-            catalog scalars are review metadata and live-control echoes.
+            mass/area/g-limit). Every run is simulated live: PN/APN/OGL are
+            classical laws, RL runs the frozen baseline checkpoint. Engagement
+            sliders set the initial geometry.
           </p>
         </div>
       </div>

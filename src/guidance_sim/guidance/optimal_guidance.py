@@ -13,8 +13,8 @@ Assumptions / limits:
   - Target acceleration treated as constant over t_go.
   - t_go from range/closing-speed (singular when Vc ≤ 0 or near
     intercept — guarded with a floor).
-  - Command is not pre-projected onto the LOS-normal plane; the
-    entity clamp removes the along-track component.
+  - ZEM is projected onto the LOS-normal plane (only that part is miss);
+    the entity clamp then removes any along-velocity residue.
 
 At N=3 with constant a_target, OGL is classically equivalent to APN.
 Reference: Nesline & Zarchan JGCD 4(1) 1981; Zarchan ch. 8.
@@ -62,6 +62,10 @@ class OptimalGuidance(GuidanceLaw):
         t_go = max(range_ / closing_velocity, self.t_go_min)
         a_t = np.asarray(self.a_target_est(), dtype=float).reshape(3)
         zem = r_rel + v_rel * t_go + 0.5 * a_t * (t_go ** 2)
+        # Miss is the ZEM component normal to the LOS; the along-LOS part
+        # would leak through the velocity-normal clamp as a bogus command.
+        u = r_rel / range_
+        zem = zem - np.dot(zem, u) * u
         return self.N * zem / (t_go ** 2)
 
     def reset(self) -> None:

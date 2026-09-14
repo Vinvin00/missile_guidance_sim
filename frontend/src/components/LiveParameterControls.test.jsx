@@ -45,6 +45,11 @@ const catalog = {
       },
     },
   ],
+  engagement_parameters: {
+    initial_range: { value: 4000, unit: 'm', reference_min: 2000, reference_max: 15000, live_control: true, control_step: 250 },
+    lateral_offset: { value: 3000, unit: 'm', reference_min: -4000, reference_max: 4000, live_control: true, control_step: 100 },
+    altitude_delta: { value: 0, unit: 'm', reference_min: -1500, reference_max: 1500, live_control: true, control_step: 50 },
+  },
 }
 
 afterEach(() => {
@@ -63,6 +68,17 @@ describe('LiveParameterControls', () => {
     expect(screen.getByLabelText('Interceptor A speed')).toBeTruthy()
     expect(screen.getByLabelText('Target B speed')).toBeTruthy()
     expect(screen.queryByLabelText(/mass/i)).toBeNull()
+  })
+
+  it('shows the 3-D initial separation and updates it with the range slider', () => {
+    render(<LiveParameterControls />)
+    expect(screen.getByText('5.00 KM')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Engagement initial range'), {
+      target: { value: '0' },
+    })
+    // Clamped by the input to its 2 km min: hypot(2000, 3000) = 3.61 km.
+    expect(screen.getByText('3.61 KM')).toBeTruthy()
   })
 
   it('writes slider bounds from catalog metadata into the store', () => {

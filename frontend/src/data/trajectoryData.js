@@ -4,15 +4,6 @@
  * or { source, frames } for single-session replay.
  */
 
-function mulberry32(seed) {
-  return () => {
-    let value = (seed += 0x6d2b79f5)
-    value = Math.imul(value ^ (value >>> 15), value | 1)
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
-  }
-}
-
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 }
@@ -138,78 +129,21 @@ export async function loadTrajectoryLog(
   }
 }
 
-export function generateMockTrialSet(
-  baseFrames,
-  { count = 30, seed = 20260909 } = {},
-) {
-  if (!Array.isArray(baseFrames) || baseFrames.length < 2) {
-    return {
-      schema_version: '1.0',
-      source: 'mock-training-trials',
-      trials: [],
-    }
+export async function loadTrialSet({ scenarioId, parameterOverrides, count }) {
+  const response = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/trials`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scenario_id: scenarioId,
+        parameter_overrides: parameterOverrides,
+        count,
+      }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`RL trials request failed (${response.status}).`)
   }
-
-  const random = mulberry32(seed)
-  const trials = Array.from({ length: count }, (_, trialIndex) => {
-    const progress = count === 1 ? 1 : trialIndex / (count - 1)
-    const successProbability = 0.12 + 0.84 * progress
-    const success =
-      trialIndex >= count - 3 ||
-      (trialIndex > 1 && random() < successProbability)
-    const phaseY = random() * Math.PI * 2
-    const phaseZ = random() * Math.PI * 2
-    const spreadM = 520 * (1 - progress) + 24
-    const terminalMissM = success ? 0 : 70 + random() * 260
-
-    const frames = baseFrames.map((frame, frameIndex) => {
-      const u = frameIndex / (baseFrames.length - 1)
-      const midcourseWindow = Math.sin(Math.PI * u)
-      const yNoise =
-        spreadM *
-        midcourseWindow *
-        (0.62 * Math.sin(2 * Math.PI * u + phaseY) +
-          0.38 * Math.sin(5 * Math.PI * u + phaseY * 0.5))
-      const zNoise =
-        spreadM *
-        0.35 *
-        midcourseWindow *
-        Math.sin(3 * Math.PI * u + phaseZ)
-      const terminalOffset = terminalMissM * u ** 3
-      const pursuerPosition = {
-        x: frame.pursuer.position_m.x,
-        y: frame.pursuer.position_m.y + yNoise + terminalOffset,
-        z: frame.pursuer.position_m.z + zNoise,
-      }
-
-      return {
-        ...frame,
-        stream_id: `mock-trial-${trialIndex + 1}`,
-        pursuer: {
-          ...frame.pursuer,
-          position_m: pursuerPosition,
-        },
-        range_m: distance(pursuerPosition, frame.target.position_m),
-      }
-    })
-
-    return {
-      episode: trialIndex + 1,
-      reward: -95 + progress * 205 + (random() - 0.5) * 35,
-      success,
-      outcome: success ? 'intercept' : 'miss',
-      frames,
-    }
-  })
-
-  return {
-    schema_version: '1.0',
-    source: 'mock-training-trials',
-    trials,
-  }
-}
-
-export async function loadTrialSet(options) {
-  // Swap this body for a fetch/parser when the RL episode format is frozen.
-  return generateMockTrialSet(options.baseFrames, options)
+  return response.json()
 }

@@ -61,6 +61,11 @@ _GEOMETRIES: dict[ScenarioId, MockGeometry] = {
         weave_amplitude_m=80.0,
         weave_frequency_hz=0.08,
     ),
+    "g-limited-turn": MockGeometry(
+        target_heading_deg=180.0,
+        lateral_offset_m=0.0,
+        interceptor_altitude_offset_m=-300.0,
+    ),
 }
 
 _GUIDANCE_CURVE_M: dict[GuidanceLawId, tuple[float, float]] = {

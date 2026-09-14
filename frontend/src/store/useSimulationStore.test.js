@@ -13,6 +13,33 @@ beforeEach(() => {
 })
 
 describe('simulation playback store', () => {
+  it('applies scenario parameter defaults when a scenario is picked', () => {
+    useSimulationStore.setState({
+      catalog: {
+        scenarios: [
+          {
+            id: 'g-limited-turn',
+            parameter_defaults: { 'engagement.target_maneuver_g': 8 },
+          },
+        ],
+      },
+      parameterValues: {
+        'engagement.target_maneuver_g': 5,
+        'interceptor.speed': 700,
+      },
+    })
+
+    useSimulationStore.getState().selectScenario('g-limited-turn')
+
+    expect(useSimulationStore.getState()).toMatchObject({
+      selectedScenarioId: 'g-limited-turn',
+      parameterValues: {
+        'engagement.target_maneuver_g': 8,
+        'interceptor.speed': 700,
+      },
+    })
+  })
+
   it('loads a stream and advances according to elapsed time', () => {
     const state = useSimulationStore.getState()
     state.beginStream()

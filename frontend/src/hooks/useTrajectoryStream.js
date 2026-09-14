@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 
-import { loadTrialSet } from '../data/trajectoryData'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 function websocketUrl() {
@@ -28,7 +27,6 @@ export function useTrajectoryStream() {
   const appendFrame = useSimulationStore((state) => state.appendFrame)
   const completeStream = useSimulationStore((state) => state.completeStream)
   const failStream = useSimulationStore((state) => state.failStream)
-  const setTrialSet = useSimulationStore((state) => state.setTrialSet)
 
   const startStream = useCallback(() => {
     requestIdRef.current += 1
@@ -65,12 +63,9 @@ export function useTrajectoryStream() {
         case 'stream.completed':
           completed = true
           completeStream(message)
-          loadTrialSet({
-            baseFrames: useSimulationStore.getState().frames,
-            count: useSimulationStore.getState().trialCount,
-          }).then((trialSet) => {
-            if (requestId === requestIdRef.current) setTrialSet(trialSet)
-          })
+          if (useSimulationStore.getState().viewMode === 'trials') {
+            useSimulationStore.getState().loadTrials()
+          }
           break
         case 'stream.error':
           completed = true
@@ -106,7 +101,6 @@ export function useTrajectoryStream() {
     parameterValues,
     selectedGuidanceLaw,
     selectedScenarioId,
-    setTrialSet,
   ])
 
   useEffect(

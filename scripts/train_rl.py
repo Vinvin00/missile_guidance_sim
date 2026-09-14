@@ -45,14 +45,33 @@ def parse_args() -> argparse.Namespace:
             "output-dir lineage; do not resume CP1–CP4 trained without it."
         ),
     )
+    parser.add_argument(
+        "--domain-randomization",
+        action="store_true",
+        help=(
+            "train on closer starts, faster targets, and higher-g maneuvers "
+            "(guidance_sim.rl.domain_randomization) instead of the frozen "
+            "training distribution."
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="override PPOTrainingConfig.seed, e.g. for a second training-seed run",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = PPOTrainingConfig(
-        use_target_turn_rate_obs=bool(args.use_target_turn_rate_obs),
-    )
+    overrides: dict = {
+        "use_target_turn_rate_obs": bool(args.use_target_turn_rate_obs),
+        "domain_randomization": bool(args.domain_randomization),
+    }
+    if args.seed is not None:
+        overrides["seed"] = args.seed
+    config = PPOTrainingConfig(**overrides)
     report = run_checkpoint(
         checkpoint_index=args.checkpoint,
         output_dir=args.output_dir,

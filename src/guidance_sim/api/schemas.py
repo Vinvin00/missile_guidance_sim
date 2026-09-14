@@ -10,8 +10,9 @@ ScenarioId = Literal[
     "crossing-intercept",
     "head-on-intercept",
     "evasive-climb",
+    "g-limited-turn",
 ]
-GuidanceLawId = Literal["pn", "apn", "ogl"]
+GuidanceLawId = Literal["pn", "apn", "ogl", "rl"]
 DataSource = Literal["synthetic", "rollout"]
 
 
@@ -56,6 +57,10 @@ class ScenarioOption(StrictModel):
     initial_range_m: float
     altitude_m: float
     duration_s: float
+    # Live-control values the viewer applies when this scenario is picked.
+    parameter_defaults: dict[str, float] = Field(default_factory=dict)
+    # Interceptor structural g-limit override; None = vehicle profile default.
+    pursuer_g_limit: float | None = None
 
 
 class GuidanceOption(StrictModel):
@@ -70,6 +75,8 @@ class CatalogResponse(StrictModel):
     scenarios: list[ScenarioOption]
     guidance_laws: list[GuidanceOption]
     vehicle_profiles: list[VehicleProfile]
+    # Initial geometry / target behaviour controls, keyed ``engagement.<name>``.
+    engagement_parameters: dict[str, ParameterValue] = Field(default_factory=dict)
 
 
 class StreamStartRequest(StrictModel):
@@ -77,6 +84,12 @@ class StreamStartRequest(StrictModel):
     scenario_id: ScenarioId
     guidance_law: GuidanceLawId
     frame_interval_ms: int = Field(default=8, ge=0, le=250)
+    parameter_overrides: dict[str, float] = Field(default_factory=dict)
+
+
+class TrialsRequest(StrictModel):
+    scenario_id: ScenarioId
+    count: int = Field(default=30, ge=1, le=50)
     parameter_overrides: dict[str, float] = Field(default_factory=dict)
 
 

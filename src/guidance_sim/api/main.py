@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import json
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -11,7 +14,7 @@ from pydantic import ValidationError
 
 from guidance_sim.api import live_guidance
 from guidance_sim.api.catalog import get_catalog
-from guidance_sim.api.live_stream import build_live_trajectory
+from guidance_sim.api.live_stream import build_live_trajectory, build_rl_trials
 from guidance_sim.api.schemas import (
     CatalogResponse,
     GuidanceFrame,
@@ -21,6 +24,7 @@ from guidance_sim.api.schemas import (
     StreamError,
     StreamStartRequest,
     StreamStarted,
+    TrialsRequest,
 )
 
 app = FastAPI(
@@ -120,6 +124,71 @@ def step_guidance_session(request: GuidanceStepRequest) -> dict[str, object]:
         ) from exc
     except live_guidance.LiveGuidanceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def load_training_log(pointer_path: Path = REPO_ROOT / "outputs" / "CURRENT_RL_BASELINE.json") -> dict[str, object]:
+    """Episode log + fixed-eval results of the lineage behind the frozen baseline."""
+
+    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    run_dir = pointer_path.parent.parent / Path(pointer["progress_path"]).parent
+    with (run_dir / "training_episodes.csv").open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    episodes = [
+        {
+            "episode": index,
+            "checkpoint": int(row["checkpoint"]),
+            "timesteps": int(row["total_timesteps"]),
+            "reward": float(row["episode_reward"]),
+            "success": row["outcome"] == "hit",
+            "outcome": row["outcome"],
+            "miss_m": float(row["min_range_m"]),
+        }
+        for index, row in enumerate(rows, start=1)
+    ]
+    checkpoints = []
+    for eval_path in sorted(run_dir.glob("rl_checkpoint_*_eval.json")):
+        summary = json.loads(eval_path.read_text(encoding="utf-8"))
+        metadata = json.loads(
+            eval_path.with_name(eval_path.name.replace("_eval", "")).read_text(encoding="utf-8")
+        )
+        checkpoints.append(
+            {
+                "checkpoint": int(metadata["checkpoint_index"]),
+                "timesteps": int(metadata["cumulative_timesteps"]),
+                "hits": int(summary["n_hits"]),
+                "cases": int(summary["n_cases"]),
+                "median_miss_m": float(summary["median_miss_distance_m"]),
+                "mean_reward": float(summary["mean_episode_reward"]),
+            }
+        )
+    return {
+        "source": "training-run",
+        "branch_name": pointer.get("branch_name", ""),
+        "model_path": pointer["model_path"],
+        "episodes": episodes,
+        "checkpoints": checkpoints,
+    }
+
+
+@app.get("/api/training")
+def training_log() -> dict[str, object]:
+    return load_training_log()
+
+
+@app.post("/api/trials")
+def rl_trials(request: TrialsRequest) -> dict[str, object]:
+    """Frozen-RL-policy Monte Carlo episodes around the current setup."""
+
+    try:
+        trials = build_rl_trials(
+            request.scenario_id, request.parameter_overrides, request.count
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"schema_version": "1.0", "source": "rl-rollouts", "trials": trials}
 
 
 @app.websocket("/ws/trajectory")

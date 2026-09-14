@@ -39,4 +39,22 @@ describe('engagementMetrics', () => {
 
     expect(metrics.gTxt).toBe('10.0 G')
   })
+
+  it('scales g-load fraction to the scenario g-limit', () => {
+    const frame = {
+      time_s: 1,
+      pursuer: {
+        position_m: { x: 0, y: 0, z: 0 },
+        velocity_m_s: { x: 700, y: 0, z: 0 },
+      },
+      target: {
+        position_m: { x: 1000, y: 0, z: 0 },
+        velocity_m_s: { x: 0, y: 0, z: 0 },
+      },
+      pursuer_accel_achieved_m_s2: { x: 0, y: 98.0665, z: 0 },
+    }
+
+    expect(engagementMetrics(frame).gFrac).toBeCloseTo(0.4)
+    expect(engagementMetrics(frame, null, null, 10).gFrac).toBeCloseTo(1)
+  })
 })

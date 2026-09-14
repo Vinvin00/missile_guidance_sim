@@ -148,3 +148,48 @@ def test_ogl_vs_pn_on_weave():
     assert r_ogl.miss_distance <= r_pn.miss_distance + 1.0, (
         f"OGL miss={r_ogl.miss_distance:.3f} PN miss={r_pn.miss_distance:.3f}"
     )
+
+
+def test_augmented_laws_not_worse_than_pn_vs_constant_turn():
+    """Regression: along-LOS target accel leaked into APN/OGL commands (735 m / 381 m misses vs PN 0.4 m)."""
+    from guidance_sim.api.live_stream import build_live_trajectory
+
+    runs = {
+        law: build_live_trajectory("head-on-intercept", law, "t", seed=7)
+        for law in ("pn", "apn", "ogl")
+    }
+    tol_m = 5.0  # within-step noise around the intercept radius
+    for law in ("apn", "ogl"):
+        assert runs[law].outcome == "hit"
+        assert runs[law].closest_approach_m <= runs["pn"].closest_approach_m + tol_m
+
+
+def test_augmented_laws_hit_where_pn_misses_g_limited():
+    """g-limited pursuer vs 8 g turn: PN saturates late and misses; APN/OGL lead the turn and hit."""
+    import dataclasses
+
+    from guidance_sim.physics.maneuvers import ConstantTurn
+
+    def run(guidance):
+        pursuer = PointMassEntity(
+            name="pursuer",
+            state=State(position=[0.0, 0.0, 3000.0], velocity=[600.0, 0.0, 0.0]),
+            vehicle=dataclasses.replace(PURSUER_VEHICLE, max_load_factor=10.0),
+        )
+        target = PointMassEntity(
+            name="target",
+            state=State(position=[4000.0, 0.0, 3000.0], velocity=[-250.0, 0.0, 0.0]),
+            vehicle=TARGET_VEHICLE,
+        )
+        if hasattr(guidance, "a_target_est"):
+            guidance.a_target_est = _truth_accel(target)
+        return Simulation(
+            pursuer, target, guidance, ConstantTurn(accel=80.0),
+            SimulationConfig(dt=0.01, max_time=30.0, intercept_radius=5.0, autopilot_tau=0.2),
+        ).run()
+
+    r_pn = run(ProportionalNavigation(4.0))
+    assert not r_pn.hit and r_pn.miss_distance > 20.0, f"PN miss={r_pn.miss_distance:.1f} m"
+    for law in (AugmentedProportionalNavigation(4.0), OptimalGuidance(3.0)):
+        r = run(law)
+        assert r.hit, f"{type(law).__name__} miss={r.miss_distance:.1f} m (PN {r_pn.miss_distance:.1f} m)"

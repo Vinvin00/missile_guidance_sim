@@ -1,8 +1,8 @@
-export function trialAppearance(trial, index, total) {
-  const progress = total <= 1 ? 1 : index / (total - 1)
+// Monte Carlo trials have no ordering, so only the outcome drives styling; misses stand out.
+export function trialAppearance(trial) {
   return {
-    color: trial.success ? '#f2f2f2' : '#ff2d16',
-    opacity: 0.1 + progress * 0.35,
-    lineWidth: trial.success ? 1.4 : 1.1,
+    color: trial.success ? '#f4f5f7' : '#ff5238',
+    opacity: trial.success ? 0.3 : 0.65,
+    lineWidth: trial.success ? 1.2 : 1.4,
   }
 }

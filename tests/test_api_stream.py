@@ -18,11 +18,13 @@ def test_catalog_exposes_generic_grounded_profiles():
         "pn",
         "apn",
         "ogl",
+        "rl",
     ]
     assert [item["label"] for item in catalog["scenarios"]] == [
         "NoManeuver",
         "ConstantTurn",
         "SinusoidalWeave",
+        "ConstantTurn vs 10 g",
     ]
     assert [profile["name"] for profile in catalog["vehicle_profiles"]] == [
         "Interceptor A",
@@ -34,8 +36,8 @@ def test_catalog_exposes_generic_grounded_profiles():
         if profile["role"] == "target"
     )
     assert target_speed["value"] == pytest.approx(240.0)
-    assert target_speed["reference_min"] == pytest.approx(200.0)
-    assert target_speed["reference_max"] == pytest.approx(300.0)
+    assert target_speed["reference_min"] == pytest.approx(150.0)
+    assert target_speed["reference_max"] == pytest.approx(450.0)
     assert "FOI-ADMIRE-2005" in target_speed["source_ids"]
     assert "AIAA-CLIMB-2024" in target_speed["source_ids"]
     assert "NPS-GUIDANCE-2000" not in target_speed["source_ids"]
@@ -77,10 +79,9 @@ def test_websocket_streams_ordered_live_engagement():
 
     assert started["type"] == "stream.started"
     assert started["data_source"] == "rollout"
-    assert started["applied_parameters"] == {
-        "interceptor.speed": 700.0,
-        "target.speed": 240.0,
-    }
+    assert started["applied_parameters"]["interceptor.speed"] == 700.0
+    assert started["applied_parameters"]["target.speed"] == 240.0
+    assert started["applied_parameters"]["engagement.initial_range"] == 7_000.0
     assert started["dt_s"] == pytest.approx(0.02)
     assert started["frame_count"] > 2
 
@@ -174,14 +175,14 @@ def test_websocket_rejects_out_of_range_live_parameter():
                 "type": "stream.start",
                 "scenario_id": "crossing-intercept",
                 "guidance_law": "pn",
-                "parameter_overrides": {"interceptor.speed": 1_200.0},
+                "parameter_overrides": {"interceptor.speed": 1_300.0},
             }
         )
         error = websocket.receive_json()
 
     assert error["type"] == "stream.error"
     assert error["code"] == "invalid_parameter_override"
-    assert "between 600 and 1000" in error["detail"]
+    assert "between 400 and 1200" in error["detail"]
 
 
 def test_live_speed_overrides_reshape_the_trajectory():
@@ -202,10 +203,8 @@ def test_live_speed_overrides_reshape_the_trajectory():
         seed=12345,
     )
 
-    assert overridden.applied_parameters == {
-        "interceptor.speed": 600.0,
-        "target.speed": 200.0,
-    }
+    assert overridden.applied_parameters["interceptor.speed"] == 600.0
+    assert overridden.applied_parameters["target.speed"] == 200.0
     # Same seed (same sampled geometry) but different speeds must produce a
     # different concrete engagement -- speed overrides used to be validated
     # and echoed only, never reshaping the frozen rollout.
@@ -220,9 +219,10 @@ def test_live_speed_overrides_reshape_the_trajectory():
         ("crossing-intercept", "none"),
         ("head-on-intercept", "constant_turn"),
         ("evasive-climb", "weave"),
+        ("g-limited-turn", "constant_turn"),
     ],
 )
-@pytest.mark.parametrize("guidance_law", ["pn", "apn", "ogl"])
+@pytest.mark.parametrize("guidance_law", ["pn", "apn", "ogl", "rl"])
 def test_all_catalog_combinations_run_a_clean_live_episode(
     scenario_id,
     expected_maneuver,
@@ -254,3 +254,85 @@ def test_all_catalog_combinations_run_a_clean_live_episode(
         ).all()
         for frame in trajectory.frames
     )
+
+
+def test_engagement_controls_set_initial_geometry():
+    trajectory = build_live_trajectory(
+        "crossing-intercept",
+        "pn",
+        stream_id="geometry",
+        parameter_overrides={
+            "engagement.initial_range": 4_000.0,
+            "engagement.lateral_offset": -2_000.0,
+            "engagement.altitude_delta": 500.0,
+            "engagement.target_heading": 90.0,
+        },
+        seed=3,
+    )
+    target = trajectory.frames[0].target
+    assert (target.position_m.x, target.position_m.y, target.position_m.z) == (
+        4_000.0,
+        -2_000.0,
+        3_500.0,
+    )
+    assert target.velocity_m_s.x == pytest.approx(0.0, abs=1e-9)
+    assert target.velocity_m_s.y == pytest.approx(240.0)
+
+
+def test_rl_law_flies_a_different_path_than_pn():
+    """The live preview used to offer only PN/APN/OGL; the RL policy must be a
+    real, distinct controller rather than an alias of a classical law."""
+
+    pn = build_live_trajectory("head-on-intercept", "pn", "pn", seed=7)
+    rl = build_live_trajectory("head-on-intercept", "rl", "rl", seed=7)
+    n = min(len(pn.frames), len(rl.frames))
+    gap = max(
+        abs(pn.frames[i].pursuer.position_m.y - rl.frames[i].pursuer.position_m.y)
+        for i in range(n)
+    )
+    assert gap > 50.0
+
+
+def test_trials_endpoint_returns_real_dispersed_rl_rollouts():
+    response = TestClient(app).post(
+        "/api/trials", json={"scenario_id": "head-on-intercept", "count": 3}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "rl-rollouts"
+    trials = body["trials"]
+    assert [trial["episode"] for trial in trials] == [1, 2, 3]
+    for trial in trials:
+        assert trial["success"] == (trial["outcome"] == "intercept")
+        assert trial["closest_approach_m"] >= 0.0
+        assert len(trial["frames"]) > 2
+    starts = {trial["frames"][0]["target"]["position_m"]["x"] for trial in trials}
+    assert len(starts) == 3  # each trial gets its own perturbed geometry
+
+
+def test_g_limited_turn_scenario_pn_misses_augmented_laws_hit():
+    from guidance_sim.api.catalog import CATALOG
+
+    scenario = next(s for s in CATALOG.scenarios if s.id == "g-limited-turn")
+    runs = {
+        law: build_live_trajectory(
+            "g-limited-turn", law, law, scenario.parameter_defaults, seed=7
+        )
+        for law in ("pn", "apn", "ogl")
+    }
+    assert runs["pn"].outcome != "hit", runs["pn"].closest_approach_m
+    assert runs["apn"].outcome == "hit", runs["apn"].closest_approach_m
+    assert runs["ogl"].outcome == "hit", runs["ogl"].closest_approach_m
+
+
+def test_training_endpoint_serves_the_baseline_run_log():
+    body = TestClient(app).get("/api/training").json()
+
+    assert body["source"] == "training-run"
+    assert body["branch_name"] == "observation_target_turn_rate"
+    assert len(body["episodes"]) == 80
+    assert [e["episode"] for e in body["episodes"]] == list(range(1, 81))
+    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5}
+    final = body["checkpoints"][-1]
+    assert (final["checkpoint"], final["hits"], final["cases"]) == (5, 5, 9)
