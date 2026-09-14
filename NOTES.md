@@ -1,4 +1,161 @@
+## 2026-09-14 — zem_t_go_max_s root cause + effort8 finished (56%) + seed3 launched
+
+### Root cause of the shaping_gamma / effort_weight failures
+
+Both single-variable follow-ups to the CP1–CP5 evasive lineage (`shaping_gamma`
+matched to PPO γ, then `effort_weight` 5→15 on top) failed the same way:
+reward kept climbing while hit rate collapsed. Traced it to `RewardConfig.t_go_max_s`
+being set to `max_time` (45 s) in `PPOTrainingConfig.reward_config()`. The ZEM
+potential extrapolates the *current* relative velocity `t_go` seconds ahead;
+whenever closing velocity is near `vc_min` (normal against an evasive target —
+the pursuer usually isn't precisely pointed at it), `t_go` clamps to the full
+45 s cap. A synthetic sensitivity probe (`src/guidance_sim/rl/zem.py`
+functions, representative 6 km engagement) confirmed the leverage:
+
+```
+dtheta=0.0°  ZEM(tgo=45)= 862.6m  phi=-0.633    ZEM(tgo=8)=2486.8m  phi=-0.833
+dtheta=2.0°  ZEM(tgo=45)=1070.6m  phi=-0.682    ZEM(tgo=8)=2521.1m  phi=-0.833
+```
+
+A 2° heading wobble moves phi by ~0.05 at `t_go_max=45` vs ~0.002 at `t_go_max=8`
+— 25x more leverage. With `shaping_weight=50` that's up to 2.5 reward/step
+from wobbling alone, no actual closure required. This is the real cause of
+the `cmd_rms` runaway seen in every prior lineage (30→220 across CP1→CP5),
+not effort weight or the discount mismatch — those only changed how cheap
+the wobble was, never removed the lever.
+
+Fix: decoupled `t_go_max_s` from `max_time`. Added `PPOTrainingConfig.zem_t_go_max_s`
+(default **10.0** — a physically-plausible terminal-guidance timescale,
+independent of episode length) and a `--zem-t-go-max` CLI override on
+`run_evasive_checkpoint.py`, alongside the existing `--shaping-gamma` /
+`--effort-weight` / `--seed` overrides. `miss_tanh_scale_m`, `shaping_gamma`,
+`effort_weight` all left at lineage defaults for a clean single-variable test.
+
+### Result: reproduces across three seeds, best result of the project
+
+| lineage | seed | CP3 | CP4 | CP5 | note |
+|---|---|---|---|---|---|
+| `evasive_zemtgo10` | 20260909 | 21/50 (42%) | 6/50 (12%) | 26/50 (52%) | sawtooth |
+| `evasive_zemtgo10_seed2` | 77000001 | 14/50 (28%) | **33/50 (66%)** | 31/50 (62%) | best peak |
+| `evasive_zemtgo10_effort8` | 20260909 | 21/50 (42%) | 21/50 (42%) | 28/50 (56%) | effort_weight 5→8; monotonic 11→13→21→21→28, no sawtooth |
+| `evasive_zemtgo10_seed3` | 43500777 | pending | pending | pending | launched, variance read |
+
+All three finished lineages land their late checkpoints in the 50-66% hit-rate
+band with median miss 4.5-5.5 m, against information-matched PN's ~78%
+(median 3.9 m) on the same held-out set
+(`outputs/evasive_delayed_tracking_attempt01/pn_baseline.json`). This is a
+step change from every earlier lineage (prior best late-checkpoint hit rate
+was ~22/50). `effort_weight=8` on top of the `t_go_max` fix trades a few
+points of peak hit rate for a much smoother, monotonic climb (no CP4-style
+collapse) — worth preferring for reproducibility even though seed2's raw
+peak is higher.
+
+**Not promoted.** `CURRENT_RL_BASELINE.json` untouched. Still below PN on raw
+hit rate; checkpoint selection still matters (early checkpoints are noisy
+across every lineage); only 2-3 seeds is not a full variance estimate.
+
+## 2026-09-14 — evasive_zemtgo10_effort8 aborted mid-CP1; daemon-restarted
+
+Prior launch (~09:22 Rome) died at ~16 384 / 204 800 timesteps with empty
+`checkpoints/` (shell-teardown / process-group kill — same mode as effort15
+CP2). A plain `nohup` retry at 10:42 also died; fixed with a Python
+double-fork (`os.setsid` + second fork, PPID=1) launching
+`outputs/evasive_zemtgo10_effort8/run_lineage.sh` at ~10:44 Rome. Confirmed
+alive past ~139k/204800 CP1 steps. Lineage runs CP1→CP5
+(`zem_t_go_max_s=10`, `effort_weight=8`, seed 20260909). Pidfile:
+`outputs/evasive_zemtgo10_effort8/lineage.pid`.
+`CURRENT_RL_BASELINE.json` untouched. Do not promote without held-out win vs
+seed2 CP4 (33/50) and information-matched PN (~78%).
+
+## 2026-09-14 — evasive_zemtgo10 (+ seed2) finished; best so far, do not promote
+
+Isolated lineages at `outputs/evasive_zemtgo10/` (seed 20260909) and
+`outputs/evasive_zemtgo10_seed2/` (seed 77000001). Single variable vs prior
+defaults: `zem_t_go_max_s` 45 → **10**. `CURRENT_RL_BASELINE.json` untouched.
+
+### Seed 1 (`evasive_zemtgo10`)
+
+| CP | hits | median miss | cmd_rms | stop |
+|---|---|---|---|---|
+| 1 | 8/50 (16%) | 10.2 m | 138 | False |
+| 2 | 6/50 (12%) | 9.2 m | 160 | True |
+| 3 | 21/50 (42%) | 5.2 m | 141 | True |
+| 4 | 6/50 (12%) | 10.6 m | 224 | True |
+| 5 | **26/50 (52%)** | 4.8 m | 175 | True |
+
+Sawtooth CP3→CP4→CP5. Best: CP5.
+
+### Seed 2 (`evasive_zemtgo10_seed2`) — finished ~09:18 Rome
+
+| CP | hits | median miss | cmd_rms | stop |
+|---|---|---|---|---|
+| 1 | 4/50 (8%) | 12.5 m | 131 | False |
+| 2 | 9/50 (18%) | 9.4 m | 145 | True |
+| 3 | 14/50 (28%) | 7.8 m | 147 | True |
+| 4 | **33/50 (66%)** | **4.6 m** | 135 | True |
+| 5 | 31/50 (62%) | 4.5 m | 167 | True |
+
+Per-maneuver at seed2 CP4: break_turn 6/13, vertical_jink 12/13,
+random_jink 7/12, bounded_weave 8/12. CP5 gained break_turn (8/13) but
+lost random_jink (4/12); overall slight regression + cmd_rms up 135→167.
+
+### Verdict
+
+**`zem_t_go_max_s=10` is a real win** vs shapinggamma/effort15/misstanh
+lineages (prior best late CP ~22/50, effort15 CP1 1/50). Peak across seeds
+is seed2 CP4 **33/50 (66%)**, median miss 4.6 m — still below
+information-matched PN on the same held-out set (~**78%**,
+`outputs/evasive_delayed_tracking_attempt01/pn_baseline.json`). Seed variance
+is large (sawtooth on seed1; smoother climb then CP4 peak on seed2).
+
+**Do not promote. Do not continue either lineage past CP5.** Best checkpoint
+to keep for comparison: `evasive_zemtgo10_seed2/checkpoints/rl_checkpoint_04.zip`.
+
+Also recorded: `evasive_effort15` died after poor CP1 (1/50, effort −63) —
+`effort_weight=15` alone is too harsh.
+
+### Next experiment (started)
+
+`outputs/evasive_zemtgo10_effort8/`: keep `zem_t_go_max_s=10`, raise
+`effort_weight` 5 → **8** (mild; not 15). Goal: hold ~66% envelope while
+stopping the CP4→CP5 cmd_rms climb. From scratch, seed 20260909.
+
+
 # NOTES
+
+## 2026-09-13 — evasive_shapinggamma CP1–CP3: stop condition fired
+
+Isolated lineage at `outputs/evasive_shapinggamma/` (`shaping_gamma=0.995` matching
+PPO γ; `miss_tanh_scale=3000` unchanged). `CURRENT_RL_BASELINE.json` untouched.
+
+| CP | hits | median miss | cmd_rms | progress_reward | stop |
+|---|---|---|---|---|---|
+| 1 | **22/50 (44%)** | 5.4 m | 102.8 | 195.4 | False |
+| 2 | 2/50 (4%) | 11.6 m | **157.1** | 283.1 | True |
+| 3 | 14/50 (28%) | 7.1 m | 152.7 | 222.5 | True |
+
+Per-maneuver CP1 → CP2 → CP3 hits:
+- break_turn 7/13 → 0/13 → 5/13
+- vertical_jink 9/13 → 0/13 → 5/13
+- random_jink 4/12 → 1/12 → 4/12
+- bounded_weave 2/12 → 1/12 → 0/12
+
+### Verdict on the discount-mismatch hypothesis
+
+**Partially confirmed, then falsified on the claim that mattered.**
+`progress_reward` is no longer the telescoping constant 27.11 — shaping finally
+measures something. But `cmd_rms` still climbed 103 → 157 by CP2, the same
+runaway both prior lineages showed. Matching γ did not stabilize command effort.
+
+**Do not promote. Do not continue to CP4/CP5.** Best checkpoint in this lineage
+is CP1; best late checkpoint across lineages remains elsewhere to compare, but
+this CP3 is not a baseline candidate.
+
+### Next experiment (queued)
+
+From-scratch lineage keeping `shaping_gamma=0.995` and raising effort weight to
+curb the CP1→CP2 command runaway, rather than resuming this CP3.
+
 
 ## 2026-09-13 — Alpha-beta velocity from the seeker's own rate channels
 

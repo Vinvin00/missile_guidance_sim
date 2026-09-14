@@ -28,13 +28,84 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--miss-tanh-scale",
+        type=float,
+        default=None,
+        help=(
+            "Override the terminal miss-penalty scale (m). The lineage default "
+            "of 3000 m leaves only 0.13 reward between a 9 m and a 5 m miss, "
+            "which is where every checkpoint actually finishes."
+        ),
+    )
+    parser.add_argument(
+        "--shaping-gamma",
+        type=float,
+        default=None,
+        help=(
+            "Override the discount used inside the ZEM-potential shaping term "
+            "(RewardConfig.shaping_gamma). The lineage default of 1.0 does not "
+            "match PPO's own gamma=0.995, so a cycle that raises then lowers "
+            "the potential can net positive discounted return without closing "
+            "the engagement."
+        ),
+    )
+    parser.add_argument(
+        "--effort-weight",
+        type=float,
+        default=None,
+        help=(
+            "Override RewardConfig.effort_weight (default 5). Raise to penalize "
+            "command-RMS runaway across checkpoints."
+        ),
+    )
+    parser.add_argument(
+        "--zem-t-go-max",
+        type=float,
+        default=None,
+        help=(
+            "Override the ZEM potential's lookahead cap in seconds (default "
+            "10). The old default coupled this to max_time, so a heading "
+            "wobble of a couple degrees could swing the extrapolated miss "
+            "point by hundreds of metres whenever closing velocity was near "
+            "zero -- a free reward signal unrelated to actually closing."
+        ),
+    )
+    parser.add_argument(
+        "--n-envs",
+        type=int,
+        default=None,
+        help="Override PPOTrainingConfig.n_envs (default 4). Lower under memory pressure.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override PPOTrainingConfig.seed, for a second seed of the same config.",
+    )
     args = parser.parse_args()
 
-    config = evasive_redesign_config()
+    overrides: dict[str, object] = {}
+    if args.miss_tanh_scale is not None:
+        overrides["miss_tanh_scale_m"] = args.miss_tanh_scale
+    if args.shaping_gamma is not None:
+        overrides["shaping_gamma"] = args.shaping_gamma
+    if args.effort_weight is not None:
+        overrides["effort_weight"] = args.effort_weight
+    if args.zem_t_go_max is not None:
+        overrides["zem_t_go_max_s"] = args.zem_t_go_max
+    if args.seed is not None:
+        overrides["seed"] = args.seed
+    if args.n_envs is not None:
+        overrides["n_envs"] = args.n_envs
+    config = evasive_redesign_config(**overrides)
     print(
         f"CP{args.checkpoint}: evasive lineage | "
         f"max_time={config.max_time:g}s t_go_max={config.reward_config().t_go_max_s:g}s | "
-        f"tracking={config.tracking.enabled} | obs={len(config.observation_names)}-D"
+        f"tracking={config.tracking.enabled} | obs={len(config.observation_names)}-D | "
+        f"miss_tanh_scale={config.miss_tanh_scale_m:g}m shaping_gamma={config.shaping_gamma:g} "
+        f"effort_weight={config.effort_weight:g} "
+        f"-> out={args.output_dir}"
     )
     report = run_checkpoint(
         args.checkpoint,

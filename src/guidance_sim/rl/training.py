@@ -94,6 +94,29 @@ class PPOTrainingConfig:
     # miss_penalty * tanh(min_range / scale), so beyond ~3x the scale it is
     # flat and supplies no gradient at all.
     miss_tanh_scale_m: float = 1_000.0
+    # Discount applied inside the ZEM-potential shaping term. Ng et al.
+    # (1999) potential-based shaping is policy-invariant only when this
+    # equals the agent's own discount (`gamma` above); left at the
+    # RewardConfig default of 1.0 it does not, and the mismatch lets a
+    # cycle that raises then lowers the potential net positive discounted
+    # return without ever closing the engagement.
+    shaping_gamma: float = 1.0
+    # Achieved-effort penalty weight. Raised on the shaping_gamma follow-up
+    # lineage to curb the CP1→CP2 command-RMS runaway (103→157) that survived
+    # the discount-mismatch fix.
+    effort_weight: float = 5.0
+    # ZEM potential's lookahead cap, independent of max_time. reward_config()
+    # used to set this to max_time so raising the episode budget couldn't
+    # silently saturate the horizon -- but that also means the shaping term
+    # extrapolates the CURRENT velocity up to max_time ahead whenever closing
+    # velocity is near zero (normal against an evasive target), so a heading
+    # wobble of a couple degrees swings the extrapolated miss point by
+    # hundreds of metres and phi with it. That's a free, physically-fake
+    # reward signal the policy can farm by oscillating heading -- the actual
+    # cause of the cmd_rms runaway, not effort weight or shaping_gamma. A
+    # short, fixed cap keeps the lookahead near real terminal-guidance
+    # timescales regardless of episode length.
+    zem_t_go_max_s: float = 10.0
 
     def __post_init__(self) -> None:
         if self.total_checkpoints != 5:
@@ -141,8 +164,10 @@ class PPOTrainingConfig:
         """
 
         return RewardConfig(
-            t_go_max_s=self.max_time,
+            t_go_max_s=self.zem_t_go_max_s,
             miss_tanh_scale_m=self.miss_tanh_scale_m,
+            shaping_gamma=self.shaping_gamma,
+            effort_weight=self.effort_weight,
         )
 
 
