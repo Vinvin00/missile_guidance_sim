@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: missile-guidance-sim-api
+    runtime: docker
+    plan: free
+    branch: feature/live-rl-inference-endpoint
+    dockerfilePath: ./Dockerfile
