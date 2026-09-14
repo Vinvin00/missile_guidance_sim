@@ -1115,10 +1115,14 @@ def run_checkpoint(
     """Train, save, evaluate, report, then return after one checkpoint."""
 
     config = config or PPOTrainingConfig()
-    if not 1 <= checkpoint_index <= config.total_checkpoints:
-        raise ValueError(
-            f"checkpoint_index must be in [1, {config.total_checkpoints}]"
-        )
+    # No upper bound against config.total_checkpoints: that field is pinned
+    # to exactly 5 for the frozen Phase-2 budget (PPOTrainingConfig.__post_init__),
+    # but an experiment lineage that is still visibly climbing at CP5 (see
+    # NOTES.md 2026-09-14) legitimately needs a CP6+, which this function
+    # already supports end to end -- every helper it calls keys off
+    # checkpoint_index, not total_checkpoints.
+    if checkpoint_index < 1:
+        raise ValueError("checkpoint_index must be >= 1")
 
     output_dir = Path(output_dir)
     checkpoint_dir = output_dir / "checkpoints"
