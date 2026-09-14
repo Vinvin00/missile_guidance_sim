@@ -1,3 +1,81 @@
+## 2026-09-14 — seed2 pushed to CP6: 68%, confirms the config but not the magnitude
+
+Pushed `evasive_zemtgo10_seed2` to CP6 (resumed from its own CP5, seed
+77000001) as the confirming test for seed3's CP6 breakthrough below.
+
+| | CP4 | CP5 | CP6 |
+|---|---|---|---|
+| seed3 | 24% | 74% | **82%** |
+| seed2 | 66% | 62% | 68% |
+
+**Does not replicate seed3's CP4->CP5 jump.** seed2 found a good policy by
+CP4 and has stayed in a 62-68% band ever since -- CP6 is a small, noisy
+uptick on a plateau, not a second breakthrough. Full seed2 numbers: CP6
+34/50, median miss 4.8 m, p90 7.2 m, max 12.4 m (vs PN 39/50, median 3.9 m).
+
+**What this confirms:** `zem_t_go_max_s=10` reliably lands checkpoints in
+the 60-82% band by CP6 across two independent seeds -- both now competitive
+with PN's 78%, both far above every earlier lineage's ~22% ceiling. That
+part replicates cleanly.
+
+**What this does not resolve:** whether seed3's 82% is the achievable
+ceiling for this config or a favorable outlier. Two seeds landed in
+genuinely different regimes (one plateaued ~65%, one broke through to
+~80%) despite identical config, so the honest read is "this config reaches
+competitive-with-PN performance, magnitude has real seed-to-seed variance
+we have not bounded" -- not "this config reaches 82%." A third seed pushed
+to CP6, or a repeat with a larger held-out set, would be needed to say
+more.
+
+## 2026-09-14 — evasive_zemtgo10_seed3 CP6: 41/50 (82%), beats PN
+
+CP6 (`outputs/evasive_zemtgo10_seed3/`, resumed from CP5's own
+`rl_checkpoint_05.zip`, same seed 43500777 / same config) confirms the CP5
+trend diagnosis was right: the curve kept climbing.
+
+| CP | hits | median miss | p90 miss | max miss | outcomes |
+|---|---|---|---|---|---|
+| 4 | 12/50 (24%) | 7.0 m | 15.9 m | 18.2 m | 30 timeout / 8 miss / 12 hit |
+| 5 | 37/50 (74%) | 4.0 m | 8.5 m | 9.9 m | 11 timeout / 2 miss / 37 hit |
+| 6 | **41/50 (82%)** | **3.9 m** | **7.1 m** | **7.9 m** | 7 timeout / 2 miss / 41 hit |
+| PN (info-matched) | 39/50 (78%) | 3.9 m | 832.4 m | 1210.1 m | 10 timeout / 1 miss / 39 hit |
+
+**CP6 beats PN on hit rate (82% vs 78%), ties it exactly on median miss
+(3.9 m), and has a drastically tighter worst case** — PN's failure mode on
+this held-out set is catastrophic loss (max miss 1210 m, mostly break-turn
+cases it can't track at all); CP6's worst miss across all 50 cases is 7.9 m.
+This is the first checkpoint in the project to match or exceed the
+classical baseline on its own terms.
+
+Intra-CP6 rolling-25-episode on-policy hit rate (0.48-0.80, oscillating, no
+longer a clean monotonic climb like CP5) suggests this checkpoint is near a
+plateau for this seed/config rather than mid-breakthrough — worth checking
+with a CP7 if pursued further, but the signal is weaker than CP4->CP5's was.
+
+**Still not promoted.** `CURRENT_RL_BASELINE.json` untouched. Before any
+promotion: this is one seed's CP6, evaluated on the same 50-case held-out
+set used to pick it -- a genuine promotion decision needs either a larger
+held-out set or a second seed extended to CP6 to rule out this being another
+lucky checkpoint draw, per the CP1-CP4 noise finding above. `run_checkpoint()`'s
+upper-bound check against `total_checkpoints` was relaxed to allow this
+(commit `e393907`); `PPOTrainingConfig.total_checkpoints` itself is still
+pinned at 5 and tested as such.
+
+## 2026-09-14 — next lineage started: evasive_zemtgo10_effort8_seed2
+
+After effort8 (seed 20260909) finished CP5 **28/50 (56%)** monotonic and
+seed3 (43500777) finished CP5 **37/50 (74%)** with a CP4→CP5 lottery jump,
+started a second seed of the preferred effort8 config for reproducibility.
+
+- Dir: `outputs/evasive_zemtgo10_effort8_seed2/`
+- Config: `zem_t_go_max_s=10`, `effort_weight=8`, seed **77000001** (same seed
+  as base `evasive_zemtgo10_seed2` for same-seed config contrast)
+- Launcher: double-fork daemon + `run_lineage.sh` CP1→CP5; pidfile
+  `lineage.pid`. `PYTHONPATH=src` set (editable import was flaky without it).
+- `CURRENT_RL_BASELINE.json` untouched. Do not promote without held-out win
+  vs seed2 CP4 (66%) / seed3 CP5 (74%) and information-matched PN (~78%).
+- No training was running when this started; effort8 and seed3 both complete.
+
 ## 2026-09-14 — zem_t_go_max_s root cause + effort8 finished (56%) + seed3 launched
 
 ### Root cause of the shaping_gamma / effort_weight failures
