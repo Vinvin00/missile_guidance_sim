@@ -38,21 +38,30 @@ independent of episode length) and a `--zem-t-go-max` CLI override on
 | `evasive_zemtgo10` | 20260909 | 21/50 (42%) | 6/50 (12%) | 26/50 (52%) | sawtooth |
 | `evasive_zemtgo10_seed2` | 77000001 | 14/50 (28%) | **33/50 (66%)** | 31/50 (62%) | best peak |
 | `evasive_zemtgo10_effort8` | 20260909 | 21/50 (42%) | 21/50 (42%) | 28/50 (56%) | effort_weight 5→8; monotonic 11→13→21→21→28, no sawtooth |
-| `evasive_zemtgo10_seed3` | 43500777 | pending | pending | pending | launched, variance read |
+| `evasive_zemtgo10_seed3` | 43500777 | 10/50 (20%) | 12/50 (24%) | **37/50 (74%)** | best of all four; p90 miss 8.5 m, max 9.9 m |
 
-All three finished lineages land their late checkpoints in the 50-66% hit-rate
-band with median miss 4.5-5.5 m, against information-matched PN's ~78%
-(median 3.9 m) on the same held-out set
-(`outputs/evasive_delayed_tracking_attempt01/pn_baseline.json`). This is a
-step change from every earlier lineage (prior best late-checkpoint hit rate
-was ~22/50). `effort_weight=8` on top of the `t_go_max` fix trades a few
-points of peak hit rate for a much smoother, monotonic climb (no CP4-style
-collapse) — worth preferring for reproducibility even though seed2's raw
-peak is higher.
+Four finished lineages now. Three land their peak checkpoint at 50-66%;
+seed3's CP5 reaches **37/50 (74%)**, median miss **4.0 m**, p90 8.5 m, max
+9.9 m — right up against information-matched PN's ~78% hit rate / 3.9 m
+median on the same held-out set
+(`outputs/evasive_delayed_tracking_attempt01/pn_baseline.json`), and with a
+far tighter worst-case tail (PN's max miss on this set was in the hundreds
+of metres). This is a step change from every earlier lineage (prior best
+late-checkpoint hit rate was ~22/50). `effort_weight=8` on top of the
+`t_go_max` fix trades a few points of peak hit rate for a much smoother,
+monotonic climb (no CP4-style collapse) — worth preferring for
+reproducibility even though seed3's raw peak is now the highest overall.
 
-**Not promoted.** `CURRENT_RL_BASELINE.json` untouched. Still below PN on raw
-hit rate; checkpoint selection still matters (early checkpoints are noisy
-across every lineage); only 2-3 seeds is not a full variance estimate.
+**Still noisy pre-CP5 in every lineage** (seed3: 28%→4%→20%→24%→74%) — the
+win is concentrated in the last checkpoint, not a steady climb, so
+checkpoint selection matters and CP5 alone is not yet trustworthy as "the"
+result without knowing why CP1-CP4 don't predict it.
+
+**Not promoted.** `CURRENT_RL_BASELINE.json` untouched. seed3 CP5 nearly
+closes the PN gap but three-of-four peaks (66%, 62%, 56%, 74%) is still a
+small sample; worth a held-out re-eval with a couple more seeds, or a look
+at why CP5 specifically jumps, before treating any single checkpoint as
+promotable.
 
 ## 2026-09-14 — evasive_zemtgo10_effort8 aborted mid-CP1; daemon-restarted
 
