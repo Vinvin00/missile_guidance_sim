@@ -188,6 +188,17 @@ class AttitudeAugmentedEntity(PointMassEntity):
             np.sin(self.theta),
         ])
 
+    def body_up(self) -> np.ndarray:
+        """Unit canopy direction: level-flight "up" rotated by bank phi about the nose."""
+        up_level = np.array([
+            -np.sin(self.theta) * np.cos(self.psi),
+            -np.sin(self.theta) * np.sin(self.psi),
+            np.cos(self.theta),
+        ])
+        right_wing = np.array([np.sin(self.psi), -np.cos(self.psi), 0.0])
+        # Same sign convention as the banked lift vector in attitude_net_acceleration.
+        return np.cos(self.phi) * up_level + np.sin(self.phi) * right_wing
+
     def state_derivative(self, y: np.ndarray) -> np.ndarray:
         """dy/dt for y = [x, y, z, vx, vy, vz, theta, phi]."""
         accel = attitude_net_acceleration(

@@ -34,6 +34,8 @@ class BodyState(StrictModel):
     velocity_m_s: Vector3
     # Nose direction when it differs from velocity (attitude-capable targets).
     body_axis: Vector3 | None = None
+    # Canopy direction (bank shows as roll about body_axis).
+    body_up: Vector3 | None = None
 
 
 class ParameterValue(StrictModel):

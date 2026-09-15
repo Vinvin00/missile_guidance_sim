@@ -1,7 +1,7 @@
 import { Grid, Html, Line, OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Box3, Quaternion, Vector3 } from 'three'
+import { Box3, Matrix4, Quaternion, Vector3 } from 'three'
 
 import { engagementOrigin, toScenePoint, toSceneVector } from '../lib/coordinates'
 import { trialAppearance } from '../lib/trialAppearance'
@@ -12,20 +12,32 @@ import { useSimulationStore } from '../store/useSimulationStore'
 // Missile (Jarlan Perez): native mesh spans ~5 units along Y, nose along +Y.
 const JET_MODEL_URL = '/models/fighter-jet.glb'
 const JET_FORWARD = new Vector3(0, 0, 1)
+const JET_UP = new Vector3(0, 1, 0)
 const JET_SCALE = 0.0015
 
 const MISSILE_MODEL_URL = '/models/missile-jarlan.glb'
 const MISSILE_FORWARD = new Vector3(0, 1, 0)
 const MISSILE_SCALE = 0.04
 
-function HeadingModel({ url, forward, scale, position, heading }) {
+function HeadingModel({ url, forward, modelUp, scale, position, heading, up }) {
   const { scene } = useGLTF(url)
   const clone = useMemo(() => scene.clone(), [scene])
   const quaternion = useMemo(() => {
     const dir = new Vector3(...heading)
     if (dir.lengthSq() < 1e-6) return new Quaternion()
-    return new Quaternion().setFromUnitVectors(forward, dir.normalize())
-  }, [forward, heading])
+    dir.normalize()
+    if (!up || !modelUp) return new Quaternion().setFromUnitVectors(forward, dir)
+    // Full attitude: map the model's (forward, up, side) basis onto the
+    // streamed (nose, canopy, side) basis so bank shows as roll.
+    const worldUp = new Vector3(...up).normalize()
+    const model = new Matrix4().makeBasis(
+      forward, modelUp, new Vector3().crossVectors(forward, modelUp),
+    )
+    const world = new Matrix4().makeBasis(
+      dir, worldUp, new Vector3().crossVectors(dir, worldUp),
+    )
+    return new Quaternion().setFromRotationMatrix(world.multiply(model.transpose()))
+  }, [forward, modelUp, heading, up])
 
   return (
     <primitive
@@ -179,9 +191,11 @@ function SequentialTrialPlayback({ origin }) {
       <HeadingModel
         url={JET_MODEL_URL}
         forward={JET_FORWARD}
+        modelUp={JET_UP}
         scale={JET_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
+        up={current.target.body_up && toSceneVector(current.target.body_up)}
       />
     </group>
   )
@@ -281,9 +295,11 @@ function Trajectories() {
       <HeadingModel
         url={JET_MODEL_URL}
         forward={JET_FORWARD}
+        modelUp={JET_UP}
         scale={JET_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
+        up={current.target.body_up && toSceneVector(current.target.body_up)}
       />
       <VehicleLabel position={targetPosition} color="#ff5238">
         TARGET

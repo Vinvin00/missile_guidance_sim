@@ -181,10 +181,14 @@ curve with α = θ − γ. The hang and the fall come from the force balance
 Near-zero airspeed needs a climbing entry. From level flight, drag
 alone only bleeds the vehicle to roughly 50–80 m/s.
 
-In the viewer, the **Cobra** scenario is a tail chase. The target
-cruises level on a trim autopilot (`hold_level_until_trigger`), then
-triggers at 8 s time-to-go. The jet model is oriented by the streamed
-`body_axis`, not by velocity, so the nose-up is visible.
+In the viewer, the **Cobra** scenario is a tail chase over 3 km. The
+target cruises level at 240 m/s on a trim autopilot
+(`hold_level_until_trigger`), then triggers late, at 1.5 s time-to-go. The
+pitch-up zooms it about 200 m while the slowed interceptor overshoots.
+PN, APN, and OGL all miss (20–34 m), but the frozen RL policy still hits.
+At 150 m/s entry, or with a trigger earlier than about 2 s, every law
+hits. The jet model is oriented by the streamed `body_axis` / `body_up`,
+so the nose-up and the spiral bank are both visible.
 
 Touches: `physics/aerodynamics.py` (`post_stall_coefficients`),
 `physics/dynamics.py` (`attitude_net_acceleration`, rate clamps),

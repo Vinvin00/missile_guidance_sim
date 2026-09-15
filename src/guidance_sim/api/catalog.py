@@ -89,21 +89,24 @@ CATALOG = CatalogResponse(
             label="Cobra",
             description=(
                 "Tail chase: the interceptor closes from behind on a target "
-                "cruising level. At ~8 s time-to-go the target cuts throttle "
-                "and pitches its nose to near-vertical, bleeding airspeed "
-                "through drag, then falls into a banked spiral. 3-DOF + "
-                "attitude model, not 6-DOF."
+                "cruising level at 240 m/s. At 1.5 s time-to-go the target "
+                "cuts throttle and snaps its nose to near-vertical; lift "
+                "zooms it up while drag bleeds airspeed, and the slowed "
+                "interceptor overshoots. It then falls into a banked spiral. "
+                "3-DOF + attitude model, not 6-DOF."
             ),
-            initial_range_m=5_000.0,
+            initial_range_m=3_000.0,
             altitude_m=3_000.0,
-            duration_s=16.0,
+            duration_s=25.0,
             parameter_defaults={
-                "engagement.initial_range": 5_000.0,
+                "engagement.initial_range": 3_000.0,
                 "engagement.lateral_offset": 0.0,
                 "engagement.altitude_delta": 0.0,
                 "engagement.target_heading": 0.0,  # flying away: tail chase
                 "interceptor.speed": 700.0,
-                "target.speed": 150.0,
+                # Entry speed matters: at 150 m/s the pitch-up has too little
+                # dynamic pressure to zoom, and every law still hits.
+                "target.speed": 240.0,
             },
         ),
     ],

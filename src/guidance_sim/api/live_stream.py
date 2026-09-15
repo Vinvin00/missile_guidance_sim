@@ -80,7 +80,9 @@ _COBRA_TARGET_VEHICLE = VehicleParams(
     max_normal_force_coefficient=1.1,
     max_load_factor=9.0,
 )
-_COBRA_TRIGGER_TIME_TO_GO_S = 8.0
+# Late trigger: PN/APN/OGL overshoot for triggers ~0.75-2 s time-to-go at the
+# catalog defaults; earlier triggers give the interceptor time to re-converge.
+_COBRA_TRIGGER_TIME_TO_GO_S = 1.5
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -104,11 +106,16 @@ def _vec3(values: np.ndarray) -> Vector3:
     return Vector3(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
 
-def _body(position: np.ndarray, velocity: np.ndarray, body_axis=None) -> BodyState:
+def _body(
+    position: np.ndarray,
+    velocity: np.ndarray,
+    attitude: AttitudeAugmentedEntity | None = None,
+) -> BodyState:
     return BodyState(
         position_m=_vec3(position),
         velocity_m_s=_vec3(velocity),
-        body_axis=None if body_axis is None else _vec3(body_axis),
+        body_axis=None if attitude is None else _vec3(attitude.body_axis()),
+        body_up=None if attitude is None else _vec3(attitude.body_up()),
     )
 
 
@@ -282,7 +289,7 @@ def build_live_trajectory(
             target=_body(
                     env.target.state.position,
                     env.target.state.velocity,
-                    env.target.body_axis() if maneuver == "cobra" else None,
+                    env.target if maneuver == "cobra" else None,
                 ),
             range_m=float(info["range_m"]),
             pursuer_accel_cmd_m_s2=Vector3(x=0.0, y=0.0, z=0.0),
@@ -318,7 +325,7 @@ def build_live_trajectory(
                 target=_body(
                     env.target.state.position,
                     env.target.state.velocity,
-                    env.target.body_axis() if maneuver == "cobra" else None,
+                    env.target if maneuver == "cobra" else None,
                 ),
                 range_m=float(info["range_m"]),
                 pursuer_accel_cmd_m_s2=_vec3(info["action_commanded_m_s2"]),

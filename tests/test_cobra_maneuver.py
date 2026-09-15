@@ -154,3 +154,15 @@ def test_hold_level_until_trigger_cruises_instead_of_sinking():
     assert maneuver.phase == "armed"
     assert abs(target.state.altitude() - 3_000.0) < 20.0  # lift-less point mass sinks ~490 m
     assert abs(target.state.speed() - 150.0) < 5.0  # throttle trims out drag
+
+
+def test_body_up_is_orthogonal_to_nose_and_rolls_with_bank():
+    target = _cobra_target([150.0, 0.0, 0.0])
+    target.theta, target.psi = np.deg2rad(30.0), np.deg2rad(40.0)
+    level_up = target.body_up()
+    target.phi = np.deg2rad(60.0)
+    banked_up = target.body_up()
+    for up in (level_up, banked_up):
+        assert np.isclose(np.linalg.norm(up), 1.0)
+        assert np.isclose(np.dot(up, target.body_axis()), 0.0)
+    assert np.isclose(np.degrees(np.arccos(np.dot(level_up, banked_up))), 60.0)
