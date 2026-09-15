@@ -89,9 +89,9 @@ CATALOG = CatalogResponse(
             label="Cobra",
             description=(
                 "Tail chase: the interceptor closes from behind on a target "
-                "cruising level at 240 m/s. At 1.5 s time-to-go the target "
-                "cuts throttle and snaps its nose to near-vertical; lift "
-                "zooms it up while drag bleeds airspeed, and the slowed "
+                "cruising level at 240 m/s. At 0.9 s time-to-go the target "
+                "snaps its nose to near-vertical with thrust held; lift and "
+                "thrust zoom it up while drag bleeds airspeed, and the slowed "
                 "interceptor overshoots. It then falls into a banked spiral. "
                 "3-DOF + attitude model, not 6-DOF."
             ),

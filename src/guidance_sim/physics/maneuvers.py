@@ -502,6 +502,7 @@ class CobraManeuver(ManeuverProfile):
         recovery_q_pa: float = 3_000.0,
         recovery_altitude_loss_m: float = 100.0,
         hold_level_until_trigger: bool = False,
+        pitch_up_throttle: Optional[float] = None,
     ):
         if not isinstance(entity, AttitudeAugmentedEntity):
             raise TypeError("CobraManeuver needs an AttitudeAugmentedEntity")
@@ -517,6 +518,10 @@ class CobraManeuver(ManeuverProfile):
         self.recovery_q_pa = float(recovery_q_pa)
         self.recovery_altitude_loss_m = float(recovery_altitude_loss_m)
         self.hold_level_until_trigger = bool(hold_level_until_trigger)
+        # None = stay at idle through the pull (the classic throttle-cut Cobra).
+        # A value keeps thrust on the upturned nose, which adds vertical
+        # displacement to the zoom.
+        self.pitch_up_throttle = pitch_up_throttle
         self.phase = "armed"
         self.phase_history: list[tuple[float, str]] = [(0.0, "armed")]
         self._time_to_go_s: Optional[float] = None
@@ -561,12 +566,14 @@ class CobraManeuver(ManeuverProfile):
                 if not e.attitude_active:
                     e.sync_attitude_to_velocity()
                 e.attitude_active = True
-                e.throttle = self.idle_throttle
+                e.throttle = (
+                    self.idle_throttle if self.pitch_up_throttle is None else float(self.pitch_up_throttle)
+                )
                 e.theta_dot = e.phi_dot = 0.0
                 self._enter(t, "throttle_cut")
             return np.zeros(3)
 
-        if self.phase == "throttle_cut":  # one control tick at idle, then pull
+        if self.phase == "throttle_cut":  # one control tick, then pull
             self._enter(t, "pitch_up")
 
         if self.phase in ("pitch_up", "hang"):

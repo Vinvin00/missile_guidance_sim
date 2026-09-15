@@ -342,16 +342,17 @@ def test_training_endpoint_serves_the_baseline_run_log():
     assert (final["checkpoint"], final["hits"], final["cases"]) == (6, 41, 50)
 
 
-def test_cobra_default_scenario_dodges_classical_pn():
-    """Locks the demo: at catalog defaults the Cobra opens a real miss vs PN."""
+@pytest.mark.parametrize(("guidance_law", "min_miss_m"), [("pn", 10.0), ("rl", 5.0)])
+def test_cobra_default_scenario_dodges(guidance_law, min_miss_m):
+    """Locks the demo: at catalog defaults the Cobra opens a real miss."""
     from guidance_sim.api.catalog import CATALOG
 
     scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
     run = build_live_trajectory(
-        "cobra-evasion", "pn", "cobra-test", scenario.parameter_defaults, seed=1
+        "cobra-evasion", guidance_law, "cobra-test", scenario.parameter_defaults, seed=1
     )
     assert run.outcome != "hit"
-    assert run.closest_approach_m > 10.0
+    assert run.closest_approach_m > min_miss_m
     nose_z = [frame.target.body_axis.z for frame in run.frames]
     assert max(nose_z) > 0.99  # nose reached near-vertical
     assert run.frames[0].target.body_up is not None

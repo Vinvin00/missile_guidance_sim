@@ -80,9 +80,11 @@ _COBRA_TARGET_VEHICLE = VehicleParams(
     max_normal_force_coefficient=1.1,
     max_load_factor=9.0,
 )
-# Late trigger: PN/APN/OGL overshoot for triggers ~0.75-2 s time-to-go at the
-# catalog defaults; earlier triggers give the interceptor time to re-converge.
-_COBRA_TRIGGER_TIME_TO_GO_S = 1.5
+# Late trigger + full thrust through the pull: at catalog defaults this made
+# PN/APN/OGL overshoot 14-17 m every seed; the frozen RL policy overshoots in
+# 21/24 seeds (its 3 hits are at 4.5-5.0 m). Idle-throttle or earlier/later triggers left RL hitting.
+_COBRA_TRIGGER_TIME_TO_GO_S = 0.9
+_COBRA_PITCH_UP_THROTTLE = 1.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -266,6 +268,7 @@ def build_live_trajectory(
             env.target,
             trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
             hold_level_until_trigger=True,
+            pitch_up_throttle=_COBRA_PITCH_UP_THROTTLE,
         )
     if policy is not None:
         # Same wrapper the policy was trained/evaluated behind.

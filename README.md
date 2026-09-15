@@ -183,10 +183,12 @@ alone only bleeds the vehicle to roughly 50–80 m/s.
 
 In the viewer, the **Cobra** scenario is a tail chase over 3 km. The
 target cruises level at 240 m/s on a trim autopilot
-(`hold_level_until_trigger`), then triggers late, at 1.5 s time-to-go. The
-pitch-up zooms it about 200 m while the slowed interceptor overshoots.
-PN, APN, and OGL all miss (20–34 m), but the frozen RL policy still hits.
-At 150 m/s entry, or with a trigger earlier than about 2 s, every law
+(`hold_level_until_trigger`), then triggers late, at 0.9 s time-to-go,
+keeping full thrust through the pull (`pitch_up_throttle=1.0`). PN, APN,
+and OGL miss by 14–17 m in every seed tried. The frozen RL policy misses
+in 21 of 24 seeds (≈88%); the three hits land at 4.5–5.0 m, right at the
+5 m intercept radius. The margin against RL is thin: with idle throttle, or with a
+trigger 0.1 s either side, RL hits some seeds. At 150 m/s entry, every law
 hits. The jet model is oriented by the streamed `body_axis` / `body_up`,
 so the nose-up and the spiral bank are both visible.
 
