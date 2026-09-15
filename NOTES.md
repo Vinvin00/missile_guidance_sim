@@ -1546,3 +1546,22 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - **Open item (deferred):** extend `max_time` so 3g/5g can convert to
   hits — requires its **own from-scratch retrain**; not pursued in this
   promotion pass.
+
+## 2026-09-15 — CobraManeuver (3-DOF + attitude, target only)
+
+- `AttitudeAugmentedEntity(PointMassEntity)`: θ, φ integrated via
+  `integrate_state` (flat-vector RK4, entity supplies `state_derivative`).
+  Inactive → `super().step()` exactly (bit-identical test). Base `integrate`
+  untouched so point-mass numbers can't drift.
+- Thrust along body `cos α v̂ + sin α l̂` (Miele/Vinh point-mass EOM form);
+  below 1 m/s falls back to the (θ, ψ) attitude axis.
+- γ uses horizontal speed *signed along nose heading ψ*; ψ follows velocity
+  heading only when it is within 90°, so a tail slide doesn't flip the nose.
+- **Gotcha:** near-zero hang needs a climbing entry; level entry bottoms
+  out ~50–80 m/s (drag ∝ V² can't finish the job). Tests use a 45–60° zoom.
+- **Gotcha:** `Simulation.run()` never calls `update_engagement`, so TTI
+  triggers (BreakTurn and Cobra) only work in the RL env / direct calls. The
+  engine run falls back to `trigger_time_s`. Pre-existing, not changed here.
+- Max pitch 60°/s, roll 90°/s are generic placeholders (AGENTS.md §3). No
+  open-literature figure was verified.
+- Not verified: frontend/API catalog exposure of Cobra; RL env with a Cobra target.

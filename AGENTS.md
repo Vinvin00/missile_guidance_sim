@@ -42,7 +42,9 @@ missile_guidance_sim/
 - **3D from the ground up.** Axis: `z` up (altitude); gravity
   `[0, 0, -9.80665]` in `dynamics.GRAVITY_VECTOR`.
 - **Point-mass entities** (`State`, `VehicleParams`, `PointMassEntity`).
-  No attitude, quaternions, or angular rates.
+  No attitude, quaternions, or angular rates — except
+  `AttitudeAugmentedEntity` (target-only `CobraManeuver`: rate-commanded
+  θ/φ, thrust along body, post-stall CL/CD; still not 6-DOF).
 - **Forces:** gravity + aerodynamic drag (ISA density → `q = ½ρV²`) +
   lateral accel command. Integration is RK4 (Euler available) over
   `accel_fn(position, velocity)`; command is zero-order-held across

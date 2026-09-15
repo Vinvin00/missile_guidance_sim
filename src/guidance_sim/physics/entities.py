@@ -14,8 +14,16 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from guidance_sim.physics.dynamics import clamp_lateral_command, net_acceleration
-from guidance_sim.physics.integrator import IntegratorType, integrate
+from guidance_sim.physics.dynamics import (
+    MAX_PITCH_RATE_RAD_S,
+    MAX_ROLL_RATE_RAD_S,
+    attitude_net_acceleration,
+    clamp_lateral_command,
+    clamp_rate,
+    flight_path_angle,
+    net_acceleration,
+)
+from guidance_sim.physics.integrator import IntegratorType, integrate, integrate_state
 
 _ZERO3 = np.zeros(3)
 
@@ -139,3 +147,78 @@ class PointMassEntity:
         )
         self.state.position = new_position
         self.state.velocity = new_velocity
+
+
+@dataclass
+class AttitudeAugmentedEntity(PointMassEntity):
+    """
+    3-DOF + attitude (NOT 6-DOF): pitch `theta` and bank `phi` are extra
+    integrated states driven by commanded rates through an idealized
+    rate autopilot -- no moments, inertia, or control surfaces. Thrust
+    acts along the body axis, so it can diverge from velocity.
+
+    While `attitude_active` is False, `step` is exactly the point-mass
+    step (no thrust, same drag/clamp path) and attitude just tracks the
+    velocity vector. Only `CobraManeuver` flips it on.
+    """
+
+    theta: float = 0.0  # pitch, rad
+    phi: float = 0.0  # bank, rad
+    theta_dot: float = 0.0  # commanded pitch rate, rad/s (ZOH per step)
+    phi_dot: float = 0.0  # commanded bank rate, rad/s (ZOH per step)
+    # Nose heading (rad). Idealized zero-sideslip yaw autopilot: follows the
+    # velocity heading, frozen per step and never flipped by a tail slide.
+    psi: float = 0.0
+    max_thrust: float = 0.0  # N
+    throttle: float = 0.0  # 0..1
+    attitude_active: bool = False
+
+    def sync_attitude_to_velocity(self) -> None:
+        v = self.state.velocity
+        if float(np.hypot(v[0], v[1])) > 1.0:
+            self.psi = float(np.arctan2(v[1], v[0]))
+        self.theta = flight_path_angle(v, self.psi)
+        self.phi = 0.0
+
+    def state_derivative(self, y: np.ndarray) -> np.ndarray:
+        """dy/dt for y = [x, y, z, vx, vy, vz, theta, phi]."""
+        accel = attitude_net_acceleration(
+            position=y[0:3],
+            velocity=y[3:6],
+            theta=y[6],
+            phi=y[7],
+            psi=self.psi,
+            thrust=self.throttle * self.max_thrust,
+            reference_area=self.vehicle.reference_area,
+            drag_coefficient=self.vehicle.drag_coefficient,
+            mass=self.vehicle.mass,
+            max_load_factor=self.vehicle.max_load_factor,
+        )
+        return np.concatenate([y[3:6], accel, [self.theta_dot, self.phi_dot]])
+
+    def step(
+        self,
+        dt: float,
+        lateral_accel_cmd: np.ndarray,
+        integrator: IntegratorType = IntegratorType.RK4,
+        autopilot_tau: float = 0.0,
+    ) -> None:
+        if not self.attitude_active:
+            super().step(dt, lateral_accel_cmd, integrator=integrator, autopilot_tau=autopilot_tau)
+            self.sync_attitude_to_velocity()
+            return
+
+        # Attitude mode: lateral_accel_cmd is ignored; forces come from attitude.
+        self.theta_dot = clamp_rate(self.theta_dot, MAX_PITCH_RATE_RAD_S)
+        self.phi_dot = clamp_rate(self.phi_dot, MAX_ROLL_RATE_RAD_S)
+        v = self.state.velocity
+        heading = float(np.arctan2(v[1], v[0]))
+        if float(np.hypot(v[0], v[1])) > 1.0 and np.cos(heading - self.psi) > 0.0:
+            self.psi = heading
+        self.last_achieved_lateral_accel = _ZERO3.copy()
+
+        y = np.concatenate([self.state.position, self.state.velocity, [self.theta, self.phi]])
+        y = integrate_state(y, self.state_derivative, dt, method=integrator)
+        self.state.position = y[0:3].copy()
+        self.state.velocity = y[3:6].copy()
+        self.theta, self.phi = float(y[6]), float(y[7])
