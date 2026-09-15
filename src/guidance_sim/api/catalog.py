@@ -84,6 +84,31 @@ CATALOG = CatalogResponse(
             parameter_defaults={"engagement.target_maneuver_g": 8.0},
             pursuer_g_limit=10.0,
         ),
+        ScenarioOption(
+            id="cobra-evasion",
+            label="Cobra",
+            description=(
+                "Tail chase: the interceptor closes from behind on a target "
+                "cruising level at 240 m/s. At 0.9 s time-to-go the target "
+                "snaps its nose to near-vertical with thrust held; lift and "
+                "thrust zoom it up while drag bleeds airspeed, and the slowed "
+                "interceptor overshoots. It then falls into a banked spiral. "
+                "3-DOF + attitude model, not 6-DOF."
+            ),
+            initial_range_m=3_000.0,
+            altitude_m=3_000.0,
+            duration_s=25.0,
+            parameter_defaults={
+                "engagement.initial_range": 3_000.0,
+                "engagement.lateral_offset": 0.0,
+                "engagement.altitude_delta": 0.0,
+                "engagement.target_heading": 0.0,  # flying away: tail chase
+                "interceptor.speed": 700.0,
+                # Entry speed matters: at 150 m/s the pitch-up has too little
+                # dynamic pressure to zoom, and every law still hits.
+                "target.speed": 240.0,
+            },
+        ),
     ],
     guidance_laws=[
         GuidanceOption(

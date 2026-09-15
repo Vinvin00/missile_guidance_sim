@@ -26,10 +26,17 @@ import numpy as np
 from guidance_sim.ml.policy_inference import FrozenPolicy, get_shared_policy
 from guidance_sim.physics.maneuvers import ConstantTurn, ManeuverProfile, NoManeuver, SinusoidalWeave
 from guidance_sim.rl.actions import action_dimension
-from guidance_sim.rl.environment import InterceptionEnv
+from guidance_sim.rl.environment import InterceptionEnv, TrackingConfig
 from guidance_sim.rl.training import FIXED_EVALUATION_CASES, PPOTrainingConfig
 
 _FIXED_CASES_BY_NAME = {case.name: case for case in FIXED_EVALUATION_CASES}
+# Matches evaluate_policy()/capture_rl_rollout.py's seed convention
+# (seed + case_index) exactly, so a named-case live session reproduces the
+# same sensor-noise/latency draw as the offline capture for that case. This
+# only became observable once tracking (which makes the seed matter -- it
+# drives the stochastic update-rate/latency/noise draw) was enabled for the
+# live path: previously reset() ignoring case_index was silently harmless.
+_FIXED_CASE_INDEX = {case.name: index for index, case in enumerate(FIXED_EVALUATION_CASES)}
 
 
 class LiveGuidanceError(ValueError):
@@ -168,6 +175,7 @@ def start_session(
         raise LiveGuidanceError("pass either case_name or an explicit pursuer/target state, not both")
     if case_name is not None:
         initial_condition_sampler, maneuver_factory = _fixed_case_ingredients(case_name)
+        seed = seed + _FIXED_CASE_INDEX[case_name]
     else:
         if any(field is None for field in custom_fields):
             raise LiveGuidanceError(
@@ -190,6 +198,10 @@ def start_session(
     config = PPOTrainingConfig(
         action_layout=baseline.action_layout,
         use_target_turn_rate_obs=baseline.use_target_turn_rate_obs,
+        # The evasive lineage trained on a 45s budget, not the frozen
+        # lineage's 25s default -- serving under the old default would
+        # truncate genuine in-progress intercepts as spurious timeouts.
+        max_time=baseline.max_time_s,
     ).simulation_config()
     n_action = action_dimension(baseline.action_layout)
 
@@ -199,6 +211,10 @@ def start_session(
         maneuver_factory=maneuver_factory,
         action_layout=baseline.action_layout,
         use_target_turn_rate_obs=baseline.use_target_turn_rate_obs,
+        # Must match the baseline's own training-time obs contract, same
+        # reasoning as live_stream.py's build_live_trajectory -- a mismatch
+        # here is a hard obs-shape crash, not a silent degradation.
+        tracking=TrackingConfig(enabled=baseline.tracking_enabled),
     )
     env = gym.wrappers.RescaleAction(
         physical_env,

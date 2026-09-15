@@ -168,6 +168,42 @@ Swap `loadTrajectoryLog()`, `loadTrialSet()`, or `loadTrainingLog()` when a
 real RL episode log exists. Do not treat overlay colors or dashboard
 curves as trained-policy results.
 
+### Cobra evasion: 3-DOF + attitude (target only)
+
+`CobraManeuver` (post-stall pitch-up → hang → spiral → recovery) runs on
+a **3-DOF + attitude** model. It is **not 6-DOF**: pitch θ and bank φ
+are extra integrated states driven by an idealized rate autopilot
+(clamped pitch/roll rates). There are no moments, no inertia tensor, no
+control surfaces, and no quaternions. Thrust acts along the body axis,
+and lift/drag come from a sigmoid-blended linear → flat-plate CL/CD(α)
+curve with α = θ − γ. The hang and the fall come from the force balance
+(q → 0 kills aero, gravity stays). Nothing about them is scripted.
+Near-zero airspeed needs a climbing entry. From level flight, drag
+alone only bleeds the vehicle to roughly 50–80 m/s.
+
+In the viewer, the **Cobra** scenario is a tail chase over 3 km. The
+target cruises level at 240 m/s on a trim autopilot
+(`hold_level_until_trigger`), then triggers late, at 0.9 s time-to-go,
+keeping full thrust through the pull (`pitch_up_throttle=1.0`). PN, APN,
+and OGL miss by 14–17 m in every seed tried. The frozen RL policy misses
+in 21 of 24 seeds (≈88%); the three hits land at 4.5–5.0 m, right at the
+5 m intercept radius. The margin against RL is thin: with idle throttle, or with a
+trigger 0.1 s either side, RL hits some seeds. At 150 m/s entry, every law
+hits. The jet model is oriented by the streamed `body_axis` / `body_up`,
+so the nose-up and the spiral bank are both visible.
+
+Touches: `physics/aerodynamics.py` (`post_stall_coefficients`),
+`physics/dynamics.py` (`attitude_net_acceleration`, rate clamps),
+`physics/integrator.py` (`integrate_state`, generic flat-vector RK4),
+`physics/entities.py` (`AttitudeAugmentedEntity`),
+`physics/maneuvers.py` (`CobraManeuver`), `tests/test_cobra_maneuver.py`.
+
+Isolation: the interceptor and all other maneuvers still use the
+unchanged `PointMassEntity` path. An inactive `AttitudeAugmentedEntity`
+matches it bit for bit (tested). The engine, guidance interface, RL
+action/observation space, and the `feature/rl-training` branch are
+untouched.
+
 ### Possible later extension (not started)
 
 Right now vehicles are 3-DOF point masses with instantaneously-achieved

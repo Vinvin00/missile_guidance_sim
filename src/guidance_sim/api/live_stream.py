@@ -36,8 +36,9 @@ from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.guidance.optimal_guidance import OptimalGuidance
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.atmosphere import G0
-from guidance_sim.physics.entities import State
+from guidance_sim.physics.entities import AttitudeAugmentedEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import (
+    CobraManeuver,
     ConstantTurn,
     ManeuverProfile,
     NoManeuver,
@@ -48,7 +49,11 @@ from guidance_sim.rl.actions import (
     action_dimension,
     world_to_lateral,
 )
-from guidance_sim.rl.environment import InterceptionEnv, _default_pursuer_vehicle
+from guidance_sim.rl.environment import (
+    InterceptionEnv,
+    TrackingConfig,
+    _default_pursuer_vehicle,
+)
 from guidance_sim.rl.training import PPOTrainingConfig
 
 _PN_N = 4.0
@@ -63,7 +68,23 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
     "head-on-intercept": "constant_turn",
     "evasive-climb": "weave",
     "g-limited-turn": "constant_turn",
+    "cobra-evasion": "cobra",
 }
+_COBRA_THRUST_TO_WEIGHT = 1.1  # generic fighter-class value
+# The env's default target is a 40 kg drone; a Cobra needs the catalog's
+# fighter-class Target B airframe (post-stall drag bleed scales with S/m).
+_COBRA_TARGET_VEHICLE = VehicleParams(
+    mass=9_100.0,
+    reference_area=45.0,
+    drag_coefficient=0.035,
+    max_normal_force_coefficient=1.1,
+    max_load_factor=9.0,
+)
+# Late trigger + full thrust through the pull: at catalog defaults this made
+# PN/APN/OGL overshoot 14-17 m every seed; the frozen RL policy overshoots in
+# 21/24 seeds (its 3 hits are at 4.5-5.0 m). Idle-throttle or earlier/later triggers left RL hitting.
+_COBRA_TRIGGER_TIME_TO_GO_S = 0.9
+_COBRA_PITCH_UP_THROTTLE = 1.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -87,8 +108,17 @@ def _vec3(values: np.ndarray) -> Vector3:
     return Vector3(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
 
-def _body(position: np.ndarray, velocity: np.ndarray) -> BodyState:
-    return BodyState(position_m=_vec3(position), velocity_m_s=_vec3(velocity))
+def _body(
+    position: np.ndarray,
+    velocity: np.ndarray,
+    attitude: AttitudeAugmentedEntity | None = None,
+) -> BodyState:
+    return BodyState(
+        position_m=_vec3(position),
+        velocity_m_s=_vec3(velocity),
+        body_axis=None if attitude is None else _vec3(attitude.body_axis()),
+        body_up=None if attitude is None else _vec3(attitude.body_up()),
+    )
 
 
 def _initial_condition_sampler(params: dict[str, float]):
@@ -128,7 +158,9 @@ def _initial_condition_sampler(params: dict[str, float]):
 
 def _maneuver_factory(kind: str, maneuver_g: float):
     def make(rng: np.random.Generator) -> ManeuverProfile:
-        if kind == "none":
+        if kind in ("none", "cobra"):
+            # Cobra needs the target entity, which the env builds after this
+            # factory runs; build_live_trajectory swaps it in after reset.
             return NoManeuver()
         magnitude_m_s2 = maneuver_g * G0
         if kind == "constant_turn":
@@ -182,14 +214,28 @@ def build_live_trajectory(
     policy = None
     use_turn_rate_obs = False
     action_layout = ACTION_LAYOUT_LATERAL2
+    tracking = TrackingConfig()
+    max_time_s = PPOTrainingConfig().max_time
     if guidance_law == "rl":
         from guidance_sim.ml.policy_inference import get_shared_policy
 
         policy = get_shared_policy()
         use_turn_rate_obs = policy.baseline.use_target_turn_rate_obs
         action_layout = policy.baseline.action_layout
+        # Must match the baseline's own training-time obs contract exactly
+        # (TrackingConfig(enabled=True)'s other fields are already the
+        # lineage defaults evasive_redesign_config trained against) -- a
+        # tracking-enabled baseline fed an env built with tracking off (or
+        # vice versa) is a hard obs-shape crash, not a silent degradation.
+        tracking = TrackingConfig(enabled=policy.baseline.tracking_enabled)
+        # The evasive lineage trained on a 45s budget, not the frozen
+        # lineage's 25s default -- serving it under the old default would
+        # truncate genuine in-progress intercepts as spurious timeouts.
+        # Classical guidance laws below are unaffected (max_time_s only
+        # changes inside this `if guidance_law == "rl"` branch).
+        max_time_s = policy.baseline.max_time_s
 
-    config = PPOTrainingConfig().simulation_config()
+    config = replace(PPOTrainingConfig().simulation_config(), max_time=max_time_s)
     env = InterceptionEnv(
         config=config,
         initial_condition_sampler=_initial_condition_sampler(applied_parameters),
@@ -198,6 +244,8 @@ def build_live_trajectory(
         ),
         action_layout=action_layout,
         use_target_turn_rate_obs=use_turn_rate_obs,
+        tracking=tracking,
+        target_vehicle=_COBRA_TARGET_VEHICLE if maneuver == "cobra" else None,
         pursuer_vehicle=(
             replace(_default_pursuer_vehicle(), max_load_factor=g_limit)
             if (g_limit := _SCENARIO_PURSUER_G_LIMIT.get(scenario_id))
@@ -208,6 +256,20 @@ def build_live_trajectory(
         seed = int(np.random.SeedSequence().generate_state(1)[0])
     observation, info = env.reset(seed=seed)
     assert env.pursuer is not None and env.target is not None
+    if maneuver == "cobra":
+        # Same state/vehicle, attitude-capable entity; env and obs untouched.
+        env.target = AttitudeAugmentedEntity(
+            name=env.target.name,
+            state=env.target.state,
+            vehicle=env.target.vehicle,
+            max_thrust=_COBRA_THRUST_TO_WEIGHT * env.target.vehicle.mass * G0,
+        )
+        env.target_maneuver = CobraManeuver(
+            env.target,
+            trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
+            hold_level_until_trigger=True,
+            pitch_up_throttle=_COBRA_PITCH_UP_THROTTLE,
+        )
     if policy is not None:
         # Same wrapper the policy was trained/evaluated behind.
         stepper = gym.wrappers.RescaleAction(
@@ -227,7 +289,11 @@ def build_live_trajectory(
             sequence=0,
             time_s=0.0,
             pursuer=_body(env.pursuer.state.position, env.pursuer.state.velocity),
-            target=_body(env.target.state.position, env.target.state.velocity),
+            target=_body(
+                    env.target.state.position,
+                    env.target.state.velocity,
+                    env.target if maneuver == "cobra" else None,
+                ),
             range_m=float(info["range_m"]),
             pursuer_accel_cmd_m_s2=Vector3(x=0.0, y=0.0, z=0.0),
             pursuer_accel_achieved_m_s2=Vector3(x=0.0, y=0.0, z=0.0),
@@ -259,7 +325,11 @@ def build_live_trajectory(
                 sequence=len(frames),
                 time_s=float(info["time_s"]),
                 pursuer=_body(env.pursuer.state.position, env.pursuer.state.velocity),
-                target=_body(env.target.state.position, env.target.state.velocity),
+                target=_body(
+                    env.target.state.position,
+                    env.target.state.velocity,
+                    env.target if maneuver == "cobra" else None,
+                ),
                 range_m=float(info["range_m"]),
                 pursuer_accel_cmd_m_s2=_vec3(info["action_commanded_m_s2"]),
                 pursuer_accel_achieved_m_s2=_vec3(info["action_achieved_m_s2"]),

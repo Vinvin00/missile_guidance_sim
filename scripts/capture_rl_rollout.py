@@ -23,7 +23,7 @@ import numpy as np
 from sb3_contrib import RecurrentPPO
 
 from guidance_sim.rl.actions import ACTION_LAYOUT_LATERAL2, action_dimension
-from guidance_sim.rl.environment import InterceptionEnv
+from guidance_sim.rl.environment import InterceptionEnv, TrackingConfig
 from guidance_sim.rl.training import (
     FIXED_EVALUATION_CASES,
     PPOTrainingConfig,
@@ -57,6 +57,8 @@ def capture_case(
     case_name: str,
     model_path: Path,
     use_target_turn_rate_obs: bool,
+    tracking_enabled: bool,
+    max_time_s: float,
     action_layout: str,
     seed: int,
 ) -> dict[str, Any]:
@@ -67,6 +69,7 @@ def capture_case(
     config = PPOTrainingConfig(
         action_layout=action_layout,  # type: ignore[arg-type]
         use_target_turn_rate_obs=use_target_turn_rate_obs,
+        max_time=max_time_s,
     ).simulation_config()
     n_action = action_dimension(action_layout)  # type: ignore[arg-type]
 
@@ -76,6 +79,7 @@ def capture_case(
         maneuver_factory=_case_maneuver(case),
         action_layout=action_layout,  # type: ignore[arg-type]
         use_target_turn_rate_obs=use_target_turn_rate_obs,
+        tracking=TrackingConfig(enabled=tracking_enabled),
     )
     env = gym.wrappers.RescaleAction(
         physical_env,
@@ -191,6 +195,8 @@ def main() -> None:
         case_name=args.case,
         model_path=model_path,
         use_target_turn_rate_obs=bool(baseline["use_target_turn_rate_obs"]),
+        tracking_enabled=bool(baseline.get("tracking_enabled", False)),
+        max_time_s=float(baseline.get("max_time_s", 25.0)),
         action_layout=str(baseline.get("action_layout", ACTION_LAYOUT_LATERAL2)),
         seed=91_000,
     )
@@ -200,6 +206,7 @@ def main() -> None:
         "branch_name": baseline.get("branch_name"),
         "observation_dim": baseline.get("observation_dim"),
         "use_target_turn_rate_obs": baseline.get("use_target_turn_rate_obs"),
+        "tracking_enabled": baseline.get("tracking_enabled", False),
         "cumulative_timesteps": baseline.get("cumulative_timesteps"),
     }
 

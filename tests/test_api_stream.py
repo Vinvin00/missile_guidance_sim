@@ -25,6 +25,7 @@ def test_catalog_exposes_generic_grounded_profiles():
         "ConstantTurn",
         "SinusoidalWeave",
         "ConstantTurn vs 10 g",
+        "Cobra",
     ]
     assert [profile["name"] for profile in catalog["vehicle_profiles"]] == [
         "Interceptor A",
@@ -220,6 +221,7 @@ def test_live_speed_overrides_reshape_the_trajectory():
         ("head-on-intercept", "constant_turn"),
         ("evasive-climb", "weave"),
         ("g-limited-turn", "constant_turn"),
+        ("cobra-evasion", "cobra"),
     ],
 )
 @pytest.mark.parametrize("guidance_law", ["pn", "apn", "ogl", "rl"])
@@ -327,12 +329,30 @@ def test_g_limited_turn_scenario_pn_misses_augmented_laws_hit():
 
 
 def test_training_endpoint_serves_the_baseline_run_log():
+    """Promoted 2026-09-14: evasive_zemtgo10_seed3, CP1-CP6."""
+
     body = TestClient(app).get("/api/training").json()
 
     assert body["source"] == "training-run"
-    assert body["branch_name"] == "observation_target_turn_rate"
-    assert len(body["episodes"]) == 80
-    assert [e["episode"] for e in body["episodes"]] == list(range(1, 81))
-    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5}
+    assert body["branch_name"] == "evasive_zemtgo10_seed3"
+    assert len(body["episodes"]) == 703
+    assert [e["episode"] for e in body["episodes"]] == list(range(1, 704))
+    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5, 6}
     final = body["checkpoints"][-1]
-    assert (final["checkpoint"], final["hits"], final["cases"]) == (5, 5, 9)
+    assert (final["checkpoint"], final["hits"], final["cases"]) == (6, 41, 50)
+
+
+@pytest.mark.parametrize(("guidance_law", "min_miss_m"), [("pn", 10.0), ("rl", 5.0)])
+def test_cobra_default_scenario_dodges(guidance_law, min_miss_m):
+    """Locks the demo: at catalog defaults the Cobra opens a real miss."""
+    from guidance_sim.api.catalog import CATALOG
+
+    scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
+    run = build_live_trajectory(
+        "cobra-evasion", guidance_law, "cobra-test", scenario.parameter_defaults, seed=1
+    )
+    assert run.outcome != "hit"
+    assert run.closest_approach_m > min_miss_m
+    nose_z = [frame.target.body_axis.z for frame in run.frames]
+    assert max(nose_z) > 0.99  # nose reached near-vertical
+    assert run.frames[0].target.body_up is not None
