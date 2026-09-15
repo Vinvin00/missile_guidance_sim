@@ -17,8 +17,8 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from guidance_sim.physics.atmosphere import isa_density
-from guidance_sim.physics.aerodynamics import dynamic_pressure
+from guidance_sim.physics.atmosphere import G0, isa_density
+from guidance_sim.physics.aerodynamics import CL_ALPHA_PER_RAD, dynamic_pressure, post_stall_coefficients
 from guidance_sim.physics.dynamics import flight_path_angle
 from guidance_sim.physics.entities import AttitudeAugmentedEntity, State
 
@@ -470,6 +470,10 @@ class CobraManeuver(ManeuverProfile):
     balance in `attitude_net_acceleration` (thrust along the body, aero
     collapsing with q, gravity unchanged).
 
+    `hold_level_until_trigger` flies the armed phase in attitude mode with a
+    trim autopilot (alpha for lift = weight, throttle for thrust = drag) so
+    the target cruises level instead of sinking as a lift-less point mass.
+
     Phases: armed -> throttle_cut -> pitch_up -> hang -> spiral -> recovered.
     `hang` is telemetry only (airspeed < `hang_speed_m_s`) and may be skipped
     if the vehicle starts falling before bleeding that far. `recovered` hands
@@ -497,6 +501,7 @@ class CobraManeuver(ManeuverProfile):
         spiral_throttle: float = 0.5,
         recovery_q_pa: float = 3_000.0,
         recovery_altitude_loss_m: float = 100.0,
+        hold_level_until_trigger: bool = False,
     ):
         if not isinstance(entity, AttitudeAugmentedEntity):
             raise TypeError("CobraManeuver needs an AttitudeAugmentedEntity")
@@ -511,6 +516,7 @@ class CobraManeuver(ManeuverProfile):
         self.spiral_throttle = float(spiral_throttle)
         self.recovery_q_pa = float(recovery_q_pa)
         self.recovery_altitude_loss_m = float(recovery_altitude_loss_m)
+        self.hold_level_until_trigger = bool(hold_level_until_trigger)
         self.phase = "armed"
         self.phase_history: list[tuple[float, str]] = [(0.0, "armed")]
         self._time_to_go_s: Optional[float] = None
@@ -523,6 +529,25 @@ class CobraManeuver(ManeuverProfile):
         self.phase = phase
         self.phase_history.append((t, phase))
 
+    def _hold_level(self, state: State) -> None:
+        e = self.entity
+        if not e.attitude_active:
+            e.sync_attitude_to_velocity()
+            e.attitude_active = True
+        q = dynamic_pressure(isa_density(state.altitude()), state.speed())
+        if q < 1.0:
+            return
+        gamma = flight_path_angle(state.velocity, e.psi)
+        v = e.vehicle
+        cl_trim = v.mass * G0 * np.cos(gamma) / (q * v.reference_area)
+        # Trim alpha plus flight-path-angle feedback (pull up when sinking).
+        alpha = float(np.clip(cl_trim / CL_ALPHA_PER_RAD - gamma, -np.deg2rad(10.0), np.deg2rad(10.0)))
+        e.theta_dot = self._GAIN * (gamma + alpha - e.theta)
+        e.phi_dot = self._GAIN * (0.0 - e.phi)
+        _cl, cd = post_stall_coefficients(alpha, v.drag_coefficient)
+        drag = q * v.reference_area * cd
+        e.throttle = float(np.clip(drag / (e.max_thrust * np.cos(alpha)), 0.0, 1.0)) if e.max_thrust > 0 else 0.0
+
     def lateral_accel(self, t: float, state: State) -> np.ndarray:
         e = self.entity
         if self.phase == "armed":
@@ -530,8 +555,11 @@ class CobraManeuver(ManeuverProfile):
                 triggered = self._time_to_go_s <= self.trigger_time_to_go_s
             else:
                 triggered = t >= self.trigger_time_s
+            if not triggered and self.hold_level_until_trigger:
+                self._hold_level(state)
             if triggered:
-                e.sync_attitude_to_velocity()
+                if not e.attitude_active:
+                    e.sync_attitude_to_velocity()
                 e.attitude_active = True
                 e.throttle = self.idle_throttle
                 e.theta_dot = e.phi_dot = 0.0

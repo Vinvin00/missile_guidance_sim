@@ -32,6 +32,8 @@ class Vector3(StrictModel):
 class BodyState(StrictModel):
     position_m: Vector3
     velocity_m_s: Vector3
+    # Nose direction when it differs from velocity (attitude-capable targets).
+    body_axis: Vector3 | None = None
 
 
 class ParameterValue(StrictModel):

@@ -181,6 +181,11 @@ curve with α = θ − γ. The hang and the fall come from the force balance
 Near-zero airspeed needs a climbing entry. From level flight, drag
 alone only bleeds the vehicle to roughly 50–80 m/s.
 
+In the viewer, the **Cobra** scenario is a tail chase. The target
+cruises level on a trim autopilot (`hold_level_until_trigger`), then
+triggers at 8 s time-to-go. The jet model is oriented by the streamed
+`body_axis`, not by velocity, so the nose-up is visible.
+
 Touches: `physics/aerodynamics.py` (`post_stall_coefficients`),
 `physics/dynamics.py` (`attitude_net_acceleration`, rate clamps),
 `physics/integrator.py` (`integrate_state`, generic flat-vector RK4),

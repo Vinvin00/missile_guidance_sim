@@ -180,6 +180,14 @@ class AttitudeAugmentedEntity(PointMassEntity):
         self.theta = flight_path_angle(v, self.psi)
         self.phi = 0.0
 
+    def body_axis(self) -> np.ndarray:
+        """Unit nose direction from (theta, psi), world frame."""
+        return np.array([
+            np.cos(self.theta) * np.cos(self.psi),
+            np.cos(self.theta) * np.sin(self.psi),
+            np.sin(self.theta),
+        ])
+
     def state_derivative(self, y: np.ndarray) -> np.ndarray:
         """dy/dt for y = [x, y, z, vx, vy, vz, theta, phi]."""
         accel = attitude_net_acceleration(

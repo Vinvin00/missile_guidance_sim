@@ -181,7 +181,7 @@ function SequentialTrialPlayback({ origin }) {
         forward={JET_FORWARD}
         scale={JET_SCALE}
         position={targetPosition}
-        heading={toSceneVector(current.target.velocity_m_s)}
+        heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
       />
     </group>
   )
@@ -283,7 +283,7 @@ function Trajectories() {
         forward={JET_FORWARD}
         scale={JET_SCALE}
         position={targetPosition}
-        heading={toSceneVector(current.target.velocity_m_s)}
+        heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
       />
       <VehicleLabel position={targetPosition} color="#ff5238">
         TARGET

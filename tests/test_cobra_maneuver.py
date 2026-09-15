@@ -143,3 +143,14 @@ def test_cobra_runs_all_phases_to_recovery_through_simulation():
     assert maneuver.phase == "recovered"
     assert maneuver.phase_history[-1][0] < max_time
     assert not target.attitude_active  # handed back to point-mass flight
+
+
+def test_hold_level_until_trigger_cruises_instead_of_sinking():
+    target = _cobra_target([150.0, 0.0, 0.0])
+    maneuver = CobraManeuver(target, trigger_time_s=1e9, hold_level_until_trigger=True)
+    for step in range(1_000):  # 10 s
+        maneuver.lateral_accel(step * _DT, target.state)
+        target.step(_DT, np.zeros(3))
+    assert maneuver.phase == "armed"
+    assert abs(target.state.altitude() - 3_000.0) < 20.0  # lift-less point mass sinks ~490 m
+    assert abs(target.state.speed() - 150.0) < 5.0  # throttle trims out drag

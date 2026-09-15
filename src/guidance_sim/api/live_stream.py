@@ -80,7 +80,7 @@ _COBRA_TARGET_VEHICLE = VehicleParams(
     max_normal_force_coefficient=1.1,
     max_load_factor=9.0,
 )
-_COBRA_TRIGGER_TIME_TO_GO_S = 4.0
+_COBRA_TRIGGER_TIME_TO_GO_S = 8.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -104,8 +104,12 @@ def _vec3(values: np.ndarray) -> Vector3:
     return Vector3(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
 
-def _body(position: np.ndarray, velocity: np.ndarray) -> BodyState:
-    return BodyState(position_m=_vec3(position), velocity_m_s=_vec3(velocity))
+def _body(position: np.ndarray, velocity: np.ndarray, body_axis=None) -> BodyState:
+    return BodyState(
+        position_m=_vec3(position),
+        velocity_m_s=_vec3(velocity),
+        body_axis=None if body_axis is None else _vec3(body_axis),
+    )
 
 
 def _initial_condition_sampler(params: dict[str, float]):
@@ -252,7 +256,9 @@ def build_live_trajectory(
             max_thrust=_COBRA_THRUST_TO_WEIGHT * env.target.vehicle.mass * G0,
         )
         env.target_maneuver = CobraManeuver(
-            env.target, trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S
+            env.target,
+            trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
+            hold_level_until_trigger=True,
         )
     if policy is not None:
         # Same wrapper the policy was trained/evaluated behind.
@@ -273,7 +279,11 @@ def build_live_trajectory(
             sequence=0,
             time_s=0.0,
             pursuer=_body(env.pursuer.state.position, env.pursuer.state.velocity),
-            target=_body(env.target.state.position, env.target.state.velocity),
+            target=_body(
+                    env.target.state.position,
+                    env.target.state.velocity,
+                    env.target.body_axis() if maneuver == "cobra" else None,
+                ),
             range_m=float(info["range_m"]),
             pursuer_accel_cmd_m_s2=Vector3(x=0.0, y=0.0, z=0.0),
             pursuer_accel_achieved_m_s2=Vector3(x=0.0, y=0.0, z=0.0),
@@ -305,7 +315,11 @@ def build_live_trajectory(
                 sequence=len(frames),
                 time_s=float(info["time_s"]),
                 pursuer=_body(env.pursuer.state.position, env.pursuer.state.velocity),
-                target=_body(env.target.state.position, env.target.state.velocity),
+                target=_body(
+                    env.target.state.position,
+                    env.target.state.velocity,
+                    env.target.body_axis() if maneuver == "cobra" else None,
+                ),
                 range_m=float(info["range_m"]),
                 pursuer_accel_cmd_m_s2=_vec3(info["action_commanded_m_s2"]),
                 pursuer_accel_achieved_m_s2=_vec3(info["action_achieved_m_s2"]),
