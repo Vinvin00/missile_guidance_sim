@@ -25,6 +25,7 @@ def test_catalog_exposes_generic_grounded_profiles():
         "ConstantTurn",
         "SinusoidalWeave",
         "ConstantTurn vs 10 g",
+        "Cobra",
     ]
     assert [profile["name"] for profile in catalog["vehicle_profiles"]] == [
         "Interceptor A",
@@ -220,6 +221,7 @@ def test_live_speed_overrides_reshape_the_trajectory():
         ("head-on-intercept", "constant_turn"),
         ("evasive-climb", "weave"),
         ("g-limited-turn", "constant_turn"),
+        ("cobra-evasion", "cobra"),
     ],
 )
 @pytest.mark.parametrize("guidance_law", ["pn", "apn", "ogl", "rl"])

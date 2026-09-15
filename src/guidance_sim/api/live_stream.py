@@ -36,8 +36,9 @@ from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.guidance.optimal_guidance import OptimalGuidance
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.atmosphere import G0
-from guidance_sim.physics.entities import State
+from guidance_sim.physics.entities import AttitudeAugmentedEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import (
+    CobraManeuver,
     ConstantTurn,
     ManeuverProfile,
     NoManeuver,
@@ -67,7 +68,19 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
     "head-on-intercept": "constant_turn",
     "evasive-climb": "weave",
     "g-limited-turn": "constant_turn",
+    "cobra-evasion": "cobra",
 }
+_COBRA_THRUST_TO_WEIGHT = 1.1  # generic fighter-class value
+# The env's default target is a 40 kg drone; a Cobra needs the catalog's
+# fighter-class Target B airframe (post-stall drag bleed scales with S/m).
+_COBRA_TARGET_VEHICLE = VehicleParams(
+    mass=9_100.0,
+    reference_area=45.0,
+    drag_coefficient=0.035,
+    max_normal_force_coefficient=1.1,
+    max_load_factor=9.0,
+)
+_COBRA_TRIGGER_TIME_TO_GO_S = 4.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -132,7 +145,9 @@ def _initial_condition_sampler(params: dict[str, float]):
 
 def _maneuver_factory(kind: str, maneuver_g: float):
     def make(rng: np.random.Generator) -> ManeuverProfile:
-        if kind == "none":
+        if kind in ("none", "cobra"):
+            # Cobra needs the target entity, which the env builds after this
+            # factory runs; build_live_trajectory swaps it in after reset.
             return NoManeuver()
         magnitude_m_s2 = maneuver_g * G0
         if kind == "constant_turn":
@@ -217,6 +232,7 @@ def build_live_trajectory(
         action_layout=action_layout,
         use_target_turn_rate_obs=use_turn_rate_obs,
         tracking=tracking,
+        target_vehicle=_COBRA_TARGET_VEHICLE if maneuver == "cobra" else None,
         pursuer_vehicle=(
             replace(_default_pursuer_vehicle(), max_load_factor=g_limit)
             if (g_limit := _SCENARIO_PURSUER_G_LIMIT.get(scenario_id))
@@ -227,6 +243,17 @@ def build_live_trajectory(
         seed = int(np.random.SeedSequence().generate_state(1)[0])
     observation, info = env.reset(seed=seed)
     assert env.pursuer is not None and env.target is not None
+    if maneuver == "cobra":
+        # Same state/vehicle, attitude-capable entity; env and obs untouched.
+        env.target = AttitudeAugmentedEntity(
+            name=env.target.name,
+            state=env.target.state,
+            vehicle=env.target.vehicle,
+            max_thrust=_COBRA_THRUST_TO_WEIGHT * env.target.vehicle.mass * G0,
+        )
+        env.target_maneuver = CobraManeuver(
+            env.target, trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S
+        )
     if policy is not None:
         # Same wrapper the policy was trained/evaluated behind.
         stepper = gym.wrappers.RescaleAction(

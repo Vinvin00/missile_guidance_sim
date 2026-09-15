@@ -11,6 +11,7 @@ ScenarioId = Literal[
     "head-on-intercept",
     "evasive-climb",
     "g-limited-turn",
+    "cobra-evasion",
 ]
 GuidanceLawId = Literal["pn", "apn", "ogl", "rl"]
 DataSource = Literal["synthetic", "rollout"]

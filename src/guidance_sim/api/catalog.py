@@ -84,6 +84,20 @@ CATALOG = CatalogResponse(
             parameter_defaults={"engagement.target_maneuver_g": 8.0},
             pursuer_g_limit=10.0,
         ),
+        ScenarioOption(
+            id="cobra-evasion",
+            label="Cobra",
+            description=(
+                "Post-stall Cobra evasion: at ~4 s time-to-go the target cuts "
+                "throttle and pitches to near-vertical, bleeding airspeed "
+                "through drag, then falls into a banked spiral. 3-DOF + "
+                "attitude model, not 6-DOF."
+            ),
+            initial_range_m=7_000.0,
+            altitude_m=3_300.0,
+            duration_s=12.0,
+            parameter_defaults={"target.speed": 150.0},
+        ),
     ],
     guidance_laws=[
         GuidanceOption(
