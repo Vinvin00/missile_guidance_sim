@@ -227,15 +227,31 @@ narrative.
 | Fighter target `F16_6DOF` | Mass, S, b, c̄, Ixx/Iyy/Izz/Ixz; CYβ, CYδr, CZδe; damping Clp/Cmq/Cnr at α=0; surface limits, rates and actuator lag. All from Stevens & Lewis, *Aircraft Control and Simulation*, and NASA TP-1538. F100-PW-229 max thrust. | Cmα (from an assumed CG shift), Cmδe (assumed tail arm), Clβ, Cnβ, Clδa, Clδr, Cnδr (order-of-magnitude), stall/CD0/Cn_max, all TVC figures (no stock F-16 TVC), engine gyro effects ignored. Aero digits were transcribed from memory of the textbook: verify before quoting. |
 | Interceptor `INTERCEPTOR_6DOF` | None, by design (AGENTS.md §3: no real missile data). | Inertia from solid-cylinder formulas on the existing generic 50 kg airframe with an assumed 2.5 m length. CNα, static margin, fin effectiveness and Cmq from slender-body/fin estimates. Actuator figures placed in typical published ranges. |
 
-**RL impact:** the action/observation contract did not change
-(frozen in [`docs/rl-interface-6dof.md`](docs/rl-interface-6dof.md)).
-Retraining should be a warm-start **fine-tune**, not a from-scratch
-retrain. Expect distribution shift from the emergent lag, induced drag
-and achieved-accel saturation. The frozen checkpoint has not been
-evaluated on the 6-DOF plant yet. `InterceptionEnv` still builds point
-masses until `feature/rl-training` makes the swap, and exposing attitude
-or body rates to the policy would be a breaking change requiring a full
-retrain. Plan for ~20× env step cost.
+**RL impact (measured):** the action/observation contract did not
+change (frozen in [`docs/rl-interface-6dof.md`](docs/rl-interface-6dof.md)),
+so the current checkpoint loads and runs. But it **does not transfer**.
+Zero-shot on the 300-case held-out evasive set it scores **0/300** on the
+6-DOF interceptor, against 242/300 on the point mass. Classical PN with
+the same estimator scores 227/300 on 6-DOF (218 on the point mass).
+
+| Guidance | Plant | Hits (n=300) | Median miss | p90 miss | bounded_weave | break_turn | random_jink | vertical_jink |
+|---|---|---|---|---|---|---|---|---|
+| RL CP6 (frozen) | point mass | **242** (80.7%) | 4.2 m | 6.6 m | 59 | 51 | 62 | 70 |
+| RL CP6 (frozen) | 6-DOF | **0** (0%) | 913 m | 2,350 m | 0 | 0 | 0 | 0 |
+| PN N=4 (same estimator) | point mass | 218 (72.7%) | 4.0 m | 40 m | 69 | 41 | 41 | 67 |
+| PN N=4 (same estimator) | 6-DOF | 227 (75.7%) | 3.9 m | 321 m | 74 | 20 | 64 | 69 |
+
+Per-maneuver columns are hits out of 75. Point-mass rows reproduce the published
+`outputs/evasive_largeeval_300/` numbers exactly (242 and 218), so the harness is
+the same. Raw data: `outputs/6dof_transfer/`, `scripts/eval_6dof_transfer.py`.
+
+The cause is the policy's ~14 g RMS bang-bang command habit. It was free
+on the point mass: lag-filtered, no induced drag. On the rigid body it
+bleeds the missile from 350 to ~50 m/s. With induced drag ablated it
+recovers to 13/20. Plan a warm-started retrain with an energy/jitter
+cost, not a light fine-tune. Details and recommendations are in the
+spec. Exposing attitude or body rates to the policy would additionally
+break the observation shape. Env step cost rises ~20×.
 
 ## Results (to be filled in as phases complete)
 

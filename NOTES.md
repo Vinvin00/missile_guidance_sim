@@ -1596,3 +1596,19 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   schema); `scripts/validate_physics.py` envelopes with 6-DOF; Mach effects,
   engine gyro, thrust lapse (none modelled). Root-level `../AGENTS.md` is
   not synced (outside the repo); sync it at merge.
+
+## 2026-09-15 — Zero-shot transfer of RL CP6 to the 6-DOF interceptor
+
+- `scripts/eval_6dof_transfer.py`: swaps the pursuer after `InterceptionEnv.reset`
+  (no env edits). Point-mass reruns reproduce published 242/300 and 218/300 exactly.
+- RL CP6: **0/300** on 6-DOF (median miss 913 m). PN: 227/300 on 6-DOF (vs 218 point mass).
+- Root cause: the policy's command RMS is ~140 m/s², against PN's ~45. The τ=0.2 lag
+  hid the jitter (achieved RMS ~62), and point-mass g had no drag cost.
+  Ablation over 20 cases: 6-DOF 0/20 → 13/20 with k_induced = 0.
+- Secondary: α overshoot to 28–35° on full-scale reversals (autopilot, my side,
+  not fixed yet). `lateral_basis` pole when a drained missile falls vertical
+  (RL branch).
+- The spec's original "light fine-tune" prediction was wrong. It has been
+  corrected in docs/rl-interface-6dof.md.
+- Gotcha: 0/20 at n=20 was already conclusive. The 300-case run was for the
+  PN reference and per-maneuver breakdown.
