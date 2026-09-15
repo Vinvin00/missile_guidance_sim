@@ -1565,3 +1565,34 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - Max pitch 60°/s, roll 90°/s are generic placeholders (AGENTS.md §3). No
   open-literature figure was verified.
 - Not verified: frontend/API catalog exposure of Cobra; RL env with a Cobra target.
+
+## 2026-09-15 — 6-DOF rigid-body core (`feature/6dof-rigid-body`)
+
+- Interface frozen first: `docs/rl-interface-6dof.md`. The action/obs contract
+  is unchanged, so this is a fine-tune. `InterceptionEnv` was deliberately not
+  touched (owned by `feature/rl-training`); the handoff is a one-line entity swap.
+- Frames: world z-up (unchanged), attitude relative to N = (x_W, −y_W, −z_W)
+  so the body math is textbook FRD/NED. Hamilton scalar-first `q_NB`. The
+  only bridge is `C_WN = diag(1, −1, −1)`.
+- **Gotcha (found, fixed):** the rate feedforward must include gravity
+  (`v × (a_cmd + g)/V²`). Without it the α loop holds a standing error to
+  follow the gravity arc, that error is lift, and a zero-command missile
+  flew 33 m high of ballistic in 5 s (1.1 m in 10 s after the fix).
+- Rate damping is written dimensionally (`¼ρVSb²·Clp·p`) so it stays finite at V → 0.
+- `c_pitch_alpha` is applied as `·sin α`: linear near 0, bounded post-stall.
+  With that, the F-16 elevator cannot hold 90° α, so TVC does the hang (intended).
+- Allocation uses a limit-weighted pinv of B. No explicit mode switch is
+  needed for "surfaces vs TVC".
+- Cobra hang: 6-DOF needs a steeper zoom (75°) for a near-zero (<5 m/s) hang.
+  At a 45–60° entry the lift generated during the finite-rate pitch-up
+  keeps ~22–25 m/s. The old instant-rate model hid that.
+- Removed `AttitudeAugmentedEntity`, `attitude_net_acceleration`,
+  `flight_path_angle`, `clamp_rate`, and the bit-for-bit "inactive = point
+  mass" test (no inactive mode exists now). Replaced by regressions against
+  `PointMassEntity`.
+- Cobra viewer: APN/OGL now hit (4–5 m). PN still misses (22 m). Not re-tuned.
+- Not verified: frozen RL checkpoint on the 6-DOF plant; frontend rendering
+  of the new attitude (the stream still sends `body_axis`/`body_up`, same
+  schema); `scripts/validate_physics.py` envelopes with 6-DOF; Mach effects,
+  engine gyro, thrust lapse (none modelled). Root-level `../AGENTS.md` is
+  not synced (outside the repo); sync it at merge.

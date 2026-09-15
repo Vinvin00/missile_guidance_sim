@@ -93,7 +93,7 @@ CATALOG = CatalogResponse(
                 "cuts throttle and snaps its nose to near-vertical; lift "
                 "zooms it up while drag bleeds airspeed, and the slowed "
                 "interceptor overshoots. It then falls into a banked spiral. "
-                "3-DOF + attitude model, not 6-DOF."
+                "6-DOF rigid body: elevator, then thrust vectoring in the hang."
             ),
             initial_range_m=3_000.0,
             altitude_m=3_000.0,

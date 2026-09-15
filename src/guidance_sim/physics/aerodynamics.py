@@ -13,11 +13,13 @@ separates "realistic" from the earlier kinematic turn-model scaffold.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
-# Post-stall coefficient model -- used ONLY by AttitudeAugmentedEntity
-# (CobraManeuver). The point-mass path (drag_deceleration /
-# available_lateral_accel) is untouched. Generic illustrative values.
+# Default post-stall coefficient model. RigidBodyEntity vehicles override
+# slope/stall/induced drag per airframe via AeroDerivatives. The point-mass
+# path (drag_deceleration / available_lateral_accel) is untouched.
 CL_ALPHA_PER_RAD = 4.0  # linear lift-curve slope
 K_INDUCED = 0.1  # CD = CD0 + K * CL^2 in the linear regime
 CD_90 = 1.2  # flat plate normal to flow (Hoerner, Fluid-Dynamic Drag, ~1.17)
@@ -72,20 +74,102 @@ def available_lateral_accel(
     return min(aero_limit, structural_limit)
 
 
-def post_stall_coefficients(alpha: float, cd0: float) -> tuple[float, float]:
+def post_stall_coefficients(
+    alpha: float,
+    cd0: float,
+    cl_alpha: float = CL_ALPHA_PER_RAD,
+    alpha_stall: float = ALPHA_STALL_RAD,
+    k_induced: float = K_INDUCED,
+) -> tuple[float, float]:
     """
     (CL, CD) at any angle of attack (rad, wrapped to [-pi, pi]).
 
     Linear regime (CL = CLa*alpha, CD = CD0 + K*CL^2) sigmoid-blended
     into flat-plate post-stall behaviour (CL = CD90 sin a cos a,
-    CD = CD0 + CD90 sin^2 a) around |alpha| = 15 deg. The sigmoid keeps
+    CD = CD0 + CD90 sin^2 a) around |alpha| = alpha_stall (default 15 deg). The sigmoid keeps
     both curves C-infinity through stall: CL collapses, CD rises toward
     flat-plate drag at 90 deg.
     """
     a = float(np.arctan2(np.sin(alpha), np.cos(alpha)))
-    w = 1.0 / (1.0 + np.exp(-(abs(a) - ALPHA_STALL_RAD) / STALL_BLEND_WIDTH_RAD))
-    cl_lin = CL_ALPHA_PER_RAD * a
-    cd_lin = cd0 + K_INDUCED * cl_lin ** 2
+    w = 1.0 / (1.0 + np.exp(-(abs(a) - alpha_stall) / STALL_BLEND_WIDTH_RAD))
+    cl_lin = cl_alpha * a
+    cd_lin = cd0 + k_induced * cl_lin ** 2
     cl_fp = CD_90 * np.sin(a) * np.cos(a)
     cd_fp = cd0 + CD_90 * np.sin(a) ** 2
     return float((1.0 - w) * cl_lin + w * cl_fp), float((1.0 - w) * cd_lin + w * cd_fp)
+
+
+@dataclass(frozen=True)
+class AeroDerivatives:
+    """
+    Stability and control derivatives for a 6-DOF airframe, per radian.
+
+    Rate derivatives use the Stevens & Lewis non-dimensionalisation:
+    p, r scaled by span/(2V) and q by chord/(2V). Missiles use body
+    diameter for both reference lengths. Rolling-moment terms are
+    `c_roll_*` so they can't be confused with lift CL.
+
+    Sign conventions: positive elevator gives nose-down (c_pitch_de < 0).
+    Positive rudder gives nose-left (c_yaw_dr < 0) and a right side force.
+    Positive aileron gives right-wing-down (c_roll_da > 0).
+    """
+
+    span: float  # m, lateral reference length
+    chord: float  # m, longitudinal reference length
+    cl_alpha: float
+    alpha_stall: float  # rad
+    k_induced: float
+    cy_beta: float
+    cy_dr: float
+    c_pitch_alpha: float  # applied as c_pitch_alpha * sin(alpha): linear near 0, bounded post-stall
+    c_pitch_q: float
+    c_pitch_de: float
+    c_roll_beta: float
+    c_roll_p: float
+    c_roll_da: float
+    c_roll_dr: float
+    c_yaw_beta: float
+    c_yaw_r: float
+    c_yaw_dr: float
+
+
+def wind_angles(v_body: np.ndarray) -> tuple[float, float, float]:
+    """(V, alpha, beta) from body FRD velocity. alpha in (-pi, pi], so tail slides are representable."""
+    speed = float(np.linalg.norm(v_body))
+    if speed < 1e-9:
+        return 0.0, 0.0, 0.0
+    alpha = float(np.arctan2(v_body[2], v_body[0]))
+    beta = float(np.arcsin(np.clip(v_body[1] / speed, -1.0, 1.0)))
+    return speed, alpha, beta
+
+
+def body_aero_force(
+    v_body: np.ndarray,
+    rho: float,
+    reference_area: float,
+    cd0: float,
+    aero: AeroDerivatives,
+    rudder: float = 0.0,
+) -> np.ndarray:
+    """
+    Aerodynamic force (N) in body FRD axes.
+
+    Drag acts along -v. Lift is perpendicular to v in the body x-z plane.
+    Side force is perpendicular to both. CL/CD come from
+    `post_stall_coefficients` at any alpha. Induced drag also charges the
+    side force, K*CY^2, so a skid-to-turn missile pays for yaw-plane g too.
+    """
+    speed, alpha, beta = wind_angles(v_body)
+    if speed < 1e-6:
+        return np.zeros(3)
+    v_hat = v_body / speed
+    lift_dir = np.cross([0.0, 1.0, 0.0], v_hat)
+    norm = float(np.linalg.norm(lift_dir))
+    lift_dir = lift_dir / norm if norm > 1e-6 else np.array([0.0, 0.0, -1.0])
+    side_dir = np.cross(v_hat, lift_dir)
+
+    cl, cd = post_stall_coefficients(alpha, cd0, aero.cl_alpha, aero.alpha_stall, aero.k_induced)
+    cy = aero.cy_beta * beta + aero.cy_dr * rudder
+    cd += aero.k_induced * cy ** 2
+    qs = dynamic_pressure(rho, speed) * reference_area
+    return qs * (-cd * v_hat + cl * lift_dir + cy * side_dir)

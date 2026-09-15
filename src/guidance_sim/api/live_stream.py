@@ -36,7 +36,7 @@ from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.guidance.optimal_guidance import OptimalGuidance
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.atmosphere import G0
-from guidance_sim.physics.entities import AttitudeAugmentedEntity, State, VehicleParams
+from guidance_sim.physics.entities import F16_6DOF, RigidBodyEntity, State
 from guidance_sim.physics.maneuvers import (
     CobraManeuver,
     ConstantTurn,
@@ -70,16 +70,9 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
     "g-limited-turn": "constant_turn",
     "cobra-evasion": "cobra",
 }
-_COBRA_THRUST_TO_WEIGHT = 1.1  # generic fighter-class value
-# The env's default target is a 40 kg drone; a Cobra needs the catalog's
-# fighter-class Target B airframe (post-stall drag bleed scales with S/m).
-_COBRA_TARGET_VEHICLE = VehicleParams(
-    mass=9_100.0,
-    reference_area=45.0,
-    drag_coefficient=0.035,
-    max_normal_force_coefficient=1.1,
-    max_load_factor=9.0,
-)
+# The env's default target is a 40 kg drone; a Cobra needs a fighter-class
+# 6-DOF airframe (F-16 mass/inertia/aero, with thrust vectoring for the hang).
+_COBRA_TARGET_VEHICLE = F16_6DOF.vehicle
 # Late trigger: PN/APN/OGL overshoot for triggers ~0.75-2 s time-to-go at the
 # catalog defaults; earlier triggers give the interceptor time to re-converge.
 _COBRA_TRIGGER_TIME_TO_GO_S = 1.5
@@ -109,7 +102,7 @@ def _vec3(values: np.ndarray) -> Vector3:
 def _body(
     position: np.ndarray,
     velocity: np.ndarray,
-    attitude: AttitudeAugmentedEntity | None = None,
+    attitude: RigidBodyEntity | None = None,
 ) -> BodyState:
     return BodyState(
         position_m=_vec3(position),
@@ -255,13 +248,8 @@ def build_live_trajectory(
     observation, info = env.reset(seed=seed)
     assert env.pursuer is not None and env.target is not None
     if maneuver == "cobra":
-        # Same state/vehicle, attitude-capable entity; env and obs untouched.
-        env.target = AttitudeAugmentedEntity(
-            name=env.target.name,
-            state=env.target.state,
-            vehicle=env.target.vehicle,
-            max_thrust=_COBRA_THRUST_TO_WEIGHT * env.target.vehicle.mass * G0,
-        )
+        # Same state, 6-DOF entity; env and obs untouched.
+        env.target = RigidBodyEntity.from_state(env.target.state, F16_6DOF, name=env.target.name)
         env.target_maneuver = CobraManeuver(
             env.target,
             trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
