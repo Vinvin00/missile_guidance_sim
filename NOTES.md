@@ -1,3 +1,135 @@
+## 2026-09-17 — Retuned cobra-evasion to actually reach hang
+
+- Follow-up to the gust-wiring entry (below): the API path's own 25 s
+  budget (`PPOTrainingConfig.max_time`, unrelated to `ScenarioOption.
+  duration_s`, which turned out to only feed `mock_stream.py`) truncated
+  the demo mid pitch-up. Added `_COBRA_MAX_TIME_S = 90.0` in
+  `live_stream.py`, applied only `if maneuver == "cobra"` and before the
+  `guidance_law == "rl"` branch, so RL's own budget still wins unconditionally
+  when both apply -- RL-vs-Cobra behavior/tests untouched.
+- Measured (replaying build_live_trajectory's own steps manually to read
+  `CobraManeuver.phase_history`, catalog defaults, seed=1, PN): trigger at
+  ~15 s (later than the older direct-sim estimate; this is the level-entry,
+  partial-throttle profile, not the test suite's steep zoom-climb entry),
+  `hang` at t=50.5 s. Confirmed reached.
+- PN/APN/OGL closest-approach values are unchanged (36.0/9.6/5.0 m) -- the
+  interceptor's closest approach already happens well inside the old 25 s
+  window: the retune just lets the run keep going afterward. `outcome`
+  changes from "timeout" to "miss" (see below), but no existing assertion
+  cared about that distinction. No test thresholds needed re-tuning; full
+  suite still 204/204.
+- **Found, not fixed:** every classical-law run now ends at ~t=63 s via
+  `pursuer_ground_impact`, *not* a timeout -- the PN/APN/OGL interceptor
+  itself flies into the ground while still chasing a target that zoomed to
+  ~5 km and levelled off. This is pre-existing interceptor-vs-zoomed-target
+  behavior, unrelated to the Cobra maneuver, the gust, or anything in this
+  entry's diff. It leaves only ~12 s between the target's hang and episode
+  end, which is not enough runway for a gust-induced departure to visibly
+  develop (compare the isolated repro in the 2026-09-17 gust entry, which
+  needed 15-90+ s post-gust). Verified: gust=0 vs gust=25 through the real
+  API currently look the same (nose direction stays smooth in both, episode
+  ends first). User decision: leave the interceptor's tail-chase-into-ground
+  behavior alone for now; gust_speed_m_s is wired and correct, it just has
+  no room to show itself in *this* scenario's current geometry.
+
+## 2026-09-17 — Wired gust_speed_m_s into the API catalog
+
+- Follow-up to the gust disturbance entry (below): exposed it as
+  `engagement.gust_speed` (0-30 m/s, default 0.0, illustrative) in
+  `catalog.py`'s `engagement_parameters`, and threaded
+  `applied_parameters["engagement.gust_speed"]` into the `CobraManeuver`
+  construction in `live_stream.py`. Free via `get_live_parameters`/
+  `resolve_live_parameters` -- no new code needed there, same path every
+  other engagement control (target_maneuver_g etc.) already uses.
+- Verified end to end: an override of 25.0 reaches
+  `run.applied_parameters["engagement.gust_speed"]` and the constructed
+  maneuver; out-of-range (50.0) is rejected by the existing bounds check.
+- Default stays 0.0, so the public demo/catalog defaults are unaffected --
+  confirmed by the full suite (204 passed).
+- Not verified: the gust has no visible effect at the `cobra-evasion`
+  scenario's own defaults, because (per the 2026-09-17 departure-fix entry)
+  that scenario's tail-chase geometry doesn't even reach `hang` within its
+  25 s duration. Seeing the gust do anything through the public API still
+  needs either a longer `duration_s` or different engagement geometry --
+  not changed here.
+
+## 2026-09-17 — CobraManeuver gust disturbance during the hang
+
+- Follow-up to the post-stall departure fix (below): that fix makes
+  degraded stability *possible*, but the scripted Cobra flies pitch-only
+  (rate_cmd = [0, q, 0]) with beta/roll ~0 throughout, so there's nothing
+  for it to amplify -- confirmed the default `cobra-evasion` demo doesn't
+  crash on its own (no disturbance to work with, and at catalog defaults it
+  doesn't even reach `hang`/`spiral` within the 25 s window).
+- Added `CobraManeuver(gust_speed_m_s=...)`: a one-shot crosswind impulse
+  applied directly to `entity.x[4]` (body-frame side velocity) the instant
+  the vehicle enters `hang`. This is the one deliberate exception to "the
+  profile only commands throttle/rates, nothing sets velocity" -- a gust is
+  an environmental disturbance, not a pilot input, and a direct velocity
+  increment on the wind axes is the standard discrete-gust model. Default
+  0.0 exactly reproduces prior behaviour (locked by
+  `test_gust_disturbs_hang_but_default_is_a_no_op`).
+- Measured (F16_6DOF, 75 deg zoom entry, idle throttle through the pull):
+  15 m/s gust -> beta spikes to 79 deg, roll rate to 140 deg/s (vs the
+  90 deg/s FCS command limit -- this is *achieved* rate, uncommanded), but
+  still reaches spiral/recovered, just ~14 s later and ~1,200 m lower.
+  20-30 m/s gust -> genuinely does not recover: stuck in `hang`, beta stays
+  large, altitude keeps bleeding for the full 90 s test budget (8,000 m ->
+  under 3,000 m and still falling when the test ends). That's a real,
+  physics-driven, unrecovered departure -- locked by
+  `test_strong_gust_during_hang_departs_instead_of_recovering`.
+- Not verified: an actual ground-impact / "crashed" end state (the test
+  budget stops at 90 s before altitude reaches 0); whether `spiral`'s bank/
+  alpha targets ever get re-acquired given more time/altitude, or whether
+  it's genuinely unrecoverable; gust direction/timing sensitivity (only
+  tried a single-axis, hang-onset impulse); wiring `gust_speed_m_s` into
+  the API catalog/live demo (still 0.0 there, so the public demo is
+  unaffected by this entry).
+
+## 2026-09-17 — Post-stall departure susceptibility (aero_moments)
+
+- Root cause of "the Cobra always recovers cleanly": `body_aero_moment`
+  used the *same* linear stability derivatives (`c_yaw_beta`, `c_roll_p`)
+  regardless of alpha. Real post-stall risk (why a Cobra can end in a flat
+  spin) comes from weathercock stability collapsing and roll damping
+  weakening once flow separates -- none of that existed, so the rate
+  autopilot always had full, clean authority through the "spiral" recovery
+  phase, and CobraManeuver's scripted recovery always succeeded.
+- Fix: extracted the stall sigmoid already used for CL/CD
+  (`post_stall_coefficients`) into `aerodynamics.stall_blend`, reused it in
+  `body_aero_moment` to degrade `c_yaw_beta` (toward destabilizing) and
+  `c_roll_p` (damping weakens) past `alpha_stall`. `autopilot_deflection_command`
+  needed no change -- it already computes `moment_free` from the same
+  `body_aero_moment` at the true state, so the degraded stability shows up
+  automatically as a bigger moment to counter, and saturates the
+  elevator/aileron/rudder/TVC pseudo-inverse for real when it's too much.
+- Magnitudes (`1.0 - 1.5*departure`, `1.0 - 0.8*departure`) are illustrative
+  PLACEHOLDERs, no sourced departure derivatives (consistent with the rest
+  of AGENTS.md §3's F-16 table).
+- Verified with `tests/test_post_stall_departure.py`: below stall, sideslip
+  restores (weathercock stability); at 85 deg alpha it doesn't. Roll damping
+  at 85 deg is <50% of its below-stall value but still damping (not
+  autorotating) -- deliberately conservative.
+- Symmetric maneuvers (the canonical Cobra test, pure pitch, beta/roll ~0
+  throughout) are unaffected -- the departure terms only bite when there's
+  an actual sideslip/roll disturbance to amplify.
+- Measured effect on `cobra-evasion` catalog defaults: PN's miss margin
+  ~56 m -> ~27 m, APN's ~15 m -> ~8.4 m (both still clean misses, thresholds
+  in `tests/test_api_stream.py` lowered to match). OGL's margin (already the
+  narrowest, since it plans against the predicted intercept) collapsed from
+  ~6.5 m to right at the 5 m intercept radius -- a genuine knife-edge now,
+  flipping between "hit" and a razor-thin miss run to run. Rewrote that
+  assertion to check the collapsed distance instead of a flaky categorical
+  hit/miss.
+- Not verified: INTERCEPTOR_6DOF's missile derivatives never reach
+  alpha_stall in normal flight (by design, see entities.py), so this change
+  is inert for the pursuer; not re-checked against a scenario that would
+  actually stall the missile. TVC gating for a non-TVC airframe (e.g. a
+  stock Su-27-style Cobra with no thrust vectoring) was not implemented --
+  the existing model already loses authority correctly there since aero
+  *and* TVC columns of `control_effectiveness` both vanish at V,thrust -> 0
+  when `max_thrust`/`tvc_arm_m` are 0, but no scenario/test exercises it.
+
 ## 2026-09-16 — Fresh seed confirms the fine-tune; re-promoted; found and fixed a CPU-inference determinism bug
 
 Two follow-ups to yesterday's promotion (below): confirm it wasn't a
@@ -1845,3 +1977,81 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - Not verified: re-running the frozen 300-case 6-DOF transfer benchmark,
   retuning guidance/autopilot gains, or replacing the illustrative schedule
   with configuration-specific wind-tunnel/CFD data.
+
+## 2026-09-16 — Worktree audit and baseline repair
+
+- The working tree contains four distinct, uncommitted code threads: a
+  selectable point-mass/6-DOF RL pursuer plant; commanded-acceleration-rate
+  reward pricing; pole-safe RL action-basis continuity; and propagation of
+  engagement geometry into `Simulation` maneuvers. Training artifacts from
+  seed 17/18 and the first 6-DOF run are mixed into the same tree. They were
+  preserved unchanged. The recorded babysitter PID is stale, but output files
+  continued changing during the audit: seed 18 training resumed externally,
+  the 6-DOF CP2 evaluation completed at 2/50 hits, and Cobra recovery defaults
+  were concurrently retuned (`q`: 3000→2000 Pa, altitude loss: 100→40 m).
+  Treat this as a hot worktree until those external jobs/editors stop.
+- Initial verification found one failure (199 passed, 1 failed): the Cobra
+  end-to-end test used a real 5 s time-to-go trigger while placing the
+  pursuer 60 km away. The target had already fallen roughly 1.5 km before
+  the trigger, contradicting the test's zoom-climb entry assertions. The
+  fixture now starts at an actual ~5 s time-to-go and disables intercept
+  termination so the full target maneuver can finish. It also accepts the
+  documented telemetry-only `hang` phase being skipped and applies
+  hang-specific assertions only when it occurs.
+- Checkpoint metadata already recorded `pursuer_plant`, but resume validation
+  ignored it. A point-mass lineage could therefore be silently resumed on
+  the 6-DOF plant despite the CLI's fresh-lineage warning. Resume now rejects
+  plant mismatches; pre-field metadata is correctly interpreted as
+  point-mass. Added a regression test.
+- Synchronized the workspace-root and package-root `AGENTS.md` files and
+  replaced their stale package tree/deferred-work descriptions with the
+  current API, RL, sensor, estimator, frontend, 6-DOF, and Mach-aero state.
+- Gotcha: `rtk` and global `pytest` are not available on PATH. Use
+  `.venv/bin/pytest` from the package root.
+- Final verification: **200 Python tests passed** (two dependency
+  deprecation warnings), **21 frontend tests passed**, the frontend
+  production build passed (existing large-bundle warning), and
+  `git diff --check` passed. Frontend lint is still red with seven existing
+  React 19 rule violations in `AppNav.jsx` / `SimulationScene.jsx`; fixing
+  those cleanly also moves shared screen configuration into a third module,
+  so it was left as a bounded follow-up rather than suppressed or mixed into
+  the RL/simulation repair.
+
+## 2026-09-17 — Alpine demo design
+
+- Scope: `frontend/src/components/SimulationScene.jsx`, `frontend/src/styles.css`,
+  and a new `SimulationScene.test.jsx`. No simulation/physics behavior changed.
+- Replaced the empty 3D grid with deterministic mountain terrain, snow-colored
+  upper ridges, atmospheric lighting/fog, and an instanced evergreen forest
+  (10,000 candidate trees, omitted above the tree line). The scenery is
+  illustrative and is not a collision surface or elevation model for physics.
+- Overview now fits both frustum axes, adds portrait label clearance, resets
+  when a new run arrives/completes or the viewport changes, and offers an
+  explicit Fit both objects action. Vehicle meshes have bounded display-scale
+  enlargement, and fixed-size labels stay separate when objects converge.
+- Retained the persistent camera and eased chase/overview/2D transitions.
+  Snapping the final overhead pose removes map rotation caused by the tiny
+  residual lookAt offset. 2D uses a 500 m grid and omits tree instances.
+- Added a direct Run simulation action to the empty view, alpine theme,
+  scene legend, telemetry visibility control, and a horizontally scrollable
+  bottom telemetry strip on phones. The landscape remains usable when panels
+  are hidden. Keyboard focus remains visible on the timeline.
+- Verified live simulation start and playback, time-zero framing of BOTH
+  models against the forest/mountains, 2D/3D switching, target chase and Fit
+  both objects, telemetry hide/show, and Setup styling in the browser.
+  Checked desktop 1280×720 and portrait 390×844; reset the viewport afterward.
+  Browser error log was empty on the final clean page.
+- Baseline: 200 Python tests and 21 frontend tests passed. Final current tree:
+  202 Python tests passed (2 dependency deprecations), 30 frontend tests passed
+  with `VITE_API_BASE_URL= npm test`, and production build passed with the
+  existing large vendor-bundle warning. The local .env API URL points at the
+  hosted backend; clearing it for tests preserves the existing relative-URL
+  test fixture. New tests cover sphere/frustum containment at five aspect
+  ratios, terrain valley clearance/relief, and start/fit/telemetry/map controls.
+- Lint: reduced the existing seven findings to two by fixing camera state/ref
+  handling while editing it. Remaining pre-existing findings: AppNav exports
+  its screen constant, and SequentialTrialPlayback resets state in an effect.
+  Neither is part of the redesigned flow. No new lint findings.
+- Not verified: GPU performance across physical mobile devices, every possible
+  user-authored trajectory, or deployment. Existing unrelated work in the
+  shared tree was preserved.

@@ -26,15 +26,19 @@ Run `pytest` from `missile_guidance_sim/` (see `pyproject.toml`).
 ```
 missile_guidance_sim/
 ├── src/guidance_sim/
-│   ├── physics/       # atmosphere, aerodynamics, dynamics, entities,
-│   │                  # integrator, maneuvers
-│   ├── guidance/      # GuidanceLaw ABC + ProportionalNavigation
+│   ├── physics/       # point-mass + rigid-body dynamics and maneuvers
+│   ├── guidance/      # PN, APN, and optimal guidance laws
 │   ├── simulation/    # Simulation, SimulationConfig, SimulationResult
-│   ├── api/           # empty stub (__init__.py only) — not implemented
-│   ├── ml/            # empty stub — not implemented
+│   ├── rl/            # Gymnasium environment, reward, training, evaluation
+│   ├── sensors/       # abstract seeker measurements and noise
+│   ├── estimation/    # alpha-beta tracking
+│   ├── evaluation/    # shadow comparisons
+│   ├── api/           # FastAPI simulation and live-stream endpoints
+│   ├── ml/            # trained-policy loading/inference
 │   └── visualization/ # plotter (3D, diagnostics, GIF)
-├── tests/             # atmosphere, aerodynamics, dynamics, PN, …
-└── scripts/run_demo.py
+├── frontend/          # React/Vite 3D viewer
+├── tests/             # physics, guidance, API, RL, and regression tests
+└── scripts/           # demos, validation, training, and evaluation entry points
 ```
 
 ### Architecture summary (Phase 1 — implemented)
@@ -48,8 +52,9 @@ missile_guidance_sim/
   guidance command is the outer-loop input. `autopilot_tau` is ignored
   (lag is emergent). Frames/conventions: `physics/rotational_dynamics.py`.
 - **Point-mass entities** (`State`, `VehicleParams`, `PointMassEntity`)
-  are kept as the regression reference and as the plant the RL env still
-  builds (see `docs/rl-interface-6dof.md`).
+  are kept as the regression reference and remain the RL environment's
+  default plant; 6-DOF training is an explicit opt-in (see
+  `docs/rl-interface-6dof.md`).
 - **Forces:** gravity + aerodynamic drag (ISA density → `q = ½ρV²`) +
   lateral accel command. Integration is RK4 (Euler available) over
   `accel_fn(position, velocity)`; command is zero-order-held across
@@ -540,9 +545,9 @@ generic.
   cheaper per step for large Monte Carlo sweeps.
 - **Adjoint method** for linearized miss sensitivity vs. time-to-go.
   Consider after Step 8.
-- Mach-dependent `C_D(M)` with drag divergence → induced drag
-  `C_D = C_D0 + K·C_L²` → boost-coast with mass depletion →
-  q-dependent AoA limit. Add in that order.
+- ~~Mach-dependent `C_D(M)` and induced drag~~ — done for the 6-DOF path.
+  Remaining sequence: boost-coast with mass depletion → q-dependent
+  AoA limit.
 
 ---
 
