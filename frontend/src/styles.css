@@ -1500,6 +1500,10 @@ input[type='range']::-moz-range-thumb {
   color: var(--text-2);
 }
 
+.rag-result.is-error .session-outcome {
+  justify-self: start;
+}
+
 .rag-result-head {
   display: flex;
   align-items: center;
