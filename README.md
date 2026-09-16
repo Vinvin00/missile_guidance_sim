@@ -151,6 +151,45 @@ npm install
 npm run dev
 ```
 
+### Run everything with Docker Compose
+
+The viewer's **ASK** screen ("Spec grounding") queries a separate
+retrieval-grounded Q&A service, [aero-spec-rag](https://github.com/Vinvin00/aero-spec-rag),
+that answers questions about guidance/aerospace parameters — drag
+coefficients, ISA atmosphere values, PN gains — with a cited, bounds-checked
+value pulled from a small document corpus, not a generated guess. It's a
+standalone project and repo; `docker-compose.yml` here wires it in as a third
+service alongside the sim backend and the viewer, so the whole demo starts
+with one command and needs nothing installed but Docker.
+
+Clone `aero-spec-rag` as a sibling of this repo:
+
+```
+Physics Sim Project/
+  missile-sim-viz/      <- this repo
+  aero-spec-rag/
+```
+
+Then, from this repo's root:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:5173`. The sim backend serves `:8000`, the
+spec-grounding backend serves `:8001`; both are health-checked before the
+frontend container starts. If `aero-spec-rag` lives somewhere else, point at
+it with `AERO_SPEC_RAG_DIR`:
+
+```bash
+AERO_SPEC_RAG_DIR=/path/to/aero-spec-rag docker compose up --build
+```
+
+The containerized `aero-spec-rag` runs its default, fully offline
+configuration (deterministic embeddings, no LLM, no API key, no Ollama) —
+see [that repo's README](https://github.com/Vinvin00/aero-spec-rag) if you
+want to point it at a local Ollama install instead.
+
 ## Roadmap
 
 1. ~~3D physics core (gravity + drag + atmosphere + airframe limits) + PN baseline, tested~~ ✅

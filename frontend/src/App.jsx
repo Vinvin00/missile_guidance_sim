@@ -8,6 +8,7 @@ import { RagPanel } from './components/RagPanel'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
+import { SpecGroundingPanel } from './components/SpecGroundingPanel'
 import { TrainingDashboard } from './components/TrainingDashboard'
 import { TrialsOverlay } from './components/TrialsOverlay'
 import { loadTrajectoryLog } from './data/trajectoryData'
@@ -108,6 +109,7 @@ export default function App() {
           <SessionReplayPanel onReplay={handleReplay} />
         )}
         {screen === 'rag' && <RagPanel />}
+        {screen === 'spec' && <SpecGroundingPanel />}
         <PlaybackControls />
       </div>
     </div>

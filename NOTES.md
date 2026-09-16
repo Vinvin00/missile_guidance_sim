@@ -1794,3 +1794,10 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   untouched, no conflicts with physics/API files.
 - Not verified: whether `9502c7b`'s own test suite state was green before
   this merge (assumed yes, not re-derived here).
+## 2026-09-16 — Main/Cobra integration
+
+Merged `main` into the Cobra line on `integration/cobra-main` so the
+viewer/deployment work and Cobra scenario can be evaluated together.
+The only content conflicts were the app screen switch and navigation list.
+Both existing RAG surfaces were retained as separate `rag` and `spec`
+screens; dropping either one would have silently discarded branch behavior.

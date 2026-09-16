@@ -1797,3 +1797,258 @@ input:disabled,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Spec grounding panel ------------------------------------------- */
+
+.spec-screen {
+  position: absolute;
+  inset: 46px 0 62px 0;
+  z-index: 3;
+  overflow: auto;
+  background: #0a0a0a;
+}
+
+.spec-inner {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  max-width: 760px;
+  padding: 30px 28px 56px;
+}
+
+.spec-intro {
+  display: grid;
+  gap: 14px;
+}
+
+.spec-intro p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #b5b5b5;
+  max-width: 56ch;
+}
+
+.spec-form {
+  display: grid;
+  gap: 8px;
+}
+
+.spec-form-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  color: #8a8a8a;
+  text-transform: uppercase;
+}
+
+.spec-form-row {
+  display: flex;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.spec-form-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 0;
+  background: #0a0a0a;
+  color: #f2f2f2;
+  font-size: 13px;
+}
+
+.spec-form-row input::placeholder {
+  color: #565656;
+}
+
+.spec-form-row button {
+  padding: 14px 22px;
+  border: 0;
+  background: #0a0a0a;
+  color: #ff2d16;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.spec-form-row button:hover:not(:disabled) {
+  background: #101010;
+}
+
+.spec-form-row button:disabled {
+  color: #565656;
+  cursor: default;
+}
+
+.spec-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spec-example-chip {
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #8a8a8a;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.spec-example-chip:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #f2f2f2;
+}
+
+.spec-example-chip:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.spec-result {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.spec-result-error {
+  border-color: rgba(255, 45, 22, 0.4);
+}
+
+.spec-result-error p {
+  margin: 0;
+  font-size: 13px;
+  color: #ff2d16;
+}
+
+.spec-result-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.spec-verified-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #3fd67a;
+}
+
+.spec-verified-badge.is-unverified {
+  color: #8a8a8a;
+}
+
+.spec-quantity {
+  font-size: 12px;
+  color: #b5b5b5;
+  text-transform: capitalize;
+}
+
+.spec-confidence {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: #565656;
+}
+
+.spec-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.spec-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.spec-unit {
+  font-size: 13px;
+  color: #8a8a8a;
+}
+
+.spec-answer {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d8d8d8;
+}
+
+.spec-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spec-flag {
+  padding: 3px 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #8a8a8a;
+  cursor: default;
+}
+
+.spec-flag-error {
+  border-color: rgba(255, 45, 22, 0.4);
+  color: #ff2d16;
+}
+
+.spec-flag-warning {
+  border-color: rgba(255, 196, 0, 0.4);
+  color: #ffc400;
+}
+
+.spec-citations {
+  display: grid;
+  gap: 10px;
+}
+
+.spec-citation {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.spec-citation-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: #b5b5b5;
+}
+
+.spec-citation-type {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #565656;
+}
+
+.spec-citation-snippet {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #6f6f6f;
+  white-space: pre-line;
+}
+
+.spec-disclaimer {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: #565656;
+}
