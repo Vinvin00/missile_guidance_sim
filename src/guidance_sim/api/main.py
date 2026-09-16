@@ -42,7 +42,7 @@ app = FastAPI(
 _DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://frontend-navy-ten-53.vercel.app",
+    "https://physics-sim-green.vercel.app",
 ]
 _allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
 allowed_origins = (
