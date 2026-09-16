@@ -347,7 +347,7 @@ def test_training_endpoint_serves_the_baseline_run_log():
 )
 def test_cobra_default_scenario_dodges_classical_guidance(guidance_law, min_miss_m):
     """Locks the demo: at catalog defaults (6-DOF target, 2.0 s trigger,
-    full thrust through the pull) the Cobra opens a real miss against PN,
+    full thrust through the pull, then idle) the Cobra opens a real miss against PN,
     APN and OGL -- PN by the widest margin, OGL by the narrowest, since OGL
     plans against the predicted intercept rather than reacting to LOS rate."""
     from guidance_sim.api.catalog import CATALOG
@@ -363,18 +363,34 @@ def test_cobra_default_scenario_dodges_classical_guidance(guidance_law, min_miss
     assert run.frames[0].target.body_up is not None
 
 
-def test_cobra_default_scenario_does_not_reliably_dodge_rl():
-    """The retired rate-commanded attitude shortcut's *instantaneous*
-    nose-snap fooled the reactive RL policy too (pre-6-DOF: 21/24 seeds
-    missed). The 6-DOF model's actuator/inertia-rate-limited climb is
-    slower and more realistic, and that alone is enough for a fast-reacting
-    policy to track and hit most of the time -- even though PN/APN/OGL
-    still miss (see test_cobra_default_scenario_dodges_classical_guidance).
+def test_cobra_default_scenario_reaches_apex_and_descends():
+    """The viewer Cobra must show the full maneuver, not park nose-up."""
+    from guidance_sim.api.catalog import CATALOG
+
+    scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
+    run = build_live_trajectory(
+        "cobra-evasion", "pn", "cobra-descent", scenario.parameter_defaults, seed=7
+    )
+    altitude = np.array([frame.target.position_m.z for frame in run.frames])
+    vertical_speed = np.array([frame.target.velocity_m_s.z for frame in run.frames])
+    nose_z = np.array([frame.target.body_axis.z for frame in run.frames])
+
+    apex = int(np.argmax(altitude))
+    assert np.argmax(nose_z > np.sin(np.deg2rad(45.0))) * run.dt_s < 6.0
+    assert 0 < apex < len(altitude) - 1
+    assert vertical_speed[apex + 1] < 0.0
+    assert altitude[-1] < altitude[apex] - 100.0
+
+
+def test_cobra_default_scenario_dodges_frozen_rl():
+    """The earlier complete Cobra defeats the frozen reactive policy.
+
+    The 6-DOF model remains actuator/inertia-rate-limited; the change from
+    the prior majority-hit result comes from showing the full maneuver at
+    7 km and triggering it at 2 s, rather than beginning near intercept.
     The interceptor here is the point-mass entity InterceptionEnv builds
     for every guidance law; only the Cobra target is 6-DOF, so this is not
-    the pursuer-transfer collapse in docs/rl-interface-6dof.md. Locks the
-    honest finding instead of a false "dodges everyone" claim: measured
-    8-9/12 hits at these settings."""
+    the pursuer-transfer collapse in docs/rl-interface-6dof.md."""
     from guidance_sim.api.catalog import CATALOG
 
     scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
@@ -385,4 +401,4 @@ def test_cobra_default_scenario_does_not_reliably_dodge_rl():
         == "hit"
         for seed in range(1, 13)
     )
-    assert hits >= 6  # majority, not the old "RL mostly misses" claim
+    assert hits == 0

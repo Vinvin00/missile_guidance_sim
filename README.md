@@ -254,19 +254,16 @@ and body rates. The pull-up saturates the elevator. In the hang
 is flown on aileron and rudder. Climb → hang → spiral → recovery is
 checked end to end (`tests/test_cobra_maneuver.py`).
 
-Viewer scenario, re-tuned for the 6-DOF airframe: full thrust through the
-pull (`pitch_up_throttle=1.0`), triggered at 2.0 s time-to-go — later than
-the old model's 0.9 s, because a finite pitch-up rate needs more warning
-to open the same separation. At catalog defaults PN misses by ≈56 m, APN
-by ≈15 m, OGL by ≈6.5 m (OGL plans against the predicted intercept rather
-than reacting to LOS rate, so it closes the gap furthest). The frozen RL
-policy, still flying the same point-mass interceptor it was trained on
-against this target, is **not** reliably dodged: it hits 8–9 of 12 seeds.
-The old attitude-rate shortcut's *instantaneous* nose-snap fooled RL too
-(21/24 seeds missed); the 6-DOF model's actuator/inertia-rate-limited
-climb is slower and more realistic, and a fast-reacting policy tracks
-through it. Classical guidance, reacting to LOS geometry rather than
-learned patterns, still misses. Locked in
+Viewer scenario, re-tuned for the 6-DOF airframe: a 7 km tail chase with
+the pull triggered 2.0 s after launch. Full thrust is held only through the
+finite-rate pitch-up (`pitch_up_throttle=1.0`), then reduced to idle so the
+target reaches an apex and falls into its spiral instead of climbing
+vertically forever. At catalog defaults PN, APN, and OGL all miss while the
+complete climb–apex–descent remains visible in the 25 s playback. The frozen RL
+policy, still flying the same point-mass interceptor it was trained on,
+misses all 12 locked seeds against this earlier complete maneuver. This is
+not an instantaneous attitude shortcut: the 6-DOF target remains limited by
+actuator rate, inertia, aerodynamics, and thrust-vector authority. Locked in
 [`tests/test_api_stream.py`](tests/test_api_stream.py).
 
 **Reference data and placeholders** (full citations inline in

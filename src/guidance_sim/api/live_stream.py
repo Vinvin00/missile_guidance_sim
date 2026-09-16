@@ -74,11 +74,13 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
 # 6-DOF airframe (F-16 mass/inertia/aero, with thrust vectoring for the hang).
 _COBRA_TARGET_VEHICLE = F16_6DOF.vehicle
 # Re-tuned for the 6-DOF airframe (see NOTES.md 2026-09-16). The old
-# instant-rate shortcut's nose-snap dodged PN/APN/OGL at 0.9 s time-to-go;
-# the 6-DOF model's finite pitch-up rate needs 2.0 s to open the same
-# separation. Full thrust through the pull (pitch_up_throttle=1.0) adds
-# vertical displacement to the zoom, same idea as before.
-_COBRA_TRIGGER_TIME_TO_GO_S = 2.0
+# instant-rate shortcut's nose-snap dodged PN/APN/OGL at 0.9 s time-to-go.
+# Raw range/closing-speed time-to-go is not monotonic in this tail chase as
+# the unpowered interceptor bleeds speed. Use a deterministic 2 s cue so the
+# finite-rate pitch-up is visible well before closest approach. Full thrust
+# is used only through the pull; the maneuver returns to idle at the pitch
+# target so it reaches an apex and falls instead of climbing forever.
+_COBRA_TRIGGER_TIME_S = 2.0
 _COBRA_PITCH_UP_THROTTLE = 1.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
@@ -256,7 +258,7 @@ def build_live_trajectory(
         env.target = RigidBodyEntity.from_state(env.target.state, F16_6DOF, name=env.target.name)
         env.target_maneuver = CobraManeuver(
             env.target,
-            trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
+            trigger_time_s=_COBRA_TRIGGER_TIME_S,
             hold_level_until_trigger=True,
             pitch_up_throttle=_COBRA_PITCH_UP_THROTTLE,
         )

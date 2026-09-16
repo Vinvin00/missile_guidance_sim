@@ -1801,3 +1801,16 @@ viewer/deployment work and Cobra scenario can be evaluated together.
 The only content conflicts were the app screen switch and navigation list.
 Both existing RAG surfaces were retained as separate `rag` and `spec`
 screens; dropping either one would have silently discarded branch behavior.
+## 2026-09-16 — Cobra completes the fall and triggers earlier
+
+The live Cobra held `pitch_up_throttle=1.0` indefinitely after reaching
+its 88-degree pitch target. That made upward thrust exceed gravity, so the
+target never reached an apex and the state machine could never enter the
+spiral. `pitch_up_throttle` now applies only through the pull; at the pitch
+target the maneuver returns to idle, allowing the hang/fall to emerge from
+the 6-DOF forces. The viewer now triggers at a deterministic 2.0 seconds
+after launch: raw range/closing-speed time-to-go was non-monotonic in the
+tail chase and could postpone the pull until the engagement was nearly over.
+The demo separation is 7 km rather than 3 km; at 3 km the 700 m/s pursuer
+terminated the run before the target reached its apex, whereas 7 km preserves
+the full 25-second climb–apex–spiral playback and a clear descent.

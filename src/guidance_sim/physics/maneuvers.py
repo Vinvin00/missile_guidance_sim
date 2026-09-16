@@ -579,9 +579,15 @@ class CobraManeuver(ManeuverProfile):
                 np.clip(self._GAIN * (self.pitch_target - theta), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
                 0.0,
             ])
+            pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
+            # `pitch_up_throttle` is boost through the pull, not a command to
+            # climb vertically forever.  Once the nose reaches the target,
+            # return to idle so drag and gravity can create the hang, apex,
+            # and ensuing fall that define the Cobra.
+            if pitch_done and self.pitch_up_throttle is not None:
+                e.throttle = self.idle_throttle
             if self.phase == "pitch_up" and state.speed() < self.hang_speed_m_s:
                 self._enter(t, "hang")
-            pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
             if pitch_done and state.velocity[2] < 0.0:
                 self._spiral_start_altitude_m = state.altitude()
                 self._enter(t, "spiral")

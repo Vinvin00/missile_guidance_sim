@@ -89,17 +89,17 @@ CATALOG = CatalogResponse(
             label="Cobra",
             description=(
                 "Tail chase: the interceptor closes from behind on a target "
-                "cruising level at 240 m/s. At 2.0 s time-to-go the target "
-                "snaps its nose to near-vertical with thrust held; lift and "
-                "thrust zoom it up while drag bleeds airspeed, and the slowed "
+                "cruising level at 240 m/s. Two seconds after launch the target "
+                "pulls its nose to near-vertical under full thrust, then cuts "
+                "to idle; drag bleeds airspeed, and the slowed "
                 "interceptor overshoots. It then falls into a banked spiral. "
                 "6-DOF rigid body: elevator, then thrust vectoring in the hang."
             ),
-            initial_range_m=3_000.0,
+            initial_range_m=7_000.0,
             altitude_m=3_000.0,
             duration_s=25.0,
             parameter_defaults={
-                "engagement.initial_range": 3_000.0,
+                "engagement.initial_range": 7_000.0,
                 "engagement.lateral_offset": 0.0,
                 "engagement.altitude_delta": 0.0,
                 "engagement.target_heading": 0.0,  # flying away: tail chase
