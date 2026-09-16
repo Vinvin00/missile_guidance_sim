@@ -43,6 +43,10 @@ _DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://physics-sim-green.vercel.app",
+    # Vercel's own auto-generated aliases for the same project -- same
+    # frontend, different hostname, so they need the same CORS grant.
+    "https://physics-sim-vincenzos-projects-d7ceae2a.vercel.app",
+    "https://physics-sim-git-main-vincenzos-projects-d7ceae2a.vercel.app",
 ]
 _allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
 allowed_origins = (
