@@ -245,7 +245,7 @@ def build_live_trajectory(
         target_vehicle=_COBRA_TARGET_VEHICLE if maneuver == "cobra" else None,
         pursuer_vehicle=(
             replace(_default_pursuer_vehicle(), max_load_factor=g_limit)
-            if (g_limit := _SCENARIO_PURSUER_G_LIMIT.get(scenario_id))
+            if (g_limit := _SCENARIO_PURSUER_G_LIMIT.get(scenario_id)) is not None
             else None
         ),
     )
@@ -343,7 +343,7 @@ def build_live_trajectory(
     return LiveTrajectory(
         dt_s=float(config.dt),
         frames=frames,
-        closest_approach_m=float(last_info["min_range_m"]),
+        closest_approach_m=float(last_info["closest_approach_m"]),
         applied_parameters=applied_parameters,
         scenario_id=scenario_id,
         maneuver=maneuver,
