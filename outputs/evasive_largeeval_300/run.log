@@ -1,0 +1,11 @@
+outputs/evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip: 242/300 hits (80.7%), median miss 4.2 m -> outputs/evasive_largeeval_300/seed3_cp6.json
+outputs/evasive_zemtgo10_seed4/checkpoints/rl_checkpoint_06.zip: 221/300 hits (73.7%), median miss 4.3 m -> outputs/evasive_largeeval_300/seed4_cp6.json
+outputs/evasive_zemtgo10_seed2/checkpoints/rl_checkpoint_06.zip: 196/300 hits (65.3%), median miss 4.6 m -> outputs/evasive_largeeval_300/seed2_cp6.json
+PN baseline: 72.7% hits over 300 held-out cases; median miss 4.0 m
+  bounded_weave   69/75 hits  median      3.1 m
+  break_turn      41/75 hits  median      4.8 m
+  random_jink     41/75 hits  median      4.8 m
+  vertical_jink   67/75 hits  median      4.0 m
+ALL DONE
+outputs/evasive_zemtgo10_seed5/checkpoints/rl_checkpoint_05.zip: 239/300 hits (79.7%), median miss 4.0 m -> outputs/evasive_largeeval_300/seed5_cp5.json
+outputs/evasive_zemtgo10_seed5/checkpoints/rl_checkpoint_06.zip: 242/300 hits (80.7%), median miss 4.0 m -> outputs/evasive_largeeval_300/seed5_cp6.json
