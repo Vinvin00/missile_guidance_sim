@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { trialAppearance } from './trialAppearance'
 
 describe('trialAppearance', () => {
-  it('fades early trials and highlights later successes', () => {
-    const earlyMiss = trialAppearance({ success: false }, 0, 5)
-    const lateHit = trialAppearance({ success: true }, 4, 5)
+  it('makes misses stand out over hits', () => {
+    const miss = trialAppearance({ success: false })
+    const hit = trialAppearance({ success: true })
 
-    expect(earlyMiss.opacity).toBeLessThan(lateHit.opacity)
-    expect(lateHit.color).toBe('#f2f2f2')
-    expect(earlyMiss.color).toBe('#ff2d16')
+    expect(miss.opacity).toBeGreaterThan(hit.opacity)
+    expect(hit.color).toBe('#f4f5f7')
+    expect(miss.color).toBe('#ff5238')
   })
 })

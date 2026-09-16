@@ -41,8 +41,15 @@ missile_guidance_sim/
 
 - **3D from the ground up.** Axis: `z` up (altitude); gravity
   `[0, 0, -9.80665]` in `dynamics.GRAVITY_VECTOR`.
-- **Point-mass entities** (`State`, `VehicleParams`, `PointMassEntity`).
-  No attitude, quaternions, or angular rates.
+- **6-DOF core** (`RigidBodyEntity`, `RigidBodyParams`, `F16_6DOF`,
+  `INTERCEPTOR_6DOF`): 13-state `[p_W, v_B, q_NB (Hamilton), ω_B]`,
+  forces + moments, cascaded autopilot → rate/position-limited actuators
+  (surfaces + TVC). Same `step()` signature as the point mass; the
+  guidance command is the outer-loop input. `autopilot_tau` is ignored
+  (lag is emergent). Frames/conventions: `physics/rotational_dynamics.py`.
+- **Point-mass entities** (`State`, `VehicleParams`, `PointMassEntity`)
+  are kept as the regression reference and as the plant the RL env still
+  builds (see `docs/rl-interface-6dof.md`).
 - **Forces:** gravity + aerodynamic drag (ISA density → `q = ½ρV²`) +
   lateral accel command. Integration is RK4 (Euler available) over
   `accel_fn(position, velocity)`; command is zero-order-held across
@@ -59,19 +66,22 @@ missile_guidance_sim/
   pursuer command/achieved lateral accel histories.
 - **Visualization:** `plot_trajectory_3d`, `plot_diagnostics`,
   `animate_3d` under `visualization/plotter.py`.
-- **Out of scope unless explicitly requested:** 6-DOF rigid-body
-  dynamics (attitude, MoI, inner autopilot tracking). Autopilot lag
-  (Step 3a) is the planned stand-in, not 6-DOF.
+- **6-DOF landed on `feature/6dof-rigid-body`** (explicitly requested
+  2026-09-15). The point-mass + autopilot-lag path is still valid for
+  cheap Monte Carlo and existing RL checkpoints.
 
 Module boundaries to preserve (do not collapse or invent new patterns):
 
 | Module | Responsibility |
 |---|---|
 | `atmosphere` | ISA T/P/ρ (and speed of sound) vs altitude |
-| `aerodynamics` | `q`, drag deceleration, available lateral accel |
-| `dynamics` | clamp command; net accel = g + drag + frozen lateral |
-| `integrator` | generic Euler/RK4 over `accel_fn` |
-| `entities` | state/params; clamp once then integrate |
+| `aerodynamics` | `q`, drag deceleration, available lateral accel, CL/CD(α), body aero force |
+| `aero_moments` | L/M/N: stability, rate damping, surfaces, thrust/TVC |
+| `controls` | deflection layout, actuator lag/rate/position limits |
+| `rotational_dynamics` | quaternions, Euler's equations, frame transforms (pure) |
+| `dynamics` | clamp command; point-mass net accel; rigid-body derivative; autopilot |
+| `integrator` | generic Euler/RK4 over `accel_fn` / flat state |
+| `entities` | state/params/vehicle data; clamp once then integrate |
 | `maneuvers` | target lateral profiles |
 | `guidance` | pursuer command laws |
 | `simulation` | time loop + result packaging |
@@ -84,8 +94,8 @@ Module boundaries to preserve (do not collapse or invent new patterns):
 2. **No large rewrites in one pass.** If a proposed change would touch
    more than ~2 modules, stop, flag the scope, and wait for
    confirmation before proceeding.
-3. **6-DOF rigid-body is out of scope** unless the user explicitly
-   requests it.
+3. **Quaternion hygiene is a physics invariant:** renormalise after every
+   step; never integrate Euler angles.
 4. **Match existing style.** Keep the RK4 ZOH command pattern, the
    atmosphere → aerodynamics → dynamics → entities layering, and the
    `GuidanceLaw` / `ManeuverProfile` subclass extension points. Prefer
@@ -192,7 +202,10 @@ intentional (models a digital autopilot sampling once per control tick).
 ## 3. Scope boundary
 
 Abstract point-mass simulation at the level of public GNC/estimation
-coursework. All vehicle parameters are **generic illustrative values**.
+coursework. Interceptor parameters are **generic illustrative values**
+(derived/placeholder, flagged in `entities.py`). The fighter-class target
+uses open-textbook F-16 data (Stevens & Lewis / NASA TP-1538), with
+placeholders flagged inline.
 
 Do not add: real sensor/seeker hardware specs, real vehicle performance
 data, countermeasure engineering, warhead/lethality modeling. "Sensor
@@ -523,9 +536,8 @@ generic.
 
 ## 6. Deferred
 
-- **6-DOF rigid body** — only if attitude/autopilot design becomes the
-  object of study. 3-DOF is correct for comparing guidance laws and
-  estimators, and far cheaper for thousands of Monte Carlo runs.
+- ~~6-DOF rigid body~~ — done (`RigidBodyEntity`). 3-DOF remains ~20×
+  cheaper per step for large Monte Carlo sweeps.
 - **Adjoint method** for linearized miss sensitivity vs. time-to-go.
   Consider after Step 8.
 - Mach-dependent `C_D(M)` with drag divergence → induced drag

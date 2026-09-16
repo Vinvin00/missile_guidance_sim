@@ -4,13 +4,14 @@ import { AppHeader } from './components/AppHeader'
 import { AppNav } from './components/AppNav'
 import { HudOverlay } from './components/HudOverlay'
 import { PlaybackControls } from './components/PlaybackControls'
+import { RagPanel } from './components/RagPanel'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
 import { SpecGroundingPanel } from './components/SpecGroundingPanel'
 import { TrainingDashboard } from './components/TrainingDashboard'
 import { TrialsOverlay } from './components/TrialsOverlay'
-import { loadTrajectoryLog, loadTrialSet } from './data/trajectoryData'
+import { loadTrajectoryLog } from './data/trajectoryData'
 import { useDebouncedParameterRestream } from './hooks/useDebouncedParameterRestream'
 import { usePlaybackClock } from './hooks/usePlaybackClock'
 import { useTrajectoryStream } from './hooks/useTrajectoryStream'
@@ -25,7 +26,6 @@ export default function App() {
   const failStream = useSimulationStore((state) => state.failStream)
   const loadReplay = useSimulationStore((state) => state.loadReplay)
   const setTrialCount = useSimulationStore((state) => state.setTrialCount)
-  const setTrialSet = useSimulationStore((state) => state.setTrialSet)
   const setViewMode = useSimulationStore((state) => state.setViewMode)
   const startStream = useTrajectoryStream()
   usePlaybackClock()
@@ -50,8 +50,11 @@ export default function App() {
   const selectScreen = useCallback(
     (next) => {
       setScreen(next)
-      if (next === 'trials') setViewMode('trials')
-      else if (useSimulationStore.getState().viewMode === 'trials') {
+      if (next === 'trials' || next === 'train') {
+        setViewMode(next === 'trials' ? 'trials' : 'training')
+        useSimulationStore.getState().loadTrials()
+      }
+      else if (['trials', 'training'].includes(useSimulationStore.getState().viewMode)) {
         setViewMode('single')
       }
     },
@@ -79,11 +82,9 @@ export default function App() {
   const handleTrialCountChange = useCallback(
     (count) => {
       setTrialCount(count)
-      const frames = useSimulationStore.getState().frames
-      if (frames.length < 2) return
-      loadTrialSet({ baseFrames: frames, count }).then(setTrialSet)
+      useSimulationStore.getState().loadTrials()
     },
-    [setTrialCount, setTrialSet],
+    [setTrialCount],
   )
 
   return (
@@ -107,6 +108,7 @@ export default function App() {
         {screen === 'replay' && (
           <SessionReplayPanel onReplay={handleReplay} />
         )}
+        {screen === 'rag' && <RagPanel />}
         {screen === 'spec' && <SpecGroundingPanel />}
         <PlaybackControls />
       </div>

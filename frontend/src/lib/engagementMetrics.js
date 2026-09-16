@@ -31,7 +31,12 @@ function num(value, digits = 0) {
 }
 
 /** Derive HUD quantities from a trajectory frame (+ optional neighbors for accel). */
-export function engagementMetrics(frame, previousFrame = null, streamResult = null) {
+export function engagementMetrics(
+  frame,
+  previousFrame = null,
+  streamResult = null,
+  gLimit = G_LIMIT,
+) {
   if (!frame) {
     return {
       clock: '+0.00s',
@@ -42,14 +47,14 @@ export function engagementMetrics(frame, previousFrame = null, streamResult = nu
       gTxt: '—',
       gFrac: 0,
       gPct: '0%',
-      gColor: '#f2f2f2',
+      gColor: '#f4f5f7',
       altI: '—',
       spdI: '—',
       altT: '—',
       spdT: '—',
       pk: 0,
       pkTxt: '—',
-      pkColor: '#f2f2f2',
+      pkColor: '#f4f5f7',
       missTxt: '—',
       losTxt: '—',
       alert: null,
@@ -87,7 +92,7 @@ export function engagementMetrics(frame, previousFrame = null, streamResult = nu
     )
   }
   const gLoad = accelMag / G0
-  const gFrac = Math.min(gLoad / G_LIMIT, 1)
+  const gFrac = Math.min(gLoad / gLimit, 1)
   const pk = Math.max(
     0,
     Math.min(
@@ -97,9 +102,9 @@ export function engagementMetrics(frame, previousFrame = null, streamResult = nu
   )
 
   let alert = null
-  if (range < 260) alert = { text: 'INTERCEPT LOCK · TERMINAL', color: '#ff2d16' }
+  if (range < 260) alert = { text: 'INTERCEPT LOCK · TERMINAL', color: '#ff5238' }
   else if (gFrac > 0.8)
-    alert = { text: 'G-LIMIT 82% · COMMAND SATURATED', color: '#ff2d16' }
+    alert = { text: 'G-LIMIT 82% · COMMAND SATURATED', color: '#ff5238' }
 
   const interceptorSpeed = hypot3(pVel)
   const targetSpeed = hypot3(tVel)
@@ -113,7 +118,7 @@ export function engagementMetrics(frame, previousFrame = null, streamResult = nu
     gLoad,
     gTxt: `${num(gLoad, 1)} G`,
     gFrac,
-    gColor: gFrac > 0.8 ? '#ff2d16' : '#f2f2f2',
+    gColor: gFrac > 0.8 ? '#ff5238' : '#f4f5f7',
     gPct: `${gFrac * 100}%`,
     altI: num(pPos.z, 0),
     spdI: num(interceptorSpeed, 0),
@@ -121,7 +126,7 @@ export function engagementMetrics(frame, previousFrame = null, streamResult = nu
     spdT: num(targetSpeed, 0),
     pk,
     pkTxt: `${num(pk, 1)}%`,
-    pkColor: pk > 90 ? '#ff2d16' : '#f2f2f2',
+    pkColor: pk > 90 ? '#62d3a4' : '#f4f5f7',
     missTxt:
       streamResult?.closest_approach_m != null
         ? `${num(streamResult.closest_approach_m, 1)} m`

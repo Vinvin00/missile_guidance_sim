@@ -7,6 +7,7 @@ import pytest
 
 from guidance_sim.rl.actions import world_to_lateral
 from guidance_sim.rl.environment import InterceptionEnv
+from guidance_sim.rl.reward import RewardConfig
 from guidance_sim.simulation.engine import SimulationConfig
 
 
@@ -90,3 +91,20 @@ def test_miss_terminal_uses_closest_approach_not_final_range():
     not_final = -100.0 * np.tanh(result["final_range_m"] / 1_000.0)
     assert result["terminal"] == pytest.approx(expected, rel=1e-6)
     assert abs(result["terminal"] - not_final) > 1.0
+
+
+def test_precision_bonus_uses_substep_closest_approach():
+    config = SimulationConfig(dt=0.02, max_time=45.0, intercept_radius=5.0)
+    plain = _rollout(InterceptionEnv(config=config), _pn_policy)
+    env = InterceptionEnv(
+        config=config,
+        reward_config=RewardConfig(precision_weight=50.0, precision_scale_m=5.0),
+    )
+    precise = _rollout(env, _pn_policy)
+    cpa = env.closest_approach_m
+    assert precise["outcome"] == plain["outcome"] == "hit"
+    # Sub-step CPA can only tighten the step-sampled minimum range.
+    assert 0.0 <= cpa <= precise["min_range_m"] + 1e-9
+    assert precise["terminal"] - plain["terminal"] == pytest.approx(
+        50.0 * np.exp(-cpa / 5.0), rel=1e-6
+    )

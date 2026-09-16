@@ -30,6 +30,7 @@ _SCENARIO_ROLLOUT: dict[ScenarioId, str] = {
     "crossing-intercept": "no_maneuver_demo",
     "head-on-intercept": "no_maneuver_demo",
     "evasive-climb": "weave_5g_070hz",
+    "g-limited-turn": "no_maneuver_demo",
 }
 
 

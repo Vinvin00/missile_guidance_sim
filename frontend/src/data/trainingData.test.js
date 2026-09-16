@@ -9,17 +9,19 @@ describe('training log adapter', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => [
-          { episode: 1, reward: 12, success: false },
-          { episode: 2, reward: 40, success: true },
-        ],
+        json: async () => ({
+          episodes: [
+            { episode: 1, reward: 12, success: false },
+            { episode: 2, reward: 40, success: true },
+          ],
+          checkpoints: [],
+        }),
       })),
     )
 
-    await expect(loadTrainingLog('/mock/training-log.json')).resolves.toEqual([
-      { episode: 1, reward: 12, success: false },
-      { episode: 2, reward: 40, success: true },
-    ])
+    const log = await loadTrainingLog('/api/training')
+    expect(log.episodes).toHaveLength(2)
+    expect(fetch).toHaveBeenCalledWith('/api/training')
     vi.unstubAllGlobals()
   })
 

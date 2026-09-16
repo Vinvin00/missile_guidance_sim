@@ -17,7 +17,11 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from guidance_sim.physics.entities import State
+from guidance_sim.physics.atmosphere import G0, isa_density
+from guidance_sim.physics.aerodynamics import body_aero_force, dynamic_pressure
+from guidance_sim.physics.controls import RUDDER
+from guidance_sim.physics.dynamics import MAX_PITCH_RATE_RAD_S, MAX_ROLL_RATE_RAD_S
+from guidance_sim.physics.entities import RigidBodyEntity, State
 
 UP = np.array([0.0, 0.0, 1.0])
 
@@ -65,6 +69,15 @@ def _vertical_direction(velocity: np.ndarray) -> np.ndarray:
         if norm < 1e-9:
             return np.zeros(3)
     return raw / norm
+
+
+def _time_to_go(target_state: State, pursuer_state: State) -> Optional[float]:
+    """Range / closing speed; None when receding or parallel (no finite t_go)."""
+    relative_position = target_state.position - pursuer_state.position
+    relative_velocity = target_state.velocity - pursuer_state.velocity
+    range_m = float(np.linalg.norm(relative_position))
+    closing_speed = -float(np.dot(relative_position, relative_velocity)) / max(range_m, 1e-9)
+    return range_m / closing_speed if closing_speed > 1e-6 else None
 
 
 class ManeuverProfile(ABC):
@@ -195,16 +208,7 @@ class BreakTurn(ManeuverProfile):
         if pursuer_state is None:
             self._time_to_go_s = None
             return
-        relative_position = target_state.position - pursuer_state.position
-        relative_velocity = target_state.velocity - pursuer_state.velocity
-        range_m = float(np.linalg.norm(relative_position))
-        closing_speed = -float(np.dot(relative_position, relative_velocity)) / max(
-            range_m, 1e-9
-        )
-        # Receding or parallel: no finite time-to-go to trigger against.
-        self._time_to_go_s = (
-            range_m / closing_speed if closing_speed > 1e-6 else None
-        )
+        self._time_to_go_s = _time_to_go(target_state, pursuer_state)
 
     def _is_active(self, t: float) -> bool:
         # Once a break is committed it is held for the rest of the run; a
@@ -455,3 +459,153 @@ class ManeuverSequence(ManeuverProfile):
             # relative to when its segment opens, not to episode start.
             total = total + profile.lateral_accel(t - start_s, state)
         return total
+
+
+class CobraManeuver(ManeuverProfile):
+    """
+    Post-stall "Cobra" evasion for a 6-DOF `RigidBodyEntity` target.
+
+    The profile only commands what a pilot commands: throttle and body
+    rates (`entity.rate_cmd`), each bounded by the FCS command limits. The
+    autopilot turns those into elevator/aileron/rudder/thrust-vector
+    deflections through rate-limited actuators, and Euler's equations do
+    the rest. Nothing sets attitude, position or velocity. The pitch-up
+    rate, the deceleration, the near-zero-airspeed hang and the fall all
+    come out of forces and moments. In the hang the aero surfaces have no
+    q, so pitch authority there is thrust vectoring.
+
+    `hold_level_until_trigger` flies the armed phase as an ordinary
+    guidance-style lateral command (lift = weight, plus sink-rate feedback)
+    with throttle trimmed to drag. The same accel autopilot as every other
+    maneuver tracks it.
+
+    Phases: armed -> throttle_cut -> pitch_up -> hang -> spiral -> recovered.
+    `hang` is telemetry only (airspeed < `hang_speed_m_s`) and may be skipped
+    if the vehicle starts falling before bleeding that far. `recovered`
+    returns the entity to the accel autopilot with a zero command.
+
+    Trigger mirrors `BreakTurn`: `trigger_time_to_go_s` against engagement
+    geometry, else absolute `trigger_time_s`.
+    """
+
+    PHASES = ("armed", "throttle_cut", "pitch_up", "hang", "spiral", "recovered")
+    _GAIN = 3.0  # 1/s, attitude error -> body-rate command (then clipped to FCS limits)
+
+    def __init__(
+        self,
+        entity: RigidBodyEntity,
+        trigger_time_to_go_s: Optional[float] = None,
+        trigger_time_s: float = 0.0,
+        pitch_target_deg: float = 88.0,
+        idle_throttle: float = 0.02,
+        hang_speed_m_s: float = 40.0,
+        spiral_bank_deg: float = 60.0,
+        spiral_alpha_deg: float = 10.0,
+        spiral_throttle: float = 0.5,
+        recovery_q_pa: float = 3_000.0,
+        recovery_altitude_loss_m: float = 100.0,
+        hold_level_until_trigger: bool = False,
+        pitch_up_throttle: Optional[float] = None,
+    ):
+        if not isinstance(entity, RigidBodyEntity):
+            raise TypeError("CobraManeuver needs a RigidBodyEntity")
+        self.entity = entity
+        self.trigger_time_to_go_s = trigger_time_to_go_s
+        self.trigger_time_s = float(trigger_time_s)
+        self.pitch_target = float(np.deg2rad(pitch_target_deg))
+        self.idle_throttle = float(idle_throttle)
+        self.hang_speed_m_s = float(hang_speed_m_s)
+        self.spiral_bank = float(np.deg2rad(spiral_bank_deg))
+        self.spiral_alpha = float(np.deg2rad(spiral_alpha_deg))
+        self.spiral_throttle = float(spiral_throttle)
+        self.recovery_q_pa = float(recovery_q_pa)
+        self.recovery_altitude_loss_m = float(recovery_altitude_loss_m)
+        self.hold_level_until_trigger = bool(hold_level_until_trigger)
+        # None = stay at idle through the pull (the classic throttle-cut Cobra).
+        # A value keeps thrust on the upturned nose, which adds vertical
+        # displacement to the zoom.
+        self.pitch_up_throttle = pitch_up_throttle
+        self.phase = "armed"
+        self.phase_history: list[tuple[float, str]] = [(0.0, "armed")]
+        self._time_to_go_s: Optional[float] = None
+        self._spiral_start_altitude_m = 0.0
+
+    def update_engagement(self, t: float, target_state: State, pursuer_state: Optional[State]) -> None:
+        self._time_to_go_s = None if pursuer_state is None else _time_to_go(target_state, pursuer_state)
+
+    def _enter(self, t: float, phase: str) -> None:
+        self.phase = phase
+        self.phase_history.append((t, phase))
+
+    def _hold_level(self, state: State) -> np.ndarray:
+        e = self.entity
+        speed = state.speed()
+        if speed < 1.0:
+            return np.zeros(3)
+        up = _vertical_direction(state.velocity)
+        cos_gamma = float(np.dot(UP, up))
+        v = e.vehicle
+        drag = -float(np.dot(
+            body_aero_force(e.x[3:6], isa_density(state.altitude()), v.reference_area,
+                            v.drag_coefficient, e.params.aero, e.deflection[RUDDER]),
+            e.x[3:6] / speed,
+        ))
+        e.throttle = float(np.clip(drag / e.params.max_thrust, 0.0, 1.0)) if e.params.max_thrust > 0 else 0.0
+        # Lift = weight·cos(gamma), plus 1/s sink-rate feedback.
+        return (G0 * cos_gamma - 1.0 * float(state.velocity[2])) * up
+
+    def lateral_accel(self, t: float, state: State) -> np.ndarray:
+        e = self.entity
+        if self.phase == "armed":
+            if self.trigger_time_to_go_s is not None and self._time_to_go_s is not None:
+                triggered = self._time_to_go_s <= self.trigger_time_to_go_s
+            else:
+                triggered = t >= self.trigger_time_s
+            if not triggered:
+                return self._hold_level(state) if self.hold_level_until_trigger else np.zeros(3)
+            e.throttle = self.idle_throttle if self.pitch_up_throttle is None else float(self.pitch_up_throttle)
+            e.rate_cmd = np.zeros(3)
+            self._enter(t, "throttle_cut")
+            return np.zeros(3)
+
+        if self.phase == "throttle_cut":  # one control tick, then pull
+            self._enter(t, "pitch_up")
+
+        phi, theta, _psi = e.euler_angles()
+        _speed, alpha, beta = e.wind_angles()
+        if self.phase in ("pitch_up", "hang"):
+            e.rate_cmd = np.array([
+                0.0,
+                np.clip(self._GAIN * (self.pitch_target - theta), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                0.0,
+            ])
+            pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
+            # `pitch_up_throttle` is boost through the pull, not a command to
+            # climb vertically forever.  Once the nose reaches the target,
+            # return to idle so drag and gravity can create the hang, apex,
+            # and ensuing fall that define the Cobra.
+            if pitch_done and self.pitch_up_throttle is not None:
+                e.throttle = self.idle_throttle
+            if self.phase == "pitch_up" and state.speed() < self.hang_speed_m_s:
+                self._enter(t, "hang")
+            if pitch_done and state.velocity[2] < 0.0:
+                self._spiral_start_altitude_m = state.altitude()
+                self._enter(t, "spiral")
+
+        if self.phase == "spiral":
+            e.throttle = self.spiral_throttle
+            # Nose back onto the velocity vector at a small alpha while banked, so
+            # the tilted lift (not a scripted path) winds the descent into a spiral.
+            e.rate_cmd = np.array([
+                np.clip(self._GAIN * (self.spiral_bank - phi), -MAX_ROLL_RATE_RAD_S, MAX_ROLL_RATE_RAD_S),
+                np.clip(self._GAIN * (self.spiral_alpha - alpha), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                np.clip(self._GAIN * beta, -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+            ])
+            q = dynamic_pressure(isa_density(state.altitude()), state.speed())
+            lost = self._spiral_start_altitude_m - state.altitude()
+            if q >= self.recovery_q_pa and lost >= self.recovery_altitude_loss_m:
+                e.rate_cmd = None
+                e.throttle = 0.0
+                self._enter(t, "recovered")
+
+        return np.zeros(3)

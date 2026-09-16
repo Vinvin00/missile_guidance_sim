@@ -1,15 +1,16 @@
-export async function loadTrainingLog(
-  source = '/mock/training-log.json',
-) {
-  // Isolated swap point: replace this fetch with a real training-loop log.
-  const response = await fetch(source)
+// Real episode log + checkpoint evals of the run behind CURRENT_RL_BASELINE.json.
+export async function loadTrainingLog(source = '/api/training') {
+  const response = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? ''}${source}`,
+  )
   if (!response.ok) {
     throw new Error(`Training log request failed (${response.status}).`)
   }
-  const entries = await response.json()
+  const log = await response.json()
   if (
-    !Array.isArray(entries) ||
-    entries.some(
+    !Array.isArray(log?.episodes) ||
+    !Array.isArray(log.checkpoints) ||
+    log.episodes.some(
       (entry) =>
         !Number.isInteger(entry.episode) ||
         !Number.isFinite(entry.reward) ||
@@ -18,5 +19,5 @@ export async function loadTrainingLog(
   ) {
     throw new Error('Unsupported training log format.')
   }
-  return entries
+  return log
 }

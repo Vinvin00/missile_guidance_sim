@@ -1,4 +1,4 @@
-import { engagementMetrics } from '../lib/engagementMetrics'
+import { G_LIMIT, engagementMetrics, num } from '../lib/engagementMetrics'
 import { useSimulationStore } from '../store/useSimulationStore'
 
 export function HudOverlay() {
@@ -9,20 +9,33 @@ export function HudOverlay() {
     (state) => state.selectedGuidanceLaw,
   )
   const catalog = useSimulationStore((state) => state.catalog)
-
-  const frame = frames[cursor]
-  const previous = cursor > 0 ? frames[cursor - 1] : null
-  const m = engagementMetrics(frame, previous, streamResult)
-  const law =
-    catalog?.guidance_laws.find((item) => item.id === selectedGuidanceLaw) ??
-    null
-  const lawStatus = law
-    ? `${law.id.toUpperCase()} ACTIVE · N=4`
-    : 'PN ACTIVE · N=4'
+  const streamMeta = useSimulationStore((state) => state.streamMeta)
+  const selectedScenarioId = useSimulationStore(
+    (state) => state.selectedScenarioId,
+  )
 
   const interceptor = catalog?.vehicle_profiles.find(
     (p) => p.role === 'interceptor',
   )
+  // Limit of the scenario that produced the frames on screen, not the picker.
+  const scenarioId = streamMeta?.scenario_id ?? selectedScenarioId
+  const gLimit =
+    catalog?.scenarios.find((s) => s.id === scenarioId)?.pursuer_g_limit ??
+    interceptor?.parameters.maneuver_limit?.value ??
+    G_LIMIT
+
+  const frame = frames[cursor]
+  const previous = cursor > 0 ? frames[cursor - 1] : null
+  const m = engagementMetrics(frame, previous, streamResult, gLimit)
+  const law =
+    catalog?.guidance_laws.find((item) => item.id === selectedGuidanceLaw) ??
+    null
+  const lawStatus = !law
+    ? 'PN ACTIVE · N=4'
+    : law.id === 'rl'
+      ? 'RL POLICY ACTIVE'
+      : `${law.id.toUpperCase()} ACTIVE · N=${law.id === 'ogl' ? 3 : 4}`
+
   const target = catalog?.vehicle_profiles.find((p) => p.role === 'target')
   const massTxt = interceptor
     ? interceptor.parameters.mass.value.toLocaleString()
@@ -60,10 +73,6 @@ export function HudOverlay() {
             <span className="law-dot is-hot" />
             <span>{lawStatus}</span>
           </div>
-          <div className="law-row is-dim">
-            <span className="law-dot" />
-            <span>RL AGENT STANDBY</span>
-          </div>
         </div>
         <div className="panel-rule" />
         <div className="g-block">
@@ -79,8 +88,8 @@ export function HudOverlay() {
           </div>
           <div className="g-scale">
             <span>0</span>
-            <span>20 WARN</span>
-            <span>25 G LIMIT</span>
+            <span>{num(gLimit * 0.8, 0)} WARN</span>
+            <span>{num(gLimit, 0)} G LIMIT</span>
           </div>
         </div>
       </section>

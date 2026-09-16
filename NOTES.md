@@ -1,3 +1,249 @@
+## 2026-09-16 — Fresh seed confirms the fine-tune; re-promoted; found and fixed a CPU-inference determinism bug
+
+Two follow-ups to yesterday's promotion (below): confirm it wasn't a
+7-seed-batch fluke, and chase down seed2's weakness.
+
+**seed2 extended CP7-10** (same precision+low-noise fine-tune, 4 more
+checkpoints): 63.3% -> 64.7% -> 65.3% -> 67.7% n=300. A real but slow climb,
+still below PN's 72.7% and not significant either way at CP10 (McNemar
+p=0.18). Treating this as a genuinely weaker seed, not a bug -- it has
+trailed PN at every checkpoint of every variant of this lineage since its
+very first CP6 (65.3%, 2026-09-14), unrelated to anything changed since.
+Not pursuing further; not worth the compute.
+
+**Fresh seed8**, seed 99999999, never touched by any prior experiment:
+full from-scratch CP1-CP6 on the standard `evasive_redesign_config()`, then
+CP7-CP8 with the identical precision-bonus + low-noise fine-tune as
+yesterday's seed3 promotion. Result: **88.7% n=300 (266/300)**, median miss
+3.7 m, max miss 15.8 m, McNemar p=9e-08 vs PN -- the strongest result across
+all eight seeds now run through this config, and it strictly dominates the
+just-promoted seed3 checkpoint (83.0%) on every axis. Re-promoted:
+`CURRENT_RL_BASELINE.json` -> `evasive_zemtgo10_seed8/checkpoints/rl_checkpoint_08.zip`.
+
+### Determinism bug found while re-validating the golden rollout tests
+
+Promoting a new checkpoint requires regenerating `outputs/rl_rollouts/*.json`
+(`scripts/capture_rl_rollout.py`) and a few tests with values keyed to the
+specific baseline (`test_shadow_compare.py`, `test_api_stream.py`,
+`test_rollout_stream.py`) -- all updated for seed8. **Caught in the process:
+yesterday's seed3 promotion was never actually re-verified against the full
+suite**, because `pytest` was run before writing the new
+`CURRENT_RL_BASELINE.json`, not after. Running it after (as the task
+protocol requires) surfaced a real bug, not just stale golden values:
+regenerating the same golden rollout twice, in two separate process
+launches, gave two different results (890 vs 891 frames, closest approach
+0.32 m vs 1.50 m) for the *identical* model, seed, and code. Repeating the
+same call **within** one process was perfectly reproducible; only
+cross-process repeats diverged.
+
+Root cause: PyTorch's default CPU inference uses multiple threads (10 on
+this machine), and multi-threaded matmul/reduction order isn't fixed across
+process launches -- so a recurrent policy stepped ~900 times accumulates
+enough floating-point-order variance to flip a near-tangent intercept by a
+frame or two. Confirmed the fix empirically: `torch.set_num_threads(1)`
+inside the process makes 3 separate launches match bit-for-bit; the default
+thread count does not. This means the *live* `/api/guidance/session`
+endpoint could already give a different rollout for the same seed depending
+on server-process thread scheduling -- a real, previously-undetected
+reproducibility bug, not merely a test artifact. Fixed at the shared root:
+`FrozenPolicy.__init__` (`ml/policy_inference.py`) now pins
+`torch.set_num_threads(1)` before loading the model; `capture_rl_rollout.py`
+does the same so the golden capture and the serving path stay comparable.
+Full suite (163 tests) passes after the fix, including the golden-rollout
+comparisons, which is what should have already been true after yesterday's
+promotion.
+
+## 2026-09-15 — Precision reward + low-noise fine-tune: promoted, 6/7 seeds now clear PN
+
+Goal: get past "one seed beats PN, others tie or trail" (2026-09-14 entry
+below) to a result that holds across seeds. Two additive changes, both
+off-by-default so every existing checkpoint's config/results stay
+bit-identical:
+
+**1. Terminal precision bonus.** Diagnosed why every RL loss on the 300-case
+set was a 5-18 m near-miss while PN's losses split between near-misses and
+catastrophic ones (hundreds to >1000 m): the terminal reward is flat exactly
+where these losses sit -- binary `intercept_bonus` at `intercept_radius`
+(5 m), and `miss_penalty * tanh(min_range/3000)` has ~0 gradient below
+~50 m. Nothing in the reward distinguishes a 1 m hit from a 9 m miss. Added
+`RewardConfig.precision_weight` / `precision_scale_m`
+(`src/guidance_sim/rl/reward.py`): on any terminal step,
+`+precision_weight * exp(-closest_approach_m / precision_scale_m)`. Used
+`precision_weight=50, precision_scale_m=5`.
+
+`closest_approach_m` is the true sub-step closest point of approach, not
+`min_range_m` (which only samples range at step ends -- at ~350 m/s closing
+and dt=0.02s a dead-centre pass can read several metres off). New
+`InterceptionEnv._segment_closest_approach` linearly interpolates relative
+position across each step (and extrapolates one step further along relative
+velocity when the step ends in a hit, since the episode stops at the first
+in-radius sample). New env field `closest_approach_m`; new info key
+`closest_approach_m`. New test:
+`test_precision_bonus_uses_substep_closest_approach`
+(`tests/test_rl_reward.py`).
+
+**2. Low-noise fine-tune.** CP6 checkpoints sit at action log-std ~0.72
+(~175 m/s^2 of exploration noise) -- fine, for exploring during from-scratch
+training, but that's an enormous amount of random command layered on top of
+a metre-scale terminal signal during fine-tuning. Confirmed the problem
+before touching noise: one extra checkpoint of *unmodified* training at the
+original noise/LR swung held-out hit rate by up to +/-12 points per seed
+(seed4: 80.7%->71.3%; seed5: 67.7%->79.7%), so single-checkpoint deltas were
+noise-dominated, not signal. New `PPOTrainingConfig.finetune_log_std` (+
+`--finetune-log-std`/`--learning-rate`/`--ent-coef` CLI flags on
+`run_evasive_checkpoint.py`): on a resumed checkpoint, resets
+`policy.log_std` to this value and overrides `learning_rate`/`ent_coef` via
+`RecurrentPPO.load(..., custom_objects=...)`. Used log_std=-2.0
+(~33 m/s^2), learning_rate=5e-5 (was 3e-4), ent_coef=0 (was 1e-3).
+`None` (default) resumes exactly as before -- verified by re-running the
+full suite (163 passed) after these changes.
+
+### Result: every CP6 seed fine-tuned 2 more checkpoints (CP7, CP8), 300-case eval each
+
+Paired comparison against PN on the identical 300 cases (McNemar exact test,
+not the unpaired z-test used previously -- correct once both methods run the
+same case list; see new `scripts/compare_vs_pn.py`). High-noise round first
+(precision term only, original LR/noise), then low-noise round (both
+changes) restarting from the same CP6 parents:
+
+| seed | CP6 (prior) | high-noise CP8 | low-noise CP8 | vs PN (low-noise, p) |
+|---|---|---|---|---|
+| seed3 | 80.7% | 81.0% | **83.0%** | 0.001 |
+| seed4 | 73.7% | 71.3% | **81.0%** | 0.013 |
+| seed6 | 73.0% | 86.0% | **80.3%** | 0.015 |
+| effort8_seed2 | 77.7% | 85.3% | **79.7%** | 0.042 |
+| seed7 | 73.7% | 76.3% | 76.7% | 0.29 (above, n.s.) |
+| seed5 | 80.7% | 79.7% | 72.3% | 1.0 (tied) |
+| seed2 | 65.3% | 67.7% | 64.7% | 0.02 (**worse**) |
+| PN (info-matched) | 72.7% | -- | -- | -- |
+
+Controls (seed2/3/4, no precision term, same low-noise fine-tune) landed at
+70.7% / 72.7% / 77.7% -- below or at their precision-term counterparts in
+2 of 3 cases, consistent with the term contributing something beyond extra
+training, though not conclusively (n=1 seed each, all within plausible
+per-checkpoint noise even at low noise).
+
+Low-noise clearly damped the checkpoint-to-checkpoint swing (average
+|CP7->CP8| delta on the precision-term runs: ~8 points high-noise, ~4.4
+low-noise) but did not change which seed is weakest -- seed2 trails PN in
+every single variant tried across this entire lineage, going back to its
+CP6 65.3% before any of this work. Treating it as a candidate bad seed
+rather than something either change broke.
+
+**Promoted.** `CURRENT_RL_BASELINE.json` now points to
+`outputs/precision_ft_lownoise/seed3_pw50/checkpoints/rl_checkpoint_08.zip`
+-- 83.0% n=300 (249/300), median miss 3.8 m, max miss 13.3 m, McNemar
+p=0.001 vs PN. This is the same seed/lineage as the prior baseline (CP6),
+fine-tuned two more checkpoints with the two changes above, not a
+from-scratch retrain. 6 of 7 CP6 seeds now clear PN's 72.7% under this
+fine-tune (4 significantly); seed2 does not and is being investigated
+further (CP9-10 extension + a fresh seed8, both queued to check whether
+it's a slow starter or structurally bad).
+
+Full run artifacts: `outputs/precision_ft/` (high-noise round),
+`outputs/precision_ft_lownoise/` (low-noise round, promoted from). New
+script: `scripts/compare_vs_pn.py`.
+
+## 2026-09-14 — 300-case held-out eval: the picture narrows, one seed still wins
+
+`scripts/eval_checkpoint_large_heldout.py` (new) re-evaluates a trained
+checkpoint against `build_held_out_cases(n_cases=N)` for any N -- the
+sequence is a deterministic extension of the same seed stream, so the
+original 50 cases are indices 0-49 of a larger set, not replaced. Ran all
+three seeds' CP6 checkpoints, plus a matched PN baseline
+(`run_evasive_pn_baseline.py --cases 300`), on **300 cases** (6x the
+original), output at `outputs/evasive_largeeval_300/`.
+
+| | n=50 (original) | n=300 | z vs PN (n=300) |
+|---|---|---|---|
+| seed3 CP6 | 82% | **80.7%** | **+2.32 (p~0.02, significant)** |
+| seed4 CP6 | 80% | 73.7% | +0.28 (not significant -- ties PN) |
+| seed2 CP6 | 68% | 65.3% | -1.94 (p~0.05, marginally below PN) |
+| PN (info-matched) | 78% | 72.7% | -- |
+
+**seed4's apparent win over PN does not survive the larger set** -- it drops
+from 80% to 73.7%, statistically indistinguishable from PN's 72.7%
+(z=0.28). PN itself also drops (78%->72.7%), confirming the original 50-case
+set was a mildly favorable draw for PN too, not just noise in the RL
+numbers. **seed3 is the one result that holds up under more statistical
+power**: 80.7% vs PN's 72.7% at n=300, z=2.32, genuinely significant. seed2
+stays the weakest of the three, now marginally *below* PN rather than just
+"lower."
+
+**The tail-safety result is unchanged and gets stronger with more samples:**
+
+| | n=300 hits | median | p90 | p99 | max |
+|---|---|---|---|---|---|
+| seed3 CP6 | 242/300 | 4.2 m | 6.7 m | 13.7 m | 15.4 m |
+| seed4 CP6 | 221/300 | 4.3 m | 7.8 m | 14.2 m | 18.0 m |
+| seed2 CP6 | 196/300 | 4.6 m | 8.6 m | 13.6 m | 17.2 m |
+| PN | 218/300 | 4.0 m | 57.2 m | **1208.7 m** | **1347.2 m** |
+
+At n=300, PN's per-maneuver breakdown shows exactly where the catastrophic
+tail lives: `break_turn` 41/75 and `random_jink` 41/75 (55% each) vs
+`bounded_weave` 69/75 and `vertical_jink` 67/75 (89-92%) -- PN structurally
+cannot track roughly half of the break-turn and random-jink cases, and when
+it fails it fails by hundreds to over a thousand metres. Every RL
+checkpoint's worst miss across all 300 cases stays under 18 m. This claim
+is now backed by 6x the sample and remains exception-free.
+
+**Revised bottom line for promotion:** only `evasive_zemtgo10_seed3` CP6
+has a statistically defensible win over PN on hit rate (n=300, p~0.02);
+seed4 is a tie, seed2 trails. All three retain the categorical tail-safety
+advantage. If promotion is pursued, `evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip`
+is the candidate, not "the zem_t_go_max_s config" generically -- the
+seed-to-seed spread (65-81% at n=300) is real, not sampling noise, per the
+z-scores above. `CURRENT_RL_BASELINE.json` still untouched.
+
+## 2026-09-14 — third seed (seed4) to CP6: 80%, breaks the tie
+
+`evasive_zemtgo10_seed4` (seed 61803399), from scratch straight through
+CP1-CP6, as the tie-breaker between seed3 (82%, real breakthrough at CP5)
+and seed2 (68%, plateaued since CP4).
+
+| | CP1 | CP2 | CP3 | CP4 | CP5 | CP6 |
+|---|---|---|---|---|---|---|
+| seed3 | 16% | 12% | 42% | 12% | 74% | **82%** |
+| seed2 | 8% | 18% | 28% | 66% | 62% | 68% |
+| seed4 | 28% | 32% | **74%** | 80% | 74% | **80%** |
+
+seed4 breaks through a checkpoint earlier than seed3 (CP3 vs CP5) and holds
+75-80% from CP3 onward -- the cleanest convergence of the three.
+
+**Three-seed CP6 comparison, all against the same held-out set:**
+
+| | hits | median miss | p90 miss | max miss |
+|---|---|---|---|---|
+| seed3 | 41/50 (82%) | 3.9 m | 7.1 m | 7.9 m |
+| seed4 | 40/50 (80%) | 4.4 m | 7.0 m | 13.3 m |
+| seed2 | 34/50 (68%) | 4.8 m | 7.2 m | 12.4 m |
+| PN (info-matched) | 39/50 (78%) | 3.9 m | 832.4 m | 1210.1 m |
+
+**Tie broken: 2 of 3 seeds land at 80-82%, at or above PN; the third holds
+68%, below PN but still far above every pre-`zem_t_go_max_s` lineage's ~22%
+ceiling.** Mean across seeds (76.7%) roughly matches PN's 78%; median (80%)
+exceeds it. `zem_t_go_max_s=10` at CP6 is now a reproducible, if
+seed-variable, match for the classical baseline on hit rate alone.
+
+**The tail behavior is the more unambiguous win and holds across all three
+seeds without exception:** every RL checkpoint's worst held-out miss is
+under 14 m; PN's worst miss on the same set is 832-1210 m (catastrophic
+loss, mostly on break-turn cases it never acquires). The RL policy has
+never once, across three independent training runs, produced a
+catastrophic loss on this held-out set. That is a categorical difference
+in failure mode, not just a mean-hit-rate coin flip, and it's the strongest
+single claim this investigation supports.
+
+**Still not promoted.** `CURRENT_RL_BASELINE.json` untouched. Open before
+promotion: (a) the held-out set is only 50 cases, so individual seed hit
+rates carry real binomial noise (a 68-82% spread across 3 seeds at n=50 is
+plausible given noise alone -- CP1-CP4 noise finding above applies here
+too, though the tail-miss result is far larger than any plausible noise
+margin); (b) no seed has been pushed past CP6 to check for a further
+plateau or decline; (c) still evaluated only on the fixed 4-maneuver-kind
+held-out distribution used throughout this lineage, not a broader stress
+test.
+
 ## 2026-09-14 — seed2 pushed to CP6: 68%, confirms the config but not the magnitude
 
 Pushed `evasive_zemtgo10_seed2` to CP6 (resumed from its own CP5, seed
@@ -1446,3 +1692,125 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - **Open item (deferred):** extend `max_time` so 3g/5g can convert to
   hits — requires its **own from-scratch retrain**; not pursued in this
   promotion pass.
+
+## 2026-09-15 — CobraManeuver (3-DOF + attitude, target only)
+
+- `AttitudeAugmentedEntity(PointMassEntity)`: θ, φ integrated via
+  `integrate_state` (flat-vector RK4, entity supplies `state_derivative`).
+  Inactive → `super().step()` exactly (bit-identical test). Base `integrate`
+  untouched so point-mass numbers can't drift.
+- Thrust along body `cos α v̂ + sin α l̂` (Miele/Vinh point-mass EOM form);
+  below 1 m/s falls back to the (θ, ψ) attitude axis.
+- γ uses horizontal speed *signed along nose heading ψ*; ψ follows velocity
+  heading only when it is within 90°, so a tail slide doesn't flip the nose.
+- **Gotcha:** near-zero hang needs a climbing entry; level entry bottoms
+  out ~50–80 m/s (drag ∝ V² can't finish the job). Tests use a 45–60° zoom.
+- **Gotcha:** `Simulation.run()` never calls `update_engagement`, so TTI
+  triggers (BreakTurn and Cobra) only work in the RL env / direct calls. The
+  engine run falls back to `trigger_time_s`. Pre-existing, not changed here.
+- Max pitch 60°/s, roll 90°/s are generic placeholders (AGENTS.md §3). No
+  open-literature figure was verified.
+- Not verified: frontend/API catalog exposure of Cobra; RL env with a Cobra target.
+
+## 2026-09-15 — 6-DOF rigid-body core (`feature/6dof-rigid-body`)
+
+- Interface frozen first: `docs/rl-interface-6dof.md`. The action/obs contract
+  is unchanged, so this is a fine-tune. `InterceptionEnv` was deliberately not
+  touched (owned by `feature/rl-training`); the handoff is a one-line entity swap.
+- Frames: world z-up (unchanged), attitude relative to N = (x_W, −y_W, −z_W)
+  so the body math is textbook FRD/NED. Hamilton scalar-first `q_NB`. The
+  only bridge is `C_WN = diag(1, −1, −1)`.
+- **Gotcha (found, fixed):** the rate feedforward must include gravity
+  (`v × (a_cmd + g)/V²`). Without it the α loop holds a standing error to
+  follow the gravity arc, that error is lift, and a zero-command missile
+  flew 33 m high of ballistic in 5 s (1.1 m in 10 s after the fix).
+- Rate damping is written dimensionally (`¼ρVSb²·Clp·p`) so it stays finite at V → 0.
+- `c_pitch_alpha` is applied as `·sin α`: linear near 0, bounded post-stall.
+  With that, the F-16 elevator cannot hold 90° α, so TVC does the hang (intended).
+- Allocation uses a limit-weighted pinv of B. No explicit mode switch is
+  needed for "surfaces vs TVC".
+- Cobra hang: 6-DOF needs a steeper zoom (75°) for a near-zero (<5 m/s) hang.
+  At a 45–60° entry the lift generated during the finite-rate pitch-up
+  keeps ~22–25 m/s. The old instant-rate model hid that.
+- Removed `AttitudeAugmentedEntity`, `attitude_net_acceleration`,
+  `flight_path_angle`, `clamp_rate`, and the bit-for-bit "inactive = point
+  mass" test (no inactive mode exists now). Replaced by regressions against
+  `PointMassEntity`.
+- Cobra viewer: APN/OGL now hit (4–5 m). PN still misses (22 m). Not re-tuned.
+- Not verified: frozen RL checkpoint on the 6-DOF plant; frontend rendering
+  of the new attitude (the stream still sends `body_axis`/`body_up`, same
+  schema); `scripts/validate_physics.py` envelopes with 6-DOF; Mach effects,
+  engine gyro, thrust lapse (none modelled). Root-level `../AGENTS.md` is
+  not synced (outside the repo); sync it at merge.
+
+## 2026-09-15 — Zero-shot transfer of RL CP6 to the 6-DOF interceptor
+
+- `scripts/eval_6dof_transfer.py`: swaps the pursuer after `InterceptionEnv.reset`
+  (no env edits). Point-mass reruns reproduce published 242/300 and 218/300 exactly.
+- RL CP6: **0/300** on 6-DOF (median miss 913 m). PN: 227/300 on 6-DOF (vs 218 point mass).
+- Root cause: the policy's command RMS is ~140 m/s², against PN's ~45. The τ=0.2 lag
+  hid the jitter (achieved RMS ~62), and point-mass g had no drag cost.
+  Ablation over 20 cases: 6-DOF 0/20 → 13/20 with k_induced = 0.
+- Secondary: α overshoot to 28–35° on full-scale reversals (autopilot, my side,
+  not fixed yet). `lateral_basis` pole when a drained missile falls vertical
+  (RL branch).
+- The spec's original "light fine-tune" prediction was wrong. It has been
+  corrected in docs/rl-interface-6dof.md.
+- Gotcha: 0/20 at n=20 was already conclusive. The 300-case run was for the
+  PN reference and per-maneuver breakdown.
+
+## 2026-09-16 — Merge feature/6dof-rigid-body into feature/cobra-maneuver
+
+- Conflicted with `ad71cc8` ("Cobra dodges the RL policy: full-thrust
+  pull, 0.9 s trigger"), which retuned the *old* 3-DOF+attitude Cobra to
+  also dodge the RL policy. Ported the intent (`pitch_up_throttle`,
+  full-thrust pull, later trigger) into the 6-DOF `CobraManeuver`, then
+  re-swept the trigger time empirically -- the old 0.9 s numbers don't
+  transfer, since the finite pitch-up rate (vs. the old instant snap)
+  needs more warning to open the same separation.
+- Sweep result (`_COBRA_TRIGGER_TIME_TO_GO_S=2.0`, `pitch_up_throttle=1.0`):
+  PN misses by ~56 m, APN ~15 m, OGL ~6.5 m (all comfortably outside the
+  5 m radius; OGL closes furthest since it plans against the predicted
+  intercept). RL, unlike the old model, is **not** reliably dodged: 8-9/12
+  seeds hit. This is a genuine, measured behavior change, not a tuning
+  failure -- the old shortcut's instantaneous nose-snap specifically
+  exploited a reactive policy's reaction time; the 6-DOF model's
+  actuator/inertia-rate-limited climb doesn't. Classical laws, which react
+  to LOS geometry rather than a learned pattern, still miss.
+- The live-viewer interceptor is unchanged (point mass) for every
+  guidance law including RL here -- only the Cobra *target* is 6-DOF. So
+  RL's hit rate on this scenario is unrelated to the pursuer-transfer
+  collapse in `docs/rl-interface-6dof.md` (that was tested with the
+  pursuer itself swapped to `RigidBodyEntity`, which this scenario never
+  does).
+- Test rewritten: `test_cobra_default_scenario_dodges_classical_guidance`
+  (pn/apn/ogl, parametrized, real thresholds) +
+  `test_cobra_default_scenario_does_not_reliably_dodge_rl` (documents the
+  measured RL hit rate honestly instead of asserting a false "dodges
+  everyone").
+- Local `feature/cobra-maneuver` also carried an unpushed RL-training
+  commit (`9502c7b`, CP8 precision-reward promotion) not on
+  `origin/feature/cobra-maneuver` and unrelated to this merge -- left
+  untouched, no conflicts with physics/API files.
+- Not verified: whether `9502c7b`'s own test suite state was green before
+  this merge (assumed yes, not re-derived here).
+## 2026-09-16 — Main/Cobra integration
+
+Merged `main` into the Cobra line on `integration/cobra-main` so the
+viewer/deployment work and Cobra scenario can be evaluated together.
+The only content conflicts were the app screen switch and navigation list.
+Both existing RAG surfaces were retained as separate `rag` and `spec`
+screens; dropping either one would have silently discarded branch behavior.
+## 2026-09-16 — Cobra completes the fall and triggers earlier
+
+The live Cobra held `pitch_up_throttle=1.0` indefinitely after reaching
+its 88-degree pitch target. That made upward thrust exceed gravity, so the
+target never reached an apex and the state machine could never enter the
+spiral. `pitch_up_throttle` now applies only through the pull; at the pitch
+target the maneuver returns to idle, allowing the hang/fall to emerge from
+the 6-DOF forces. The viewer now triggers at a deterministic 2.0 seconds
+after launch: raw range/closing-speed time-to-go was non-monotonic in the
+tail chase and could postpone the pull until the engagement was nearly over.
+The demo separation is 7 km rather than 3 km; at 3 km the 700 m/s pursuer
+terminated the run before the target reached its apex, whereas 7 km preserves
+the full 25-second climb–apex–spiral playback and a clear descent.

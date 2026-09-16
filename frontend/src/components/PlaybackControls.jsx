@@ -88,17 +88,20 @@ export function PlaybackControls() {
 
       <div className="rate-group">
         <span>RATE</span>
-        {RATES.map((rate) => (
-          <button
-            key={rate}
-            type="button"
-            className={rate === playbackRate ? 'is-active' : ''}
-            onClick={() => setPlaybackRate(rate)}
-            disabled={!hasFrames}
-          >
-            {rate}×
-          </button>
-        ))}
+        <div className="rate-buttons" role="group" aria-label="Playback rate">
+          {RATES.map((rate) => (
+            <button
+              key={rate}
+              type="button"
+              className={rate === playbackRate ? 'is-active' : ''}
+              onClick={() => setPlaybackRate(rate)}
+              disabled={!hasFrames}
+              aria-pressed={rate === playbackRate}
+            >
+              {rate}×
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )

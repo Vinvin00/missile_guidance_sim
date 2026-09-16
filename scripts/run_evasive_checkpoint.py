@@ -72,6 +72,27 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--precision-weight",
+        type=float,
+        default=None,
+        help=(
+            "Terminal bonus weight * exp(-closest_approach / 5 m) (default 0). "
+            "Gives gradient between a 1 m hit and a 9 m near-miss, where the "
+            "binary hit bonus and tanh miss penalty give none."
+        ),
+    )
+    parser.add_argument(
+        "--finetune-log-std",
+        type=float,
+        default=None,
+        help=(
+            "Reset the resumed policy's action log-std to this value and apply "
+            "--learning-rate/--ent-coef over the saved ones (low-noise fine-tune)."
+        ),
+    )
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--ent-coef", type=float, default=None)
+    parser.add_argument(
         "--n-envs",
         type=int,
         default=None,
@@ -94,6 +115,14 @@ def main() -> None:
         overrides["effort_weight"] = args.effort_weight
     if args.zem_t_go_max is not None:
         overrides["zem_t_go_max_s"] = args.zem_t_go_max
+    if args.precision_weight is not None:
+        overrides["precision_weight"] = args.precision_weight
+    if args.finetune_log_std is not None:
+        overrides["finetune_log_std"] = args.finetune_log_std
+    if args.learning_rate is not None:
+        overrides["learning_rate"] = args.learning_rate
+    if args.ent_coef is not None:
+        overrides["ent_coef"] = args.ent_coef
     if args.seed is not None:
         overrides["seed"] = args.seed
     if args.n_envs is not None:
@@ -104,7 +133,7 @@ def main() -> None:
         f"max_time={config.max_time:g}s t_go_max={config.reward_config().t_go_max_s:g}s | "
         f"tracking={config.tracking.enabled} | obs={len(config.observation_names)}-D | "
         f"miss_tanh_scale={config.miss_tanh_scale_m:g}m shaping_gamma={config.shaping_gamma:g} "
-        f"effort_weight={config.effort_weight:g} "
+        f"effort_weight={config.effort_weight:g} precision_weight={config.precision_weight:g} "
         f"-> out={args.output_dir}"
     )
     report = run_checkpoint(

@@ -38,10 +38,19 @@ def test_fixed_eval_matrix_matches_rl_groups():
     assert PPOTrainingConfig().max_time == 25.0
 
 
-def test_baseline_pointer_is_checkpoint_05():
+def test_baseline_pointer_is_evasive_zemtgo10_seed8_checkpoint_08():
+    """Promoted 2026-09-16: fresh seed, precision-bonus + low-noise fine-tune.
+
+    88.7% n=300 vs PN's 72.7% (McNemar p=9e-8); see NOTES.md 2026-09-16.
+    """
+
     pointer = load_rl_baseline_pointer(BASELINE_POINTER)
-    assert pointer["model_path"].endswith("rl_checkpoint_05.zip")
-    assert pointer["use_target_turn_rate_obs"] is True
+    assert pointer["model_path"].endswith(
+        "evasive_zemtgo10_seed8/checkpoints/rl_checkpoint_08.zip"
+    )
+    assert pointer["use_target_turn_rate_obs"] is False
+    assert pointer["tracking_enabled"] is True
+    assert pointer["observation_dim"] == 12
     model = REPO_ROOT / pointer["model_path"]
     assert model.is_file()
 

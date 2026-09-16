@@ -68,3 +68,30 @@ def integrate(
     elif method == IntegratorType.RK4:
         return rk4_step(position, velocity, accel_fn, dt)
     raise ValueError(f"Unknown integrator method: {method}")
+
+
+StateDerivativeFn = Callable[[np.ndarray], np.ndarray]
+
+
+def integrate_state(
+    y: np.ndarray,
+    deriv_fn: StateDerivativeFn,
+    dt: float,
+    method: IntegratorType = IntegratorType.RK4,
+) -> np.ndarray:
+    """
+    Euler/RK4 over a flat state vector with an entity-supplied derivative
+    (dy/dt = f(y)). Entities with extra integrated states (e.g. attitude)
+    bring their own `f`; the integrator never inspects entity type. The
+    position/velocity `integrate` above is left as-is so point-mass
+    results stay bit-identical.
+    """
+    if method == IntegratorType.EULER:
+        return y + dt * deriv_fn(y)
+    if method == IntegratorType.RK4:
+        k1 = deriv_fn(y)
+        k2 = deriv_fn(y + 0.5 * dt * k1)
+        k3 = deriv_fn(y + 0.5 * dt * k2)
+        k4 = deriv_fn(y + dt * k3)
+        return y + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    raise ValueError(f"Unknown integrator method: {method}")

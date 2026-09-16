@@ -8,8 +8,10 @@ airframe), benchmarked against each other over a range of target
 maneuverability levels.
 
 This is an applied control-theory + ML portfolio project: the physics
-is standard point-mass flight dynamics (the same simplified model
-used in introductory GNC coursework and drone/aircraft simulation),
+core is 6-DOF rigid-body flight dynamics (quaternion attitude, Euler's
+equations, aero moments, rate-limited control surfaces and thrust
+vectoring behind a cascaded autopilot), with the original point-mass
+model kept as its regression reference,
 the guidance law is the textbook one, and the ML component is layered
 on top for comparison. No sensor/seeker hardware, propulsion, or
 warhead engineering is modeled — everything here operates at the same
@@ -50,12 +52,15 @@ training-dashboard surfaces still use isolated mock loaders.
 ```
 src/guidance_sim/
 ├── physics/
-│   ├── entities.py      # State (3D), VehicleParams, PointMassEntity
+│   ├── entities.py      # State, VehicleParams, RigidBodyEntity (6-DOF) + F16_6DOF / INTERCEPTOR_6DOF data, PointMassEntity (reference)
+│   ├── rotational_dynamics.py  # Quaternions (Hamilton), Euler's equations, frame transforms
+│   ├── aero_moments.py  # Roll/pitch/yaw moments: stability, rate damping, surfaces, thrust vectoring
+│   ├── controls.py      # Deflection layout + actuator lag/rate/position limits
 │   ├── atmosphere.py    # ISA standard atmosphere (density/temp/pressure vs altitude)
-│   ├── aerodynamics.py  # Dynamic pressure, drag, available lateral accel (aero + structural limits)
-│   ├── dynamics.py      # Combines gravity + drag + clamped guidance command into net acceleration
-│   ├── integrator.py    # Generic RK4/Euler integrator over a real acceleration function
-│   └── maneuvers.py     # NoManeuver, ConstantTurn, SinusoidalWeave (3D vector commands)
+│   ├── aerodynamics.py  # q, drag, lateral limits, post-stall CL/CD, body-axis aero force
+│   ├── dynamics.py      # Point-mass net accel; 13-state rigid-body derivative; cascaded autopilot
+│   ├── integrator.py    # Generic RK4/Euler integrator
+│   └── maneuvers.py     # NoManeuver, ConstantTurn, SinusoidalWeave, ..., CobraManeuver
 ├── guidance/
 │   ├── base.py                      # GuidanceLaw abstract interface (returns a 3D vector)
 │   └── proportional_navigation.py   # Classical PN, full 3D vector form
@@ -76,7 +81,10 @@ docs/                 # Scenario parameter source review
 
 **Axis convention:** z is up (altitude); gravity acts along -z.
 
-Each entity is a point mass integrated under the sum of three forces:
+The 6-DOF rigid body (next section) is the core. The point-mass model
+below is what it is regression-tested against, and what the RL env on
+`feature/rl-training` still builds. Each point mass is integrated
+under the sum of three forces:
 
 1. **Gravity** — constant `[0, 0, -g]`.
 2. **Aerodynamic drag** — `F_drag = q · Cd · A`, opposing the velocity
@@ -207,14 +215,90 @@ Swap `loadTrajectoryLog()`, `loadTrialSet()`, or `loadTrainingLog()` when a
 real RL episode log exists. Do not treat overlay colors or dashboard
 curves as trained-policy results.
 
-### Possible later extension (not started)
+### 6-DOF rigid-body core (supersedes the point-mass core and the old "6-DOF deferred" note)
 
-Right now vehicles are 3-DOF point masses with instantaneously-achieved
-lateral acceleration (bounded by dynamic pressure and g-limit). A full
-6-DOF rigid-body model — quaternion attitude, angular rates, moments of
-inertia, an inner autopilot loop tracking commanded acceleration — is a
-substantially larger scope increase (closer to a second project than an
-extension) and isn't planned unless there's a specific reason to need it.
+`RigidBodyEntity` integrates 13 states with RK4:
+`[position_W, velocity_B, quaternion_NB, body rates p q r]`.
+
+- **Frames.** Position lives in the project's z-up world frame. Velocity
+  is in body FRD axes. Attitude is a Hamilton, scalar-first quaternion,
+  body → NED-style local frame (`N = (x_W, −y_W, −z_W)`). The quaternion
+  is renormalised explicitly after every step, and a test holds `|q|`
+  within 1e-12 over 10k tumbling steps. `euler_angles()` and
+  `rotation_matrix_world()` are for telemetry and the viewer. See
+  `physics/rotational_dynamics.py` for the one place conventions are
+  defined.
+- **Forces and moments.** Lift, drag and side force come from the
+  post-stall CL/CD blend, now per-vehicle rather than Cobra-only. There
+  are aero moments from static stability, rate damping (Clp, Cmq, Cnr)
+  and surface deflections, plus thrust and thrust-vector moments. Euler's
+  equations solve `I·ω̇ + ω×Iω = M`.
+- **Controls.** Elevator, aileron, rudder, TVC pitch and TVC yaw each
+  get a first-order lag, then a rate limit, then a position limit.
+- **Autopilot.** Guidance (PN, APN, OGL or RL) still outputs a clamped
+  lateral acceleration. An inner cascade turns it into body-rate
+  commands (feedforward path rate plus α/β loops; skid-to-turn for the
+  missile, bank-to-turn for the fighter). Inverse dynamics turns those
+  into a required moment. A limit-weighted pseudo-inverse allocates
+  deflections, so TVC takes over automatically as dynamic pressure
+  vanishes.
+- **Superset check.** With zero command, the 6-DOF interceptor matches
+  the point-mass ballistic arc to under 3 m over 10 s. On the PN demo
+  intercept it hits at the same time, within 0.1 s, with under 10 m of
+  trajectory deviation over 7 km (`tests/test_rigid_body.py`).
+- **Cost.** About 0.6 ms per step, against 0.03 ms for a point mass.
+
+**Cobra, now genuinely 6-DOF.** `CobraManeuver` commands only throttle
+and body rates. The pull-up saturates the elevator. In the hang
+(~30 m/s, no q) pitch authority comes from thrust vectoring. The spiral
+is flown on aileron and rudder. Climb → hang → spiral → recovery is
+checked end to end (`tests/test_cobra_maneuver.py`).
+
+Viewer scenario, re-tuned for the 6-DOF airframe: a 7 km tail chase with
+the pull triggered 2.0 s after launch. Full thrust is held only through the
+finite-rate pitch-up (`pitch_up_throttle=1.0`), then reduced to idle so the
+target reaches an apex and falls into its spiral instead of climbing
+vertically forever. At catalog defaults PN, APN, and OGL all miss while the
+complete climb–apex–descent remains visible in the 25 s playback. The frozen RL
+policy, still flying the same point-mass interceptor it was trained on,
+misses all 12 locked seeds against this earlier complete maneuver. This is
+not an instantaneous attitude shortcut: the 6-DOF target remains limited by
+actuator rate, inertia, aerodynamics, and thrust-vector authority. Locked in
+[`tests/test_api_stream.py`](tests/test_api_stream.py).
+
+**Reference data and placeholders** (full citations inline in
+`physics/entities.py`):
+
+| Vehicle | Sourced | Derived / placeholder |
+|---|---|---|
+| Fighter target `F16_6DOF` | Mass, S, b, c̄, Ixx/Iyy/Izz/Ixz; CYβ, CYδr, CZδe; damping Clp/Cmq/Cnr at α=0; surface limits, rates and actuator lag. All from Stevens & Lewis, *Aircraft Control and Simulation*, and NASA TP-1538. F100-PW-229 max thrust. | Cmα (from an assumed CG shift), Cmδe (assumed tail arm), Clβ, Cnβ, Clδa, Clδr, Cnδr (order-of-magnitude), stall/CD0/Cn_max, all TVC figures (no stock F-16 TVC), engine gyro effects ignored. Aero digits were transcribed from memory of the textbook: verify before quoting. |
+| Interceptor `INTERCEPTOR_6DOF` | None, by design (AGENTS.md §3: no real missile data). | Inertia from solid-cylinder formulas on the existing generic 50 kg airframe with an assumed 2.5 m length. CNα, static margin, fin effectiveness and Cmq from slender-body/fin estimates. Actuator figures placed in typical published ranges. |
+
+**RL impact (measured):** the action/observation contract did not
+change (frozen in [`docs/rl-interface-6dof.md`](docs/rl-interface-6dof.md)),
+so the current checkpoint loads and runs. But it **does not transfer**.
+Zero-shot on the 300-case held-out evasive set it scores **0/300** on the
+6-DOF interceptor, against 242/300 on the point mass. Classical PN with
+the same estimator scores 227/300 on 6-DOF (218 on the point mass).
+
+| Guidance | Plant | Hits (n=300) | Median miss | p90 miss | bounded_weave | break_turn | random_jink | vertical_jink |
+|---|---|---|---|---|---|---|---|---|
+| RL CP6 (frozen) | point mass | **242** (80.7%) | 4.2 m | 6.6 m | 59 | 51 | 62 | 70 |
+| RL CP6 (frozen) | 6-DOF | **0** (0%) | 913 m | 2,350 m | 0 | 0 | 0 | 0 |
+| PN N=4 (same estimator) | point mass | 218 (72.7%) | 4.0 m | 40 m | 69 | 41 | 41 | 67 |
+| PN N=4 (same estimator) | 6-DOF | 227 (75.7%) | 3.9 m | 321 m | 74 | 20 | 64 | 69 |
+
+Per-maneuver columns are hits out of 75. Point-mass rows reproduce the published
+`outputs/evasive_largeeval_300/` numbers exactly (242 and 218), so the harness is
+the same. Raw data: `outputs/6dof_transfer/`, `scripts/eval_6dof_transfer.py`.
+
+The cause is the policy's ~14 g RMS bang-bang command habit. It was free
+on the point mass: lag-filtered, no induced drag. On the rigid body it
+bleeds the missile from 350 to ~50 m/s. With induced drag ablated it
+recovers to 13/20. Plan a warm-started retrain with an energy/jitter
+cost, not a light fine-tune. Details and recommendations are in the
+spec. Exposing attitude or body rates to the policy would additionally
+break the observation shape. Env step cost rises ~20×.
 
 ## Results (to be filled in as phases complete)
 

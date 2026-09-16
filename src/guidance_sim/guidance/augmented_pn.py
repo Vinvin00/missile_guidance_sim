@@ -36,6 +36,14 @@ class AugmentedProportionalNavigation(GuidanceLaw):
     ) -> np.ndarray:
         pn_term = self._pn.compute_command(pursuer_state, target_state, dt)
         a_t = np.asarray(self.a_target_est(), dtype=float).reshape(3)
+        # Only target accel normal to the LOS moves the ZEM. The along-LOS
+        # part otherwise leaks into the pursuer's velocity-normal plane
+        # whenever velocity and LOS diverge, driving large bogus commands.
+        r_rel = target_state.position - pursuer_state.position
+        range_ = float(np.linalg.norm(r_rel))
+        if range_ > 1e-6:
+            u = r_rel / range_
+            a_t = a_t - np.dot(a_t, u) * u
         return pn_term + 0.5 * self.N * a_t
 
     def reset(self) -> None:

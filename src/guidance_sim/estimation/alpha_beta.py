@@ -19,12 +19,11 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from guidance_sim.estimation.base import Estimator
 from guidance_sim.physics.entities import State
 from guidance_sim.sensors.measurement import Measurement, spherical_to_relative
 
 
-class AlphaBetaFilter(Estimator):
+class AlphaBetaFilter:
     def __init__(
         self,
         alpha: float = 0.5,

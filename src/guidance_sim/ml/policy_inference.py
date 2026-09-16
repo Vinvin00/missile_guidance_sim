@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 from sb3_contrib import RecurrentPPO
 
 from guidance_sim.rl.actions import ActionLayout
@@ -35,6 +36,8 @@ class FrozenPolicyBaseline:
     model_path: Path
     action_layout: ActionLayout
     use_target_turn_rate_obs: bool
+    tracking_enabled: bool
+    max_time_s: float
     observation_dim: int
     branch_name: str
     cumulative_timesteps: int
@@ -58,6 +61,13 @@ def load_baseline_pointer(
         model_path=model_path,
         action_layout=str(payload.get("action_layout", "lateral2")),  # type: ignore[arg-type]
         use_target_turn_rate_obs=bool(payload["use_target_turn_rate_obs"]),
+        # Absent on pre-tracking baseline pointers (frozen CP1-CP5 lineage);
+        # default False preserves their 10/13-D contract unchanged.
+        tracking_enabled=bool(payload.get("tracking_enabled", False)),
+        # Absent on baseline pointers predating the evasive lineage; default
+        # 25.0 matches PPOTrainingConfig's own default (the frozen lineage's
+        # episode budget), so old pointers keep their existing behavior.
+        max_time_s=float(payload.get("max_time_s", 25.0)),
         observation_dim=int(payload["observation_dim"]),
         branch_name=str(payload.get("branch_name", "")),
         cumulative_timesteps=int(payload.get("cumulative_timesteps", 0)),
@@ -74,6 +84,14 @@ class FrozenPolicy:
 
     def __init__(self, baseline: FrozenPolicyBaseline | None = None) -> None:
         self.baseline = baseline or load_baseline_pointer()
+        # Multi-threaded CPU matmul reduction order isn't fixed across
+        # process launches, so the same seed produced a different recurrent
+        # trajectory (and eventually a different hit/miss) from one process
+        # to the next -- confirmed: 3 separate process launches of the same
+        # rollout matched bit-for-bit at 1 thread, diverged at the default
+        # (10). A live session must reproduce the same seed's outcome every
+        # time regardless of thread count, so pin it here at load time.
+        torch.set_num_threads(1)
         self._model = RecurrentPPO.load(str(self.baseline.model_path), device="cpu")
 
     def predict(

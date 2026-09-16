@@ -38,6 +38,7 @@ differ.
 | `crossing-intercept` | **NoManeuver** | Non-maneuvering target path |
 | `head-on-intercept` | **ConstantTurn** | Label aligned to ConstantTurn tier |
 | `evasive-climb` | **SinusoidalWeave** | Bounded climbing weave path |
+| `g-limited-turn` | **ConstantTurn vs 10 g** | 8 g turn vs 10 g-limited interceptor; PN misses, APN/OGL hit |
 
 ## Public anchors
 
