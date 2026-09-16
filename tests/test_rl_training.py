@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 
 import numpy as np
@@ -13,6 +13,7 @@ from guidance_sim.physics.maneuvers import (
     NoManeuver,
     SinusoidalWeave,
 )
+from guidance_sim.physics.entities import RigidBodyEntity
 from guidance_sim.rl.training import (
     FIXED_EVALUATION_CASES,
     PPOTrainingConfig,
@@ -143,6 +144,49 @@ def test_ppo_action_wrapper_rescales_to_physical_limit_before_dynamics():
         vec_env.close()
 
 
+def test_ppo_training_config_rejects_unknown_pursuer_plant():
+    with pytest.raises(ValueError, match="pursuer_plant"):
+        PPOTrainingConfig(pursuer_plant="rigid")
+
+
+def test_ppo_action_wrapper_pursuer_plant_6dof_builds_rigid_body_pursuer():
+    config = PPOTrainingConfig(
+        timesteps_per_checkpoint=4,
+        n_envs=1,
+        max_time=1.0,
+        n_steps=4,
+        batch_size=4,
+        n_epochs=1,
+        pursuer_plant="6dof",
+    )
+    vec_env = make_training_vec_env(config, checkpoint_index=1)
+    try:
+        physical_env = vec_env.venv.envs[0].env
+        vec_env.reset()
+        assert isinstance(physical_env.pursuer, RigidBodyEntity)
+        vec_env.step(np.ones((1, 2), dtype=np.float32))
+    finally:
+        vec_env.close()
+
+
+def test_evaluate_policy_pursuer_plant_6dof_runs_and_reports():
+    config = SimulationConfig(
+        dt=0.02,
+        max_time=0.04,
+        intercept_radius=5.0,
+        autopilot_tau=0.2,
+    )
+    summary = evaluate_policy(
+        _ZeroRecurrentPolicy(),
+        cases=FIXED_EVALUATION_CASES[:2],
+        simulation_config=config,
+        pursuer_plant="6dof",
+    )
+    assert summary.n_cases == 2
+    for case in summary.cases:
+        assert np.isfinite(case.episode_reward)
+
+
 def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
     config = PPOTrainingConfig(
         timesteps_per_checkpoint=8,
@@ -195,6 +239,26 @@ def test_checkpoint_smoke_train_save_evaluate_and_refuse_overwrite(tmp_path):
     )
     with pytest.raises(ValueError, match="incompatible observation"):
         run_checkpoint(2, output_dir=stale_dir, config=config)
+
+    pointmass_dir = tmp_path / "pointmass_lineage"
+    (pointmass_dir / "checkpoints").mkdir(parents=True)
+    (pointmass_dir / "checkpoints" / "rl_checkpoint_01.zip").write_bytes(b"stale")
+    (pointmass_dir / "rl_checkpoint_01.json").write_text(
+        json.dumps(
+            {
+                "observation_names": list(config.observation_names),
+                "action_layout": config.action_layout,
+                "pursuer_plant": "pointmass",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="incompatible pursuer plant"):
+        run_checkpoint(
+            2,
+            output_dir=pointmass_dir,
+            config=replace(config, pursuer_plant="6dof"),
+        )
 
 
 def test_training_budget_is_exactly_five_equal_checkpoints():

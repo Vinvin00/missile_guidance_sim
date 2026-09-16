@@ -68,20 +68,31 @@ def lateral_basis(velocity: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return e1, e2 / e2_norm
 
 
+_POLE_COS_THRESHOLD = 0.985  # ~cos(10 deg) from vertical
+
+
 def lateral_basis_from_previous(
     velocity: np.ndarray, previous_e1: np.ndarray | None
 ) -> tuple[np.ndarray, np.ndarray]:
     """Continuous variant of ``lateral_basis`` for sequential control steps.
 
-    ``lateral_basis`` recomputes ``e1`` from ``up x v_hat`` every call, which
-    is discontinuous near the poles (``v_hat`` parallel to world-up): as the
-    fallback branch flips, a constant action maps to a world command that
-    whips 90-180 degrees between steps (see docs/rl-interface-6dof.md,
-    "action-basis singularity"). This instead projects the previous step's
-    ``e1`` onto the new velocity-normal plane and re-normalises, which keeps
-    the frame continuous through the pole. Falls back to ``lateral_basis``
-    when there is no previous frame (episode reset) or it has degenerated
-    (previous ``e1`` now anti-/parallel to the new velocity).
+    ``lateral_basis``'s ``up x v_hat`` is a smooth vector field everywhere
+    except right at the poles (``v_hat`` parallel to world-up) -- a
+    topological singularity no purely-static formula can avoid. Near there,
+    a constant action maps to a world command that whips 90-180 degrees
+    between steps as the fallback branch flips (see
+    docs/rl-interface-6dof.md, "action-basis singularity"): exactly what
+    happens once a stalled missile falls vertical.
+
+    Away from that neighbourhood this returns ``lateral_basis`` unchanged
+    (bit-for-bit -- other call sites, and pinned golden-rollout/regression
+    tests, assume that exact formula in ordinary flight). Only within
+    ``_POLE_COS_THRESHOLD`` of vertical does it instead project the
+    previous step's ``e1`` onto the new velocity-normal plane and
+    re-normalise, which stays continuous through the pole. Falls back to
+    ``lateral_basis`` when there is no previous frame (episode reset) or it
+    has degenerated (previous ``e1`` now anti-/parallel to the new
+    velocity).
     """
 
     velocity = np.asarray(velocity, dtype=float).reshape(3)
@@ -90,7 +101,8 @@ def lateral_basis_from_previous(
         return np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])
     v_hat = velocity / speed
 
-    if previous_e1 is not None:
+    near_pole = abs(float(np.dot(v_hat, _UP))) > _POLE_COS_THRESHOLD
+    if near_pole and previous_e1 is not None:
         projected = previous_e1 - np.dot(previous_e1, v_hat) * v_hat
         norm = float(np.linalg.norm(projected))
         if norm >= _BASIS_EPS:

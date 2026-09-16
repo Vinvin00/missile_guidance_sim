@@ -7,7 +7,7 @@ import pytest
 
 from guidance_sim.rl.actions import world_to_lateral
 from guidance_sim.rl.environment import InterceptionEnv
-from guidance_sim.rl.reward import RewardConfig
+from guidance_sim.rl.reward import RewardConfig, compute_reward
 from guidance_sim.simulation.engine import SimulationConfig
 
 
@@ -91,6 +91,55 @@ def test_miss_terminal_uses_closest_approach_not_final_range():
     not_final = -100.0 * np.tanh(result["final_range_m"] / 1_000.0)
     assert result["terminal"] == pytest.approx(expected, rel=1e-6)
     assert abs(result["terminal"] - not_final) > 1.0
+
+
+def _base_reward_kwargs() -> dict[str, object]:
+    return dict(
+        previous_potential=0.0,
+        zem_m=100.0,
+        previous_range_m=1_000.0,
+        current_range_m=990.0,
+        min_range_m=990.0,
+        achieved_lateral_m_s2=np.zeros(3),
+        legacy_commanded_m_s2=np.array([50.0, 0.0, 0.0]),
+        action_limit_m_s2=100.0,
+        dt=0.02,
+        outcome="ongoing",
+    )
+
+
+def test_effort_rate_weight_zero_ignores_commanded_jitter():
+    """Default (0) must not price the commanded-accel step at all -- other
+    callers assume effort_rate_weight=0 leaves the reward bit-identical to
+    before this term existed."""
+
+    kwargs = _base_reward_kwargs()
+    config = RewardConfig()
+    with_jump = compute_reward(
+        **kwargs, config=config, previous_commanded_m_s2=np.array([-50.0, 0.0, 0.0])
+    )
+    no_previous = compute_reward(**kwargs, config=config, previous_commanded_m_s2=None)
+    assert with_jump.effort == no_previous.effort
+
+
+def test_effort_rate_weight_penalises_commanded_jitter_beyond_achieved_effort():
+    """A policy that jitters the commanded accel every step costs more than
+    one that holds it steady, even at equal achieved (post-lag) accel --
+    the whole point of pricing the commanded *rate*, not just the achieved
+    magnitude (docs/rl-interface-6dof.md, effort profile)."""
+
+    kwargs = _base_reward_kwargs()
+    config = RewardConfig(effort_rate_weight=1.0)
+
+    steady = compute_reward(
+        **kwargs, config=config, previous_commanded_m_s2=np.array([50.0, 0.0, 0.0])
+    )
+    jittering = compute_reward(
+        **kwargs, config=config, previous_commanded_m_s2=np.array([-50.0, 0.0, 0.0])
+    )
+    assert jittering.effort < steady.effort
+    expected_gap = -1.0 * kwargs["dt"] * (100.0 / kwargs["action_limit_m_s2"]) ** 2
+    assert jittering.effort - steady.effort == pytest.approx(expected_gap, rel=1e-9)
 
 
 def test_precision_bonus_uses_substep_closest_approach():

@@ -58,6 +58,18 @@ def test_carried_basis_falls_back_to_static_formula_with_no_previous_frame():
     assert np.allclose(e2, expected_e2)
 
 
+def test_carried_basis_matches_static_formula_exactly_away_from_the_pole():
+    """Ordinary (non-diving) flight must reproduce the pinned static formula
+    bit-for-bit, even with an unrelated previous frame in hand -- other call
+    sites and golden-rollout regression tests assume it."""
+    velocity = np.array([300.0, 40.0, -20.0])
+    unrelated_previous_e1 = np.array([0.0, 1.0, 0.0])
+    e1, e2 = lateral_basis_from_previous(velocity, unrelated_previous_e1)
+    expected_e1, expected_e2 = lateral_basis(velocity)
+    assert np.array_equal(e1, expected_e1)
+    assert np.array_equal(e2, expected_e2)
+
+
 def test_carried_basis_falls_back_when_previous_frame_degenerates():
     velocity = np.array([0.0, 0.0, 100.0])
     previous_e1 = velocity / np.linalg.norm(velocity)  # parallel: projection is zero

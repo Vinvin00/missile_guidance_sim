@@ -43,6 +43,14 @@ class RewardConfig:
     zem_scale_m: float = 500.0
     miss_tanh_scale_m: float = 1_000.0
     effort_weight: float = 5.0
+    # Penalises the step-to-step *change* in commanded (pre-lag) lateral
+    # accel, not just its achieved (post-lag) magnitude. achieved_lateral_m_s2
+    # is low-pass filtered by the autopilot's actuator lag, so a policy that
+    # bang-bang jitters the command sees a small achieved-effort penalty even
+    # though every jitter cycle costs real induced drag on the rigid-body
+    # airframe (docs/rl-interface-6dof.md, "effort profile"). 0 keeps every
+    # existing lineage's reward bit-identical.
+    effort_rate_weight: float = 0.0
     shaping_weight: float = 50.0
     terminal_weight: float = 1.0
     vc_min_m_s: float = 1.0
@@ -67,6 +75,7 @@ class RewardConfig:
             raise ValueError("reward scales must be finite and positive")
         non_negative = (
             self.effort_weight,
+            self.effort_rate_weight,
             self.shaping_weight,
             self.terminal_weight,
             self.vc_min_m_s,
@@ -155,6 +164,7 @@ def compute_reward(
     outcome: str,
     config: RewardConfig,
     closest_approach_m: float | None = None,
+    previous_commanded_m_s2: np.ndarray | None = None,
 ) -> RewardBreakdown:
     """Evaluate new and legacy reward terms for a single transition."""
 
@@ -171,6 +181,15 @@ def compute_reward(
         * dt
         * (achieved_norm / action_limit_m_s2) ** 2
     )
+    if config.effort_rate_weight > 0.0 and previous_commanded_m_s2 is not None:
+        commanded_step = np.asarray(legacy_commanded_m_s2, dtype=float) - np.asarray(
+            previous_commanded_m_s2, dtype=float
+        )
+        effort += (
+            -config.effort_rate_weight
+            * dt
+            * (float(np.linalg.norm(commanded_step)) / action_limit_m_s2) ** 2
+        )
     terminal = _new_terminal(outcome, min_range_m, config)
     if terminal_state and config.precision_weight > 0.0:
         cpa = min_range_m if closest_approach_m is None else closest_approach_m

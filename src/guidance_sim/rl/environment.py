@@ -56,7 +56,7 @@ as ``legacy_*`` diagnostics and is not part of the env return.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable
+from typing import Callable, Literal
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -64,7 +64,13 @@ import numpy as np
 
 from guidance_sim.estimation.alpha_beta import AlphaBetaFilter
 from guidance_sim.physics.atmosphere import G0
-from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
+from guidance_sim.physics.entities import (
+    INTERCEPTOR_6DOF,
+    PointMassEntity,
+    RigidBodyEntity,
+    State,
+    VehicleParams,
+)
 from guidance_sim.physics.maneuvers import ManeuverProfile, NoManeuver
 from guidance_sim.sensors.measurement import SeekerNoiseConfig, Sensor, SensorConfig
 from guidance_sim.rl.actions import (
@@ -294,6 +300,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2,
         use_target_turn_rate_obs: bool = False,
         tracking: TrackingConfig | None = None,
+        pursuer_plant: Literal["pointmass", "6dof"] = "pointmass",
     ) -> None:
         super().__init__()
         self.config = replace(config) if config is not None else SimulationConfig()
@@ -316,11 +323,24 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             )
         self._validate_config()
 
+        if pursuer_plant not in ("pointmass", "6dof"):
+            raise ValueError(f"unsupported pursuer_plant: {pursuer_plant}")
+        if pursuer_plant == "6dof" and pursuer_vehicle is not None:
+            raise ValueError(
+                "pursuer_vehicle is fixed by INTERCEPTOR_6DOF when "
+                "pursuer_plant='6dof'; pass pursuer_vehicle=None"
+            )
+        self.pursuer_plant: Literal["pointmass", "6dof"] = pursuer_plant
+        self._pursuer_rigid_body_params = INTERCEPTOR_6DOF if pursuer_plant == "6dof" else None
+
         self._initial_condition_sampler = initial_condition_sampler
         self._maneuver_factory = maneuver_factory
-        self._pursuer_vehicle = replace(
-            pursuer_vehicle or _default_pursuer_vehicle()
-        )
+        if pursuer_plant == "6dof":
+            self._pursuer_vehicle = INTERCEPTOR_6DOF.vehicle
+        else:
+            self._pursuer_vehicle = replace(
+                pursuer_vehicle or _default_pursuer_vehicle()
+            )
         self._target_vehicle = replace(target_vehicle or _default_target_vehicle())
         self.ground_altitude_m = float(ground_altitude_m)
         if not np.isfinite(self.ground_altitude_m):
@@ -363,7 +383,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             dtype=np.float32,
         )
 
-        self.pursuer: PointMassEntity | None = None
+        self.pursuer: PointMassEntity | RigidBodyEntity | None = None
         self.target: PointMassEntity | None = None
         self.target_maneuver: ManeuverProfile | None = None
         self.time_s = 0.0
@@ -378,6 +398,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self._estimator_ready = False
         self._last_update_time_s = 0.0
         self._lateral_e1: np.ndarray | None = None
+        self._previous_commanded_m_s2: np.ndarray | None = None
 
     def _validate_config(self) -> None:
         cfg = self.config
@@ -405,11 +426,16 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if not isinstance(pursuer_state, State) or not isinstance(target_state, State):
             raise TypeError("initial_condition_sampler must return two State objects")
 
-        self.pursuer = PointMassEntity(
-            name="pursuer",
-            state=pursuer_state.copy(),
-            vehicle=replace(self._pursuer_vehicle),
-        )
+        if self.pursuer_plant == "6dof":
+            self.pursuer = RigidBodyEntity.from_state(
+                pursuer_state.copy(), self._pursuer_rigid_body_params, name="pursuer"
+            )
+        else:
+            self.pursuer = PointMassEntity(
+                name="pursuer",
+                state=pursuer_state.copy(),
+                vehicle=replace(self._pursuer_vehicle),
+            )
         self.target = PointMassEntity(
             name="target",
             state=target_state.copy(),
@@ -430,6 +456,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self._estimator_ready = False
         self._last_update_time_s = 0.0
         self._lateral_e1 = None
+        self._previous_commanded_m_s2 = None
 
         self.time_s = 0.0
         self.min_range_m = self._range()
@@ -546,7 +573,9 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             outcome=outcome,
             config=self.reward_config,
             closest_approach_m=self.closest_approach_m,
+            previous_commanded_m_s2=self._previous_commanded_m_s2,
         )
+        self._previous_commanded_m_s2 = commanded.copy()
         self._phi = breakdown.potential
         self._episode_legacy_reward += breakdown.legacy_total
         reward_terms = breakdown.env_terms()

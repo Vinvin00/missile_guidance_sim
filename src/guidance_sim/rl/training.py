@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 import json
 from pathlib import Path
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Callable, Literal, Protocol, Sequence
 
 import gymnasium as gym
 import numpy as np
@@ -84,6 +84,11 @@ class PPOTrainingConfig:
     lstm_hidden_size: int = 64
     domain_randomization: bool = False
     action_layout: ActionLayout = ACTION_LAYOUT_LATERAL2
+    # "pointmass" (default) preserves every existing lineage bit-identical.
+    # "6dof" swaps the pursuer for the rigid-body airframe (INTERCEPTOR_6DOF)
+    # per docs/rl-interface-6dof.md's retraining recommendation -- the point
+    # mass this policy was trained on has zero-shot transfer to it (0/300).
+    pursuer_plant: Literal["pointmass", "6dof"] = "pointmass"
     # Off by default: preserves CP1–CP4 obs contract. New experiment branch only.
     use_target_turn_rate_obs: bool = False
     # Evasive-redesign lineage: real evasion maneuvers + delayed/estimated
@@ -106,6 +111,10 @@ class PPOTrainingConfig:
     # lineage to curb the CP1→CP2 command-RMS runaway (103→157) that survived
     # the discount-mismatch fix.
     effort_weight: float = 5.0
+    # Prices the step-to-step change in commanded (pre-lag) accel rather
+    # than just its achieved (post-lag) magnitude (RewardConfig.effort_rate_weight).
+    # 0 keeps every existing lineage's reward bit-identical.
+    effort_rate_weight: float = 0.0
     # ZEM potential's lookahead cap, independent of max_time. reward_config()
     # used to set this to max_time so raising the episode budget couldn't
     # silently saturate the horizon -- but that also means the shaping term
@@ -143,6 +152,8 @@ class PPOTrainingConfig:
             raise ValueError("batch_size must divide n_steps * n_envs")
         if self.dt <= 0.0 or self.max_time <= 0.0:
             raise ValueError("simulation dt and max_time must be positive")
+        if self.pursuer_plant not in ("pointmass", "6dof"):
+            raise ValueError("pursuer_plant must be 'pointmass' or '6dof'")
 
     @property
     def observation_names(self) -> tuple[str, ...]:
@@ -177,6 +188,7 @@ class PPOTrainingConfig:
             miss_tanh_scale_m=self.miss_tanh_scale_m,
             shaping_gamma=self.shaping_gamma,
             effort_weight=self.effort_weight,
+            effort_rate_weight=self.effort_rate_weight,
             precision_weight=self.precision_weight,
         )
 
@@ -595,6 +607,7 @@ def make_training_vec_env(
             action_layout=config.action_layout,
             use_target_turn_rate_obs=config.use_target_turn_rate_obs,
             tracking=config.tracking,
+            pursuer_plant=config.pursuer_plant,
         )
         return gym.wrappers.RescaleAction(
             physical_env,
@@ -686,6 +699,7 @@ def evaluate_policy(
     use_target_turn_rate_obs: bool = False,
     tracking: TrackingConfig | None = None,
     reward_config: RewardConfig | None = None,
+    pursuer_plant: Literal["pointmass", "6dof"] = "pointmass",
 ) -> EvaluationSummary:
     """Evaluate a policy on the immutable, ordered scenario set."""
 
@@ -698,6 +712,7 @@ def evaluate_policy(
             reward_config=reward_config,
             initial_condition_sampler=_case_initial_conditions(case),
             maneuver_factory=_case_maneuver(case),
+            pursuer_plant=pursuer_plant,
             action_layout=action_layout,
             use_target_turn_rate_obs=use_target_turn_rate_obs,
             tracking=tracking,
@@ -1007,6 +1022,17 @@ def _validate_previous_observation_contract(
             "preceding checkpoint uses an incompatible action layout; "
             "restart from checkpoint 1"
         )
+    # Metadata written before pursuer_plant was introduced necessarily came
+    # from the point-mass environment.  Never silently continue that lineage
+    # on the rigid-body plant (or vice versa): the observation/action shapes
+    # match, so SB3 would otherwise load successfully and create a mixed,
+    # irreproducible experiment.
+    previous_plant = metadata.get("pursuer_plant", "pointmass")
+    if previous_plant != config.pursuer_plant:
+        raise ValueError(
+            "preceding checkpoint uses an incompatible pursuer plant; "
+            "restart from checkpoint 1"
+        )
 
 
 def _append_progress(
@@ -1030,6 +1056,7 @@ def _append_progress(
             f"- Action layout: `{config.action_layout}`\n"
             f"- Domain randomization: {config.domain_randomization} "
             "(must remain false for this retrain)\n"
+            f"- Pursuer plant: {config.pursuer_plant}\n"
             "- Reward: ZEM PBRS shaping (w=50) + closest-approach terminal "
             "+ achieved-effort; legacy Phase-1 reward logged in parallel\n"
             f"- Fixed budget: {config.total_timesteps:,} timesteps in "
@@ -1222,6 +1249,7 @@ def run_checkpoint(
         use_target_turn_rate_obs=config.use_target_turn_rate_obs,
         tracking=config.tracking,
         reward_config=config.reward_config(),
+        pursuer_plant=config.pursuer_plant,
     )
     total_episodes = _count_csv_rows(episode_csv_path)
     curve = _curve_summary(callback.rows, total_episodes)
@@ -1257,6 +1285,7 @@ def run_checkpoint(
             "use_target_turn_rate_obs": config.use_target_turn_rate_obs,
             "action_layout": config.action_layout,
             "domain_randomization": config.domain_randomization,
+            "pursuer_plant": config.pursuer_plant,
             "config": asdict(config),
             "curve": asdict(curve),
             "evaluation": _jsonable_evaluation(evaluation),

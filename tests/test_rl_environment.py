@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from guidance_sim.physics.entities import State
+from guidance_sim.physics.entities import INTERCEPTOR_6DOF, PointMassEntity, RigidBodyEntity, State
 from guidance_sim.physics.maneuvers import SinusoidalWeave
 from guidance_sim.rl.actions import world_to_lateral
 from guidance_sim.rl.environment import (
@@ -94,6 +94,47 @@ def test_reset_and_step_match_gymnasium_contract():
     assert next_info["action_achieved_m_s2"].shape == (3,)
     assert "legacy_reward" in next_info
     assert "legacy_episode_reward" in next_info
+
+
+def test_pursuer_plant_defaults_to_pointmass():
+    env = InterceptionEnv(config=SimulationConfig(dt=0.02, max_time=1.0))
+    env.reset(seed=17)
+    assert isinstance(env.pursuer, PointMassEntity)
+
+
+def test_pursuer_plant_6dof_builds_a_rigid_body_pursuer_and_runs():
+    env = InterceptionEnv(
+        config=SimulationConfig(dt=0.02, max_time=1.0, autopilot_tau=0.2),
+        pursuer_plant="6dof",
+    )
+    observation, info = env.reset(seed=17)
+    assert isinstance(env.pursuer, RigidBodyEntity)
+    assert env.pursuer.params is INTERCEPTOR_6DOF
+    assert env.action_limit_m_s2 == pytest.approx(
+        INTERCEPTOR_6DOF.vehicle.max_load_factor * 9.80665
+    )
+    _assert_observation_contract(env, observation)
+
+    for _ in range(5):
+        observation, reward, terminated, truncated, info = env.step(
+            _zero_action(env)
+        )
+        _assert_observation_contract(env, observation)
+        assert np.isfinite(reward)
+        if terminated or truncated:
+            break
+
+
+def test_pursuer_plant_rejects_unknown_choice():
+    with pytest.raises(ValueError, match="pursuer_plant"):
+        InterceptionEnv(pursuer_plant="rigid")  # type: ignore[arg-type]
+
+
+def test_pursuer_plant_6dof_rejects_an_explicit_pursuer_vehicle():
+    with pytest.raises(ValueError, match="pursuer_vehicle"):
+        InterceptionEnv(
+            pursuer_plant="6dof", pursuer_vehicle=INTERCEPTOR_6DOF.vehicle
+        )
 
 
 def test_action_flows_through_norm_bound_lag_and_dynamics_clamp():

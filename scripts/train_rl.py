@@ -60,6 +60,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="override PPOTrainingConfig.seed, e.g. for a second training-seed run",
     )
+    parser.add_argument(
+        "--pursuer-plant",
+        choices=("pointmass", "6dof"),
+        default="pointmass",
+        help=(
+            "'6dof' trains against the rigid-body interceptor airframe "
+            "(INTERCEPTOR_6DOF) instead of the point mass. Start a fresh "
+            "output-dir lineage: the point-mass-trained checkpoints do not "
+            "transfer (docs/rl-interface-6dof.md, 0/300 zero-shot)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -68,6 +79,7 @@ def main() -> None:
     overrides: dict = {
         "use_target_turn_rate_obs": bool(args.use_target_turn_rate_obs),
         "domain_randomization": bool(args.domain_randomization),
+        "pursuer_plant": args.pursuer_plant,
     }
     if args.seed is not None:
         overrides["seed"] = args.seed
@@ -82,6 +94,7 @@ def main() -> None:
     print(f"Checkpoint {report.checkpoint_index} complete; training stopped.")
     print(f"Cumulative timesteps: {report.cumulative_timesteps:,}")
     print(f"use_target_turn_rate_obs: {config.use_target_turn_rate_obs}")
+    print(f"pursuer_plant: {config.pursuer_plant}")
     print(f"Episodes this checkpoint: {curve.checkpoint_episodes}")
     if curve.first_quintile_mean_reward is not None:
         print(

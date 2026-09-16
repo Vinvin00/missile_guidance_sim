@@ -104,6 +104,29 @@ def main() -> None:
         default=None,
         help="Override PPOTrainingConfig.seed, for a second seed of the same config.",
     )
+    parser.add_argument(
+        "--pursuer-plant",
+        choices=("pointmass", "6dof"),
+        default=None,
+        help=(
+            "'6dof' trains against INTERCEPTOR_6DOF instead of the point "
+            "mass. This lineage's point-mass checkpoints do not transfer "
+            "(docs/rl-interface-6dof.md, 0/300 zero-shot) -- use a fresh "
+            "--output-dir, not a resume."
+        ),
+    )
+    parser.add_argument(
+        "--effort-rate-weight",
+        type=float,
+        default=None,
+        help=(
+            "Override RewardConfig.effort_rate_weight (default 0). Prices "
+            "the step-to-step change in commanded (pre-lag) accel, not just "
+            "the achieved (post-lag) magnitude -- achieved accel hides "
+            "bang-bang jitter that costs real induced drag on the 6-DOF "
+            "airframe (docs/rl-interface-6dof.md, 'effort profile')."
+        ),
+    )
     args = parser.parse_args()
 
     overrides: dict[str, object] = {}
@@ -127,13 +150,18 @@ def main() -> None:
         overrides["seed"] = args.seed
     if args.n_envs is not None:
         overrides["n_envs"] = args.n_envs
+    if args.pursuer_plant is not None:
+        overrides["pursuer_plant"] = args.pursuer_plant
+    if args.effort_rate_weight is not None:
+        overrides["effort_rate_weight"] = args.effort_rate_weight
     config = evasive_redesign_config(**overrides)
     print(
         f"CP{args.checkpoint}: evasive lineage | "
         f"max_time={config.max_time:g}s t_go_max={config.reward_config().t_go_max_s:g}s | "
         f"tracking={config.tracking.enabled} | obs={len(config.observation_names)}-D | "
         f"miss_tanh_scale={config.miss_tanh_scale_m:g}m shaping_gamma={config.shaping_gamma:g} "
-        f"effort_weight={config.effort_weight:g} precision_weight={config.precision_weight:g} "
+        f"effort_weight={config.effort_weight:g} effort_rate_weight={config.effort_rate_weight:g} "
+        f"precision_weight={config.precision_weight:g} pursuer_plant={config.pursuer_plant} "
         f"-> out={args.output_dir}"
     )
     report = run_checkpoint(
