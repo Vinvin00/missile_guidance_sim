@@ -4,7 +4,6 @@ import { AppHeader } from './components/AppHeader'
 import { AppNav } from './components/AppNav'
 import { HudOverlay } from './components/HudOverlay'
 import { PlaybackControls } from './components/PlaybackControls'
-import { RagPanel } from './components/RagPanel'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
@@ -108,7 +107,6 @@ export default function App() {
         {screen === 'replay' && (
           <SessionReplayPanel onReplay={handleReplay} />
         )}
-        {screen === 'rag' && <RagPanel />}
         {screen === 'spec' && <SpecGroundingPanel />}
         <PlaybackControls />
       </div>

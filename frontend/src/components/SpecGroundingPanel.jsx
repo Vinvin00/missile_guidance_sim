@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState } from 'react'
 
 const AERO_RAG_API_URL =
-  import.meta.env.VITE_AERO_RAG_API_URL ?? 'http://localhost:8001'
+  import.meta.env.VITE_AERO_RAG_API_URL ?? 'http://127.0.0.1:8000'
 
 const EXAMPLE_QUERIES = [
   'What is the ISA air density at 10 km altitude?',
