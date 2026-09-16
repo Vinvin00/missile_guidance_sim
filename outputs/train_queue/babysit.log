@@ -1348,3 +1348,219 @@
 2026-09-16 17:55:57 START cp=1 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 1 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
 2026-09-16 17:58:36 DONE cp=1 out=evasive_zemtgo10_seed17 rc=0
 2026-09-16 17:58:36 START cp=2 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 2 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:01:31 DONE cp=2 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:01:31 START cp=3 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 3 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:04:14 DONE cp=3 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:04:14 START cp=4 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 4 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:07:03 DONE cp=4 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:07:03 START cp=5 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 5 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:09:53 DONE cp=5 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:09:53 START cp=6 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 6 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:12:42 DONE cp=6 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:12:42 START cp=7 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 7 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5 --precision-weight 50 --finetune-log-std -2.0 --learning-rate 5e-5 --ent-coef 0
+2026-09-16 18:15:24 DONE cp=7 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:15:24 START eval rl_checkpoint_07.zip -> eval300_cp7.json
+2026-09-16 18:17:19 outputs/evasive_zemtgo10_seed17/checkpoints/rl_checkpoint_07.zip: 238/300 hits (79.3%), median miss 4.1 m -> outputs/evasive_zemtgo10_seed17/eval300_cp7.json
+2026-09-16 18:17:19 DONE eval eval300_cp7.json rc=0
+2026-09-16 18:17:19 START cp=8 out=evasive_zemtgo10_seed17 seed=2236067977 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 8 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed17 --seed 2236067977 --zem-t-go-max 10 --effort-weight 5 --precision-weight 50 --finetune-log-std -2.0 --learning-rate 5e-5 --ent-coef 0
+2026-09-16 18:20:08 DONE cp=8 out=evasive_zemtgo10_seed17 rc=0
+2026-09-16 18:20:08 START eval rl_checkpoint_08.zip -> eval300_cp8.json
+2026-09-16 18:22:15 outputs/evasive_zemtgo10_seed17/checkpoints/rl_checkpoint_08.zip: 244/300 hits (81.3%), median miss 4.1 m -> outputs/evasive_zemtgo10_seed17/eval300_cp8.json
+2026-09-16 18:22:15 DONE eval eval300_cp8.json rc=0
+2026-09-16 18:22:15 START cp=1 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 1 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:26:44 DONE cp=1 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 18:26:44 yield evasive_zemtgo10_seed18 to external job
+2026-09-16 18:28:14 wait: another trainer/eval is already running
+2026-09-16 18:29:45 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 18:29:45 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 18:29:45 START cp=2 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 2 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:32:43 DONE cp=2 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 18:32:43 START cp=3 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 3 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 18:35:45 DONE cp=3 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 18:35:45 yield evasive_zemtgo10_seed18 to external job
+2026-09-16 18:37:15 wait: another trainer/eval is already running
+2026-09-16 19:45:26 wait: another trainer/eval is already running
+2026-09-16 19:46:56 wait: another trainer/eval is already running
+2026-09-16 20:01:23 wait: another trainer/eval is already running
+2026-09-16 20:03:39 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 20:03:39 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 20:03:39 START cp=4 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 4 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 20:19:06 DONE cp=4 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 20:19:06 START cp=5 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 5 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 20:29:44 DONE cp=5 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 20:29:44 START cp=6 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 6 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5
+2026-09-16 20:37:12 DONE cp=6 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 20:37:13 START cp=7 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 7 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5 --precision-weight 50 --finetune-log-std -2.0 --learning-rate 5e-5 --ent-coef 0
+2026-09-16 20:45:44 DONE cp=7 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 20:45:44 START eval rl_checkpoint_07.zip -> eval300_cp7.json
+2026-09-16 22:10:45 outputs/evasive_zemtgo10_seed18/checkpoints/rl_checkpoint_07.zip: 253/300 hits (84.3%), median miss 3.8 m -> outputs/evasive_zemtgo10_seed18/eval300_cp7.json
+2026-09-16 22:10:45 DONE eval eval300_cp7.json rc=0
+2026-09-16 22:10:45 START cp=8 out=evasive_zemtgo10_seed18 seed=2645751311 cmd=/Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/.venv/bin/python /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/scripts/run_evasive_checkpoint.py --checkpoint 8 --output-dir /Users/vincenzo/Desktop/Projects/Physics Sim Project/missile_guidance_sim/outputs/evasive_zemtgo10_seed18 --seed 2645751311 --zem-t-go-max 10 --effort-weight 5 --precision-weight 50 --finetune-log-std -2.0 --learning-rate 5e-5 --ent-coef 0
+2026-09-16 22:49:55 DONE cp=8 out=evasive_zemtgo10_seed18 rc=0
+2026-09-16 22:49:55 START eval rl_checkpoint_08.zip -> eval300_cp8.json
+2026-09-16 22:52:50 outputs/evasive_zemtgo10_seed18/checkpoints/rl_checkpoint_08.zip: 242/300 hits (80.7%), median miss 3.9 m -> outputs/evasive_zemtgo10_seed18/eval300_cp8.json
+2026-09-16 22:52:50 DONE eval eval300_cp8.json rc=0
+2026-09-16 22:54:33 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 22:54:33 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 22:54:33 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 22:54:33 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:29:14 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:29:14 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:29:14 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:29:14 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:58:05 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:58:05 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:58:05 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:58:05 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:59:35 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:59:35 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-16 23:59:35 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-16 23:59:35 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:01:06 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:01:06 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:01:06 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:01:06 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:02:36 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:02:36 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:02:36 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:02:36 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:04:07 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:04:07 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:04:07 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:04:07 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:05:37 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:05:37 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:05:37 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:05:37 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:07:08 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:07:08 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:07:08 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:07:08 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:08:38 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:08:38 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:08:38 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:08:39 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:10:09 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:10:09 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:10:09 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:10:09 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:11:39 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:11:39 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:11:39 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:11:40 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:13:10 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:13:10 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:13:10 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:13:10 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:14:40 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:14:40 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:14:41 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:14:41 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:16:11 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:16:11 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:16:11 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:16:11 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:17:41 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:17:41 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:17:42 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:17:42 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:19:12 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:19:12 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:19:12 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:19:12 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:20:42 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:20:43 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:20:43 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:20:43 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:22:13 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:22:13 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:22:13 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:22:13 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:23:43 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:23:44 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:23:44 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:23:44 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:25:14 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:25:14 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:25:14 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:25:14 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:26:44 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:26:45 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:26:45 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:26:45 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:28:15 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:28:15 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:28:15 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:28:15 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:29:45 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:29:45 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:29:46 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:29:46 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:31:16 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:31:16 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:31:16 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:31:16 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:32:46 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:32:46 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:32:46 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:32:47 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:34:17 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:34:17 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:34:17 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:34:17 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:35:47 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:35:47 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:35:47 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:35:47 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:37:18 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:37:18 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:37:18 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:37:18 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:38:48 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:38:48 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:38:48 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:38:48 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:40:19 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:40:19 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:40:19 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:40:19 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:41:49 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:41:49 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:41:49 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:41:49 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:43:19 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:43:20 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:43:20 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:43:20 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:44:50 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:44:50 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:44:50 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:44:50 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:46:20 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:46:21 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:46:21 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:46:21 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:47:51 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:47:51 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:47:51 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:47:51 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:49:22 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:49:22 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:49:22 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:49:22 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:50:52 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:50:52 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:50:52 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:50:52 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:52:22 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:52:23 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:52:23 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:52:23 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:53:53 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:53:53 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:53:53 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:53:53 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:55:23 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:55:23 skip complete evasive_zemtgo10_seed17 through CP8
+2026-09-17 00:55:23 skip complete evasive_zemtgo10_seed18 through CP8
+2026-09-17 00:55:24 skip complete evasive_zemtgo10_seed18 through CP8
