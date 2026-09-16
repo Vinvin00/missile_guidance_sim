@@ -1711,3 +1711,86 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - Max pitch 60°/s, roll 90°/s are generic placeholders (AGENTS.md §3). No
   open-literature figure was verified.
 - Not verified: frontend/API catalog exposure of Cobra; RL env with a Cobra target.
+
+## 2026-09-15 — 6-DOF rigid-body core (`feature/6dof-rigid-body`)
+
+- Interface frozen first: `docs/rl-interface-6dof.md`. The action/obs contract
+  is unchanged, so this is a fine-tune. `InterceptionEnv` was deliberately not
+  touched (owned by `feature/rl-training`); the handoff is a one-line entity swap.
+- Frames: world z-up (unchanged), attitude relative to N = (x_W, −y_W, −z_W)
+  so the body math is textbook FRD/NED. Hamilton scalar-first `q_NB`. The
+  only bridge is `C_WN = diag(1, −1, −1)`.
+- **Gotcha (found, fixed):** the rate feedforward must include gravity
+  (`v × (a_cmd + g)/V²`). Without it the α loop holds a standing error to
+  follow the gravity arc, that error is lift, and a zero-command missile
+  flew 33 m high of ballistic in 5 s (1.1 m in 10 s after the fix).
+- Rate damping is written dimensionally (`¼ρVSb²·Clp·p`) so it stays finite at V → 0.
+- `c_pitch_alpha` is applied as `·sin α`: linear near 0, bounded post-stall.
+  With that, the F-16 elevator cannot hold 90° α, so TVC does the hang (intended).
+- Allocation uses a limit-weighted pinv of B. No explicit mode switch is
+  needed for "surfaces vs TVC".
+- Cobra hang: 6-DOF needs a steeper zoom (75°) for a near-zero (<5 m/s) hang.
+  At a 45–60° entry the lift generated during the finite-rate pitch-up
+  keeps ~22–25 m/s. The old instant-rate model hid that.
+- Removed `AttitudeAugmentedEntity`, `attitude_net_acceleration`,
+  `flight_path_angle`, `clamp_rate`, and the bit-for-bit "inactive = point
+  mass" test (no inactive mode exists now). Replaced by regressions against
+  `PointMassEntity`.
+- Cobra viewer: APN/OGL now hit (4–5 m). PN still misses (22 m). Not re-tuned.
+- Not verified: frozen RL checkpoint on the 6-DOF plant; frontend rendering
+  of the new attitude (the stream still sends `body_axis`/`body_up`, same
+  schema); `scripts/validate_physics.py` envelopes with 6-DOF; Mach effects,
+  engine gyro, thrust lapse (none modelled). Root-level `../AGENTS.md` is
+  not synced (outside the repo); sync it at merge.
+
+## 2026-09-15 — Zero-shot transfer of RL CP6 to the 6-DOF interceptor
+
+- `scripts/eval_6dof_transfer.py`: swaps the pursuer after `InterceptionEnv.reset`
+  (no env edits). Point-mass reruns reproduce published 242/300 and 218/300 exactly.
+- RL CP6: **0/300** on 6-DOF (median miss 913 m). PN: 227/300 on 6-DOF (vs 218 point mass).
+- Root cause: the policy's command RMS is ~140 m/s², against PN's ~45. The τ=0.2 lag
+  hid the jitter (achieved RMS ~62), and point-mass g had no drag cost.
+  Ablation over 20 cases: 6-DOF 0/20 → 13/20 with k_induced = 0.
+- Secondary: α overshoot to 28–35° on full-scale reversals (autopilot, my side,
+  not fixed yet). `lateral_basis` pole when a drained missile falls vertical
+  (RL branch).
+- The spec's original "light fine-tune" prediction was wrong. It has been
+  corrected in docs/rl-interface-6dof.md.
+- Gotcha: 0/20 at n=20 was already conclusive. The 300-case run was for the
+  PN reference and per-maneuver breakdown.
+
+## 2026-09-16 — Merge feature/6dof-rigid-body into feature/cobra-maneuver
+
+- Conflicted with `ad71cc8` ("Cobra dodges the RL policy: full-thrust
+  pull, 0.9 s trigger"), which retuned the *old* 3-DOF+attitude Cobra to
+  also dodge the RL policy. Ported the intent (`pitch_up_throttle`,
+  full-thrust pull, later trigger) into the 6-DOF `CobraManeuver`, then
+  re-swept the trigger time empirically -- the old 0.9 s numbers don't
+  transfer, since the finite pitch-up rate (vs. the old instant snap)
+  needs more warning to open the same separation.
+- Sweep result (`_COBRA_TRIGGER_TIME_TO_GO_S=2.0`, `pitch_up_throttle=1.0`):
+  PN misses by ~56 m, APN ~15 m, OGL ~6.5 m (all comfortably outside the
+  5 m radius; OGL closes furthest since it plans against the predicted
+  intercept). RL, unlike the old model, is **not** reliably dodged: 8-9/12
+  seeds hit. This is a genuine, measured behavior change, not a tuning
+  failure -- the old shortcut's instantaneous nose-snap specifically
+  exploited a reactive policy's reaction time; the 6-DOF model's
+  actuator/inertia-rate-limited climb doesn't. Classical laws, which react
+  to LOS geometry rather than a learned pattern, still miss.
+- The live-viewer interceptor is unchanged (point mass) for every
+  guidance law including RL here -- only the Cobra *target* is 6-DOF. So
+  RL's hit rate on this scenario is unrelated to the pursuer-transfer
+  collapse in `docs/rl-interface-6dof.md` (that was tested with the
+  pursuer itself swapped to `RigidBodyEntity`, which this scenario never
+  does).
+- Test rewritten: `test_cobra_default_scenario_dodges_classical_guidance`
+  (pn/apn/ogl, parametrized, real thresholds) +
+  `test_cobra_default_scenario_does_not_reliably_dodge_rl` (documents the
+  measured RL hit rate honestly instead of asserting a false "dodges
+  everyone").
+- Local `feature/cobra-maneuver` also carried an unpushed RL-training
+  commit (`9502c7b`, CP8 precision-reward promotion) not on
+  `origin/feature/cobra-maneuver` and unrelated to this merge -- left
+  untouched, no conflicts with physics/API files.
+- Not verified: whether `9502c7b`'s own test suite state was green before
+  this merge (assumed yes, not re-derived here).

@@ -1,6 +1,8 @@
 """
 Quick manual demo: run one PN-guided 3D intercept under realistic
 gravity/drag/g-limit dynamics, print the result, and write plots.
+The pursuer is the 6-DOF rigid body (autopilot + actuators + Euler's
+equations); the target stays a point-mass drone.
 
 Usage:
     python scripts/run_demo.py
@@ -14,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
-from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
+from guidance_sim.physics.entities import INTERCEPTOR_6DOF, PointMassEntity, RigidBodyEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import NoManeuver
 from guidance_sim.simulation.engine import Simulation, SimulationConfig
 from guidance_sim.visualization.plotter import (
@@ -25,20 +27,16 @@ from guidance_sim.visualization.plotter import (
 
 
 def main() -> None:
-    pursuer_vehicle = VehicleParams(
-        mass=50.0, reference_area=0.05, drag_coefficient=0.3,
-        max_normal_force_coefficient=15.0, max_load_factor=25.0,
-    )
     target_vehicle = VehicleParams(
         mass=40.0, reference_area=0.06, drag_coefficient=0.35,
         max_normal_force_coefficient=10.0, max_load_factor=9.0,
     )
 
     # Non-maneuvering target: PN should fly a near-straight lead course.
-    pursuer = PointMassEntity(
+    pursuer = RigidBodyEntity.from_state(
+        State(position=[0.0, 0.0, 3000.0], velocity=[350.0, 0.0, 0.0]),
+        INTERCEPTOR_6DOF,
         name="pursuer",
-        state=State(position=[0.0, 0.0, 3000.0], velocity=[350.0, 0.0, 0.0]),
-        vehicle=pursuer_vehicle,
     )
     target = PointMassEntity(
         name="target",

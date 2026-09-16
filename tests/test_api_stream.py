@@ -342,9 +342,14 @@ def test_training_endpoint_serves_the_baseline_run_log():
     assert (final["checkpoint"], final["hits"], final["cases"]) == (8, 45, 50)
 
 
-@pytest.mark.parametrize(("guidance_law", "min_miss_m"), [("pn", 10.0), ("rl", 5.0)])
-def test_cobra_default_scenario_dodges(guidance_law, min_miss_m):
-    """Locks the demo: at catalog defaults the Cobra opens a real miss."""
+@pytest.mark.parametrize(
+    ("guidance_law", "min_miss_m"), [("pn", 30.0), ("apn", 8.0), ("ogl", 5.0)]
+)
+def test_cobra_default_scenario_dodges_classical_guidance(guidance_law, min_miss_m):
+    """Locks the demo: at catalog defaults (6-DOF target, 2.0 s trigger,
+    full thrust through the pull) the Cobra opens a real miss against PN,
+    APN and OGL -- PN by the widest margin, OGL by the narrowest, since OGL
+    plans against the predicted intercept rather than reacting to LOS rate."""
     from guidance_sim.api.catalog import CATALOG
 
     scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
@@ -356,3 +361,28 @@ def test_cobra_default_scenario_dodges(guidance_law, min_miss_m):
     nose_z = [frame.target.body_axis.z for frame in run.frames]
     assert max(nose_z) > 0.99  # nose reached near-vertical
     assert run.frames[0].target.body_up is not None
+
+
+def test_cobra_default_scenario_does_not_reliably_dodge_rl():
+    """The retired rate-commanded attitude shortcut's *instantaneous*
+    nose-snap fooled the reactive RL policy too (pre-6-DOF: 21/24 seeds
+    missed). The 6-DOF model's actuator/inertia-rate-limited climb is
+    slower and more realistic, and that alone is enough for a fast-reacting
+    policy to track and hit most of the time -- even though PN/APN/OGL
+    still miss (see test_cobra_default_scenario_dodges_classical_guidance).
+    The interceptor here is the point-mass entity InterceptionEnv builds
+    for every guidance law; only the Cobra target is 6-DOF, so this is not
+    the pursuer-transfer collapse in docs/rl-interface-6dof.md. Locks the
+    honest finding instead of a false "dodges everyone" claim: measured
+    8-9/12 hits at these settings."""
+    from guidance_sim.api.catalog import CATALOG
+
+    scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
+    hits = sum(
+        build_live_trajectory(
+            "cobra-evasion", "rl", "cobra-test", scenario.parameter_defaults, seed=seed
+        ).outcome
+        == "hit"
+        for seed in range(1, 13)
+    )
+    assert hits >= 6  # majority, not the old "RL mostly misses" claim

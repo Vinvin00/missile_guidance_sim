@@ -18,9 +18,10 @@ from typing import Optional, Sequence
 import numpy as np
 
 from guidance_sim.physics.atmosphere import G0, isa_density
-from guidance_sim.physics.aerodynamics import CL_ALPHA_PER_RAD, dynamic_pressure, post_stall_coefficients
-from guidance_sim.physics.dynamics import flight_path_angle
-from guidance_sim.physics.entities import AttitudeAugmentedEntity, State
+from guidance_sim.physics.aerodynamics import body_aero_force, dynamic_pressure
+from guidance_sim.physics.controls import RUDDER
+from guidance_sim.physics.dynamics import MAX_PITCH_RATE_RAD_S, MAX_ROLL_RATE_RAD_S
+from guidance_sim.physics.entities import RigidBodyEntity, State
 
 UP = np.array([0.0, 0.0, 1.0])
 
@@ -462,35 +463,37 @@ class ManeuverSequence(ManeuverProfile):
 
 class CobraManeuver(ManeuverProfile):
     """
-    Post-stall "Cobra" evasion for an `AttitudeAugmentedEntity` target.
+    Post-stall "Cobra" evasion for a 6-DOF `RigidBodyEntity` target.
 
-    The profile only commands what a pilot/autopilot commands -- throttle,
-    pitch rate, bank rate. It never touches position or velocity: the
-    deceleration, near-zero-airspeed hang, and fall come out of the force
-    balance in `attitude_net_acceleration` (thrust along the body, aero
-    collapsing with q, gravity unchanged).
+    The profile only commands what a pilot commands: throttle and body
+    rates (`entity.rate_cmd`), each bounded by the FCS command limits. The
+    autopilot turns those into elevator/aileron/rudder/thrust-vector
+    deflections through rate-limited actuators, and Euler's equations do
+    the rest. Nothing sets attitude, position or velocity. The pitch-up
+    rate, the deceleration, the near-zero-airspeed hang and the fall all
+    come out of forces and moments. In the hang the aero surfaces have no
+    q, so pitch authority there is thrust vectoring.
 
-    `hold_level_until_trigger` flies the armed phase in attitude mode with a
-    trim autopilot (alpha for lift = weight, throttle for thrust = drag) so
-    the target cruises level instead of sinking as a lift-less point mass.
+    `hold_level_until_trigger` flies the armed phase as an ordinary
+    guidance-style lateral command (lift = weight, plus sink-rate feedback)
+    with throttle trimmed to drag. The same accel autopilot as every other
+    maneuver tracks it.
 
     Phases: armed -> throttle_cut -> pitch_up -> hang -> spiral -> recovered.
     `hang` is telemetry only (airspeed < `hang_speed_m_s`) and may be skipped
-    if the vehicle starts falling before bleeding that far. `recovered` hands
-    the entity back to plain point-mass flight.
+    if the vehicle starts falling before bleeding that far. `recovered`
+    returns the entity to the accel autopilot with a zero command.
 
     Trigger mirrors `BreakTurn`: `trigger_time_to_go_s` against engagement
-    geometry, else absolute `trigger_time_s`. `lateral_accel` always returns
-    zeros; the commands are written onto `entity` (the engine then calls its
-    polymorphic `step`).
+    geometry, else absolute `trigger_time_s`.
     """
 
     PHASES = ("armed", "throttle_cut", "pitch_up", "hang", "spiral", "recovered")
-    _GAIN = 10.0  # 1/s, proportional attitude-hold gain (saturates at max rate)
+    _GAIN = 3.0  # 1/s, attitude error -> body-rate command (then clipped to FCS limits)
 
     def __init__(
         self,
-        entity: AttitudeAugmentedEntity,
+        entity: RigidBodyEntity,
         trigger_time_to_go_s: Optional[float] = None,
         trigger_time_s: float = 0.0,
         pitch_target_deg: float = 88.0,
@@ -504,8 +507,8 @@ class CobraManeuver(ManeuverProfile):
         hold_level_until_trigger: bool = False,
         pitch_up_throttle: Optional[float] = None,
     ):
-        if not isinstance(entity, AttitudeAugmentedEntity):
-            raise TypeError("CobraManeuver needs an AttitudeAugmentedEntity")
+        if not isinstance(entity, RigidBodyEntity):
+            raise TypeError("CobraManeuver needs a RigidBodyEntity")
         self.entity = entity
         self.trigger_time_to_go_s = trigger_time_to_go_s
         self.trigger_time_s = float(trigger_time_s)
@@ -534,24 +537,22 @@ class CobraManeuver(ManeuverProfile):
         self.phase = phase
         self.phase_history.append((t, phase))
 
-    def _hold_level(self, state: State) -> None:
+    def _hold_level(self, state: State) -> np.ndarray:
         e = self.entity
-        if not e.attitude_active:
-            e.sync_attitude_to_velocity()
-            e.attitude_active = True
-        q = dynamic_pressure(isa_density(state.altitude()), state.speed())
-        if q < 1.0:
-            return
-        gamma = flight_path_angle(state.velocity, e.psi)
+        speed = state.speed()
+        if speed < 1.0:
+            return np.zeros(3)
+        up = _vertical_direction(state.velocity)
+        cos_gamma = float(np.dot(UP, up))
         v = e.vehicle
-        cl_trim = v.mass * G0 * np.cos(gamma) / (q * v.reference_area)
-        # Trim alpha plus flight-path-angle feedback (pull up when sinking).
-        alpha = float(np.clip(cl_trim / CL_ALPHA_PER_RAD - gamma, -np.deg2rad(10.0), np.deg2rad(10.0)))
-        e.theta_dot = self._GAIN * (gamma + alpha - e.theta)
-        e.phi_dot = self._GAIN * (0.0 - e.phi)
-        _cl, cd = post_stall_coefficients(alpha, v.drag_coefficient)
-        drag = q * v.reference_area * cd
-        e.throttle = float(np.clip(drag / (e.max_thrust * np.cos(alpha)), 0.0, 1.0)) if e.max_thrust > 0 else 0.0
+        drag = -float(np.dot(
+            body_aero_force(e.x[3:6], isa_density(state.altitude()), v.reference_area,
+                            v.drag_coefficient, e.params.aero, e.deflection[RUDDER]),
+            e.x[3:6] / speed,
+        ))
+        e.throttle = float(np.clip(drag / e.params.max_thrust, 0.0, 1.0)) if e.params.max_thrust > 0 else 0.0
+        # Lift = weight·cos(gamma), plus 1/s sink-rate feedback.
+        return (G0 * cos_gamma - 1.0 * float(state.velocity[2])) * up
 
     def lateral_accel(self, t: float, state: State) -> np.ndarray:
         e = self.entity
@@ -560,43 +561,45 @@ class CobraManeuver(ManeuverProfile):
                 triggered = self._time_to_go_s <= self.trigger_time_to_go_s
             else:
                 triggered = t >= self.trigger_time_s
-            if not triggered and self.hold_level_until_trigger:
-                self._hold_level(state)
-            if triggered:
-                if not e.attitude_active:
-                    e.sync_attitude_to_velocity()
-                e.attitude_active = True
-                e.throttle = (
-                    self.idle_throttle if self.pitch_up_throttle is None else float(self.pitch_up_throttle)
-                )
-                e.theta_dot = e.phi_dot = 0.0
-                self._enter(t, "throttle_cut")
+            if not triggered:
+                return self._hold_level(state) if self.hold_level_until_trigger else np.zeros(3)
+            e.throttle = self.idle_throttle if self.pitch_up_throttle is None else float(self.pitch_up_throttle)
+            e.rate_cmd = np.zeros(3)
+            self._enter(t, "throttle_cut")
             return np.zeros(3)
 
         if self.phase == "throttle_cut":  # one control tick, then pull
             self._enter(t, "pitch_up")
 
+        phi, theta, _psi = e.euler_angles()
+        _speed, alpha, beta = e.wind_angles()
         if self.phase in ("pitch_up", "hang"):
-            e.theta_dot = self._GAIN * (self.pitch_target - e.theta)
+            e.rate_cmd = np.array([
+                0.0,
+                np.clip(self._GAIN * (self.pitch_target - theta), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                0.0,
+            ])
             if self.phase == "pitch_up" and state.speed() < self.hang_speed_m_s:
                 self._enter(t, "hang")
-            pitch_done = e.theta >= self.pitch_target - np.deg2rad(2.0)
+            pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
             if pitch_done and state.velocity[2] < 0.0:
                 self._spiral_start_altitude_m = state.altitude()
                 self._enter(t, "spiral")
 
         if self.phase == "spiral":
             e.throttle = self.spiral_throttle
-            e.phi_dot = self._GAIN * (self.spiral_bank - e.phi)
-            # Nose follows velocity with a small alpha, so the banked lift
-            # (not a scripted path) winds the descent into a spiral.
-            gamma = flight_path_angle(state.velocity, e.psi)
-            e.theta_dot = self._GAIN * (gamma + self.spiral_alpha - e.theta)
+            # Nose back onto the velocity vector at a small alpha while banked, so
+            # the tilted lift (not a scripted path) winds the descent into a spiral.
+            e.rate_cmd = np.array([
+                np.clip(self._GAIN * (self.spiral_bank - phi), -MAX_ROLL_RATE_RAD_S, MAX_ROLL_RATE_RAD_S),
+                np.clip(self._GAIN * (self.spiral_alpha - alpha), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                np.clip(self._GAIN * beta, -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+            ])
             q = dynamic_pressure(isa_density(state.altitude()), state.speed())
             lost = self._spiral_start_altitude_m - state.altitude()
             if q >= self.recovery_q_pa and lost >= self.recovery_altitude_loss_m:
-                e.attitude_active = False
-                e.throttle = e.theta_dot = e.phi_dot = 0.0
+                e.rate_cmd = None
+                e.throttle = 0.0
                 self._enter(t, "recovered")
 
         return np.zeros(3)

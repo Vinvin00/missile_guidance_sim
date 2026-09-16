@@ -1,9 +1,10 @@
-"""CobraManeuver / AttitudeAugmentedEntity: 3-DOF + attitude post-stall physics.
+"""CobraManeuver on the 6-DOF rigid body.
 
-The key claim under test: the hang and the fall come out of the force
-balance (thrust along body, aero collapsing with q, gravity), not from any
-scripted trajectory. The only commands in these tests are throttle and
-attitude rates.
+The key claim under test: the pitch-up, hang and fall come out of control
+deflections -> moments -> Euler's equations, and out of the force balance.
+Nothing scripts attitude or trajectory. The only commands in these tests
+are throttle and body-rate commands, and those go through the autopilot
+and rate-limited actuators.
 """
 
 from __future__ import annotations
@@ -12,31 +13,20 @@ import numpy as np
 
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.aerodynamics import ALPHA_STALL_RAD, post_stall_coefficients
-from guidance_sim.physics.entities import AttitudeAugmentedEntity, PointMassEntity, State, VehicleParams
+from guidance_sim.physics.controls import ELEVATOR, TV_PITCH
+from guidance_sim.physics.entities import F16_6DOF, INTERCEPTOR_6DOF, RigidBodyEntity, State
 from guidance_sim.physics.maneuvers import CobraManeuver
+from guidance_sim.physics.rotational_dynamics import quat_from_euler
 from guidance_sim.simulation.engine import Simulation, SimulationConfig
 
 _DT = 0.01
-# Generic fighter-class values, same airframe as test_evasive_maneuvers.
-_VEHICLE = VehicleParams(
-    mass=9_100.0,
-    reference_area=45.0,
-    drag_coefficient=0.035,
-    max_normal_force_coefficient=1.1,
-    max_load_factor=9.0,
-)
 
 
-def _cobra_target(velocity, altitude_m: float = 3_000.0) -> AttitudeAugmentedEntity:
-    return AttitudeAugmentedEntity(
-        name="target",
-        state=State(position=[0.0, 0.0, altitude_m], velocity=velocity),
-        vehicle=_VEHICLE,
-        max_thrust=100_000.0,
-    )
+def _cobra_target(velocity, altitude_m: float = 3_000.0) -> RigidBodyEntity:
+    return RigidBodyEntity.from_state(State(position=[0.0, 0.0, altitude_m], velocity=velocity), F16_6DOF, "target")
 
 
-def _zoom_climb_velocity(speed: float = 150.0, gamma_deg: float = 60.0) -> list[float]:
+def _zoom_climb_velocity(speed: float = 150.0, gamma_deg: float = 75.0) -> list[float]:
     g = np.deg2rad(gamma_deg)
     return [speed * np.cos(g), 0.0, speed * np.sin(g)]
 
@@ -56,14 +46,13 @@ def test_post_stall_blend_is_continuous_through_stall_onset():
     assert cd_90 > 20.0 * cd_0
 
 
-def _hold_high_pitch_idle(target: AttitudeAugmentedEntity, duration_s: float):
-    """Pitch to 88 deg and hold at idle thrust. No velocity/fall commands anywhere."""
-    target.sync_attitude_to_velocity()
-    target.attitude_active = True
+def _hold_high_pitch_idle(target: RigidBodyEntity, duration_s: float):
+    """Command pitch rate toward 88 deg at idle thrust. No velocity/fall commands anywhere."""
     target.throttle = 0.02
     speeds, vzs = [], []
     for _ in range(int(round(duration_s / _DT))):
-        target.theta_dot = 10.0 * (np.deg2rad(88.0) - target.theta)
+        theta = target.euler_angles()[1]
+        target.rate_cmd = np.array([0.0, np.clip(3.0 * (np.deg2rad(88.0) - theta), -1.0, 1.0), 0.0])
         target.step(_DT, np.zeros(3))
         speeds.append(target.state.speed())
         vzs.append(float(target.state.velocity[2]))
@@ -90,21 +79,6 @@ def test_fall_emerges_after_hang_without_a_fall_command():
     assert vzs[-1] < -5.0  # gravity-dominated fall is building
 
 
-def test_inactive_attitude_entity_matches_point_mass_bit_for_bit():
-    """Isolation: until CobraManeuver fires, the target IS a point mass."""
-    point_mass = PointMassEntity(
-        name="pm", state=State(position=[0.0, 0.0, 3_000.0], velocity=[240.0, 5.0, -3.0]),
-        vehicle=_VEHICLE,
-    )
-    augmented = _cobra_target([240.0, 5.0, -3.0])
-    cmd = np.array([0.0, 30.0, 10.0])
-    for _ in range(300):
-        point_mass.step(_DT, cmd, autopilot_tau=0.2)
-        augmented.step(_DT, cmd, autopilot_tau=0.2)
-    assert np.array_equal(point_mass.state.position, augmented.state.position)
-    assert np.array_equal(point_mass.state.velocity, augmented.state.velocity)
-
-
 def test_cobra_time_to_go_trigger():
     maneuver = CobraManeuver(_cobra_target([200.0, 0.0, 0.0]), trigger_time_to_go_s=5.0)
     target = State(position=[0.0, 0.0, 3_000.0], velocity=[200.0, 0.0, 0.0])
@@ -118,17 +92,24 @@ def test_cobra_time_to_go_trigger():
     assert maneuver.phase == "throttle_cut"
 
 
-def test_cobra_runs_all_phases_to_recovery_through_simulation():
+def test_cobra_end_to_end_6dof_climb_hang_spiral_recovery_from_real_control_inputs():
+    """Integration: full Cobra through Simulation, both vehicles 6-DOF."""
     target = _cobra_target(_zoom_climb_velocity(speed=160.0, gamma_deg=45.0))
     maneuver = CobraManeuver(target, trigger_time_s=1.0)
-    pursuer = PointMassEntity(
-        name="pursuer",
-        state=State(position=[-60_000.0, 0.0, 3_000.0], velocity=[300.0, 0.0, 0.0]),
-        vehicle=VehicleParams(
-            mass=50.0, reference_area=0.05, drag_coefficient=0.3,
-            max_normal_force_coefficient=15.0, max_load_factor=25.0,
-        ),
+    pursuer = RigidBodyEntity.from_state(
+        State(position=[-60_000.0, 0.0, 3_000.0], velocity=[300.0, 0.0, 0.0]), INTERCEPTOR_6DOF, "pursuer"
     )
+
+    samples = []  # (phase, altitude, speed, pitch, elevator, tv_pitch)
+    original = maneuver.lateral_accel
+
+    def recording_lateral_accel(t, state):
+        command = original(t, state)
+        samples.append((maneuver.phase, state.altitude(), state.speed(), target.euler_angles()[1],
+                        target.deflection[ELEVATOR], target.deflection[TV_PITCH]))
+        return command
+
+    maneuver.lateral_accel = recording_lateral_accel
     max_time = 40.0
     Simulation(
         pursuer=pursuer,
@@ -140,27 +121,42 @@ def test_cobra_runs_all_phases_to_recovery_through_simulation():
 
     phases = [name for _t, name in maneuver.phase_history]
     assert phases == list(CobraManeuver.PHASES)
-    assert maneuver.phase == "recovered"
     assert maneuver.phase_history[-1][0] < max_time
-    assert not target.attitude_active  # handed back to point-mass flight
+    assert target.rate_cmd is None  # handed back to the accel autopilot
+
+    by_phase = {p: [s for s in samples if s[0] == p] for p in CobraManeuver.PHASES}
+    start_alt = samples[0][1]
+    # Climb: altitude gained during pitch-up, and the nose really got near vertical.
+    assert max(s[1] for s in by_phase["pitch_up"]) > start_alt + 300.0
+    assert max(s[3] for s in by_phase["pitch_up"] + by_phase["hang"]) > np.deg2rad(85.0)
+    # The pitch-up was flown on the elevator (saturating), not a rate shortcut.
+    assert min(s[4] for s in by_phase["pitch_up"]) < -0.5 * F16_6DOF.actuators.max_deflection[ELEVATOR]
+    # Hang: slow, and thrust vectoring is doing the pitch work where q is gone.
+    assert min(s[2] for s in by_phase["hang"]) < 40.0
+    assert max(abs(s[5]) for s in by_phase["hang"]) > np.deg2rad(1.0)
+    # Spiral: altitude lost, airspeed rebuilt.
+    spiral = by_phase["spiral"]
+    assert spiral[-1][1] < spiral[0][1] - 100.0
+    assert spiral[-1][2] > spiral[0][2] + 20.0
 
 
 def test_hold_level_until_trigger_cruises_instead_of_sinking():
     target = _cobra_target([150.0, 0.0, 0.0])
     maneuver = CobraManeuver(target, trigger_time_s=1e9, hold_level_until_trigger=True)
     for step in range(1_000):  # 10 s
-        maneuver.lateral_accel(step * _DT, target.state)
-        target.step(_DT, np.zeros(3))
+        target.step(_DT, maneuver.lateral_accel(step * _DT, target.state))
     assert maneuver.phase == "armed"
-    assert abs(target.state.altitude() - 3_000.0) < 20.0  # lift-less point mass sinks ~490 m
+    assert abs(target.state.altitude() - 3_000.0) < 20.0  # lift-less glide sinks ~490 m
     assert abs(target.state.speed() - 150.0) < 5.0  # throttle trims out drag
 
 
 def test_body_up_is_orthogonal_to_nose_and_rolls_with_bank():
     target = _cobra_target([150.0, 0.0, 0.0])
-    target.theta, target.psi = np.deg2rad(30.0), np.deg2rad(40.0)
+    theta, psi = np.deg2rad(30.0), np.deg2rad(40.0)
+    target.x[6:10] = quat_from_euler(0.0, theta, psi)
     level_up = target.body_up()
-    target.phi = np.deg2rad(60.0)
+    assert level_up[2] > 0.0  # canopy up when wings level
+    target.x[6:10] = quat_from_euler(np.deg2rad(60.0), theta, psi)
     banked_up = target.body_up()
     for up in (level_up, banked_up):
         assert np.isclose(np.linalg.norm(up), 1.0)

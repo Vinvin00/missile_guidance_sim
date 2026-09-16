@@ -36,7 +36,7 @@ from guidance_sim.guidance.base import GuidanceLaw
 from guidance_sim.guidance.optimal_guidance import OptimalGuidance
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.atmosphere import G0
-from guidance_sim.physics.entities import AttitudeAugmentedEntity, State, VehicleParams
+from guidance_sim.physics.entities import F16_6DOF, RigidBodyEntity, State
 from guidance_sim.physics.maneuvers import (
     CobraManeuver,
     ConstantTurn,
@@ -70,20 +70,15 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
     "g-limited-turn": "constant_turn",
     "cobra-evasion": "cobra",
 }
-_COBRA_THRUST_TO_WEIGHT = 1.1  # generic fighter-class value
-# The env's default target is a 40 kg drone; a Cobra needs the catalog's
-# fighter-class Target B airframe (post-stall drag bleed scales with S/m).
-_COBRA_TARGET_VEHICLE = VehicleParams(
-    mass=9_100.0,
-    reference_area=45.0,
-    drag_coefficient=0.035,
-    max_normal_force_coefficient=1.1,
-    max_load_factor=9.0,
-)
-# Late trigger + full thrust through the pull: at catalog defaults this made
-# PN/APN/OGL overshoot 14-17 m every seed; the frozen RL policy overshoots in
-# 21/24 seeds (its 3 hits are at 4.5-5.0 m). Idle-throttle or earlier/later triggers left RL hitting.
-_COBRA_TRIGGER_TIME_TO_GO_S = 0.9
+# The env's default target is a 40 kg drone; a Cobra needs a fighter-class
+# 6-DOF airframe (F-16 mass/inertia/aero, with thrust vectoring for the hang).
+_COBRA_TARGET_VEHICLE = F16_6DOF.vehicle
+# Re-tuned for the 6-DOF airframe (see NOTES.md 2026-09-16). The old
+# instant-rate shortcut's nose-snap dodged PN/APN/OGL at 0.9 s time-to-go;
+# the 6-DOF model's finite pitch-up rate needs 2.0 s to open the same
+# separation. Full thrust through the pull (pitch_up_throttle=1.0) adds
+# vertical displacement to the zoom, same idea as before.
+_COBRA_TRIGGER_TIME_TO_GO_S = 2.0
 _COBRA_PITCH_UP_THROTTLE = 1.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
@@ -111,7 +106,7 @@ def _vec3(values: np.ndarray) -> Vector3:
 def _body(
     position: np.ndarray,
     velocity: np.ndarray,
-    attitude: AttitudeAugmentedEntity | None = None,
+    attitude: RigidBodyEntity | None = None,
 ) -> BodyState:
     return BodyState(
         position_m=_vec3(position),
@@ -257,13 +252,8 @@ def build_live_trajectory(
     observation, info = env.reset(seed=seed)
     assert env.pursuer is not None and env.target is not None
     if maneuver == "cobra":
-        # Same state/vehicle, attitude-capable entity; env and obs untouched.
-        env.target = AttitudeAugmentedEntity(
-            name=env.target.name,
-            state=env.target.state,
-            vehicle=env.target.vehicle,
-            max_thrust=_COBRA_THRUST_TO_WEIGHT * env.target.vehicle.mass * G0,
-        )
+        # Same state, 6-DOF entity; env and obs untouched.
+        env.target = RigidBodyEntity.from_state(env.target.state, F16_6DOF, name=env.target.name)
         env.target_maneuver = CobraManeuver(
             env.target,
             trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
