@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -38,11 +39,22 @@ app = FastAPI(
         "and each run draws a new random seed."
     ),
 )
+_DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://frontend-navy-ten-53.vercel.app",
+]
+_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
+allowed_origins = (
+    [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
+    if _allowed_origins_env
+    else _DEFAULT_ALLOWED_ORIGINS
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
