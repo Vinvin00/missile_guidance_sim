@@ -15,8 +15,9 @@ def test_no_maneuver_rollout_matches_baseline_eval_miss():
     assert trajectory.case_name == "no_maneuver_demo"
     # Golden value tied to outputs/rl_rollouts/no_maneuver_demo.json,
     # regenerated 2026-09-16 against the promoted evasive_zemtgo10_seed8
-    # CP8 baseline (was 3.0468213306506464 under the prior seed3 baseline).
-    assert trajectory.closest_approach_m == pytest.approx(1.4967420807277796)
+    # CP8 baseline (was 3.0468213306506464 under the prior seed3 baseline,
+    # 1.4967420807277796 before the lateral_basis_from_previous continuity fix).
+    assert trajectory.closest_approach_m == pytest.approx(1.4868842209629864)
     assert trajectory.dt_s == pytest.approx(0.02)
     assert trajectory.frames[0].time_s == 0.0
     assert trajectory.frames[-1].range_m <= 5.0

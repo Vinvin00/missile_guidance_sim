@@ -37,47 +37,53 @@ export function AppHeader({ screen, projection, onProjection }) {
           />
           <span className="stream-status">{status}</span>
         </div>
-        <div className="projection-toggle" role="group" aria-label="Camera">
-          <button
-            type="button"
-            className={cameraMode === 'overview' ? 'is-active' : ''}
-            onClick={() => setCameraMode('overview')}
-          >
-            3/4
-          </button>
-          <span className="projection-rule" aria-hidden="true" />
-          <button
-            type="button"
-            className={cameraMode === 'pursuer' ? 'is-active' : ''}
-            onClick={() => setCameraMode('pursuer')}
-          >
-            INTERCEPTOR
-          </button>
-          <span className="projection-rule" aria-hidden="true" />
-          <button
-            type="button"
-            className={cameraMode === 'target' ? 'is-active' : ''}
-            onClick={() => setCameraMode('target')}
-          >
-            TARGET
-          </button>
+        <div className="projection-group">
+          <span className="projection-group-label">Camera</span>
+          <div className="projection-toggle" role="group" aria-label="Camera">
+            <button
+              type="button"
+              className={cameraMode === 'overview' ? 'is-active' : ''}
+              onClick={() => setCameraMode('overview')}
+            >
+              3/4
+            </button>
+            <span className="projection-rule" aria-hidden="true" />
+            <button
+              type="button"
+              className={cameraMode === 'pursuer' ? 'is-active' : ''}
+              onClick={() => setCameraMode('pursuer')}
+            >
+              INTERCEPTOR
+            </button>
+            <span className="projection-rule" aria-hidden="true" />
+            <button
+              type="button"
+              className={cameraMode === 'target' ? 'is-active' : ''}
+              onClick={() => setCameraMode('target')}
+            >
+              TARGET
+            </button>
+          </div>
         </div>
-        <div className="projection-toggle" role="group" aria-label="Projection">
-          <button
-            type="button"
-            className={projection === '3d' ? 'is-active' : ''}
-            onClick={() => onProjection('3d')}
-          >
-            3D
-          </button>
-          <span className="projection-rule" aria-hidden="true" />
-          <button
-            type="button"
-            className={projection === '2d' ? 'is-active' : ''}
-            onClick={() => onProjection('2d')}
-          >
-            2D
-          </button>
+        <div className="projection-group">
+          <span className="projection-group-label">View</span>
+          <div className="projection-toggle" role="group" aria-label="Projection">
+            <button
+              type="button"
+              className={projection === '3d' ? 'is-active' : ''}
+              onClick={() => onProjection('3d')}
+            >
+              3D
+            </button>
+            <span className="projection-rule" aria-hidden="true" />
+            <button
+              type="button"
+              className={projection === '2d' ? 'is-active' : ''}
+              onClick={() => onProjection('2d')}
+            >
+              2D
+            </button>
+          </div>
         </div>
       </div>
     </header>

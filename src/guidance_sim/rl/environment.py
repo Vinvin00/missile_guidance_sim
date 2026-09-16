@@ -72,7 +72,7 @@ from guidance_sim.rl.actions import (
     ACTION_LAYOUT_WORLD3,
     ActionLayout,
     action_dimension,
-    lateral_to_world,
+    lateral_basis_from_previous,
 )
 from guidance_sim.rl.reward import RewardConfig, compute_reward
 from guidance_sim.rl.zem import potential_from_zem, predicted_miss_m
@@ -377,6 +377,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self._sensor_config: SensorConfig | None = None
         self._estimator_ready = False
         self._last_update_time_s = 0.0
+        self._lateral_e1: np.ndarray | None = None
 
     def _validate_config(self) -> None:
         cfg = self.config
@@ -428,6 +429,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             self.estimator = None
         self._estimator_ready = False
         self._last_update_time_s = 0.0
+        self._lateral_e1 = None
 
         self.time_s = 0.0
         self.min_range_m = self._range()
@@ -687,7 +689,10 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         if self.pursuer is None:
             raise RuntimeError("environment has not been reset")
         if self.action_layout == ACTION_LAYOUT_LATERAL2:
-            world = lateral_to_world(requested, self.pursuer.state.velocity)
+            e1, e2 = lateral_basis_from_previous(self.pursuer.state.velocity, self._lateral_e1)
+            self._lateral_e1 = e1
+            coefficients = np.asarray(requested, dtype=float).reshape(2)
+            world = coefficients[0] * e1 + coefficients[1] * e2
         else:
             world = requested.copy()
         magnitude = float(np.linalg.norm(world))

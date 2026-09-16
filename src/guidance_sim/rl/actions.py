@@ -68,6 +68,39 @@ def lateral_basis(velocity: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return e1, e2 / e2_norm
 
 
+def lateral_basis_from_previous(
+    velocity: np.ndarray, previous_e1: np.ndarray | None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Continuous variant of ``lateral_basis`` for sequential control steps.
+
+    ``lateral_basis`` recomputes ``e1`` from ``up x v_hat`` every call, which
+    is discontinuous near the poles (``v_hat`` parallel to world-up): as the
+    fallback branch flips, a constant action maps to a world command that
+    whips 90-180 degrees between steps (see docs/rl-interface-6dof.md,
+    "action-basis singularity"). This instead projects the previous step's
+    ``e1`` onto the new velocity-normal plane and re-normalises, which keeps
+    the frame continuous through the pole. Falls back to ``lateral_basis``
+    when there is no previous frame (episode reset) or it has degenerated
+    (previous ``e1`` now anti-/parallel to the new velocity).
+    """
+
+    velocity = np.asarray(velocity, dtype=float).reshape(3)
+    speed = float(np.linalg.norm(velocity))
+    if speed < _SPEED_EPS:
+        return np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])
+    v_hat = velocity / speed
+
+    if previous_e1 is not None:
+        projected = previous_e1 - np.dot(previous_e1, v_hat) * v_hat
+        norm = float(np.linalg.norm(projected))
+        if norm >= _BASIS_EPS:
+            e1 = projected / norm
+            e2 = np.cross(v_hat, e1)
+            return e1, e2 / float(np.linalg.norm(e2))
+
+    return lateral_basis(velocity)
+
+
 def lateral_to_world(action_2d: np.ndarray, velocity: np.ndarray) -> np.ndarray:
     """Map a 2D lateral action onto the velocity-normal plane in world axes."""
 

@@ -1,0 +1,21 @@
+outputs/precision_ft/seed6_pw50/checkpoints/rl_checkpoint_07.zip: 254/300 hits (84.7%), median miss 3.6 m -> outputs/precision_ft/seed6_pw50/eval300_cp7.json
+outputs/precision_ft/seed3_pw0/checkpoints/rl_checkpoint_07.zip: 248/300 hits (82.7%), median miss 4.0 m -> outputs/precision_ft/seed3_pw0/eval300_cp7.json
+outputs/precision_ft/seed4_pw50/checkpoints/rl_checkpoint_07.zip: 242/300 hits (80.7%), median miss 4.1 m -> outputs/precision_ft/seed4_pw50/eval300_cp7.json
+outputs/precision_ft/effort8_seed2_pw50/checkpoints/rl_checkpoint_07.zip: 227/300 hits (75.7%), median miss 4.1 m -> outputs/precision_ft/effort8_seed2_pw50/eval300_cp7.json
+outputs/precision_ft/seed2_pw0/checkpoints/rl_checkpoint_07.zip: 220/300 hits (73.3%), median miss 4.2 m -> outputs/precision_ft/seed2_pw0/eval300_cp7.json
+outputs/precision_ft/seed3_pw50/checkpoints/rl_checkpoint_07.zip: 210/300 hits (70.0%), median miss 4.4 m -> outputs/precision_ft/seed3_pw50/eval300_cp7.json
+outputs/precision_ft/seed2_pw50/checkpoints/rl_checkpoint_07.zip: 198/300 hits (66.0%), median miss 4.3 m -> outputs/precision_ft/seed2_pw50/eval300_cp7.json
+outputs/precision_ft/seed5_pw50/checkpoints/rl_checkpoint_07.zip: 203/300 hits (67.7%), median miss 4.3 m -> outputs/precision_ft/seed5_pw50/eval300_cp7.json
+outputs/precision_ft/seed7_pw50/checkpoints/rl_checkpoint_07.zip: 195/300 hits (65.0%), median miss 4.3 m -> outputs/precision_ft/seed7_pw50/eval300_cp7.json
+outputs/precision_ft/seed4_pw0/checkpoints/rl_checkpoint_07.zip: 198/300 hits (66.0%), median miss 4.5 m -> outputs/precision_ft/seed4_pw0/eval300_cp7.json
+outputs/precision_ft/seed6_pw50/checkpoints/rl_checkpoint_08.zip: 258/300 hits (86.0%), median miss 3.7 m -> outputs/precision_ft/seed6_pw50/eval300_cp8.json
+outputs/precision_ft/effort8_seed2_pw50/checkpoints/rl_checkpoint_08.zip: 256/300 hits (85.3%), median miss 3.8 m -> outputs/precision_ft/effort8_seed2_pw50/eval300_cp8.json
+outputs/precision_ft/seed3_pw50/checkpoints/rl_checkpoint_08.zip: 243/300 hits (81.0%), median miss 3.9 m -> outputs/precision_ft/seed3_pw50/eval300_cp8.json
+outputs/precision_ft/seed3_pw0/checkpoints/rl_checkpoint_08.zip: 210/300 hits (70.0%), median miss 4.3 m -> outputs/precision_ft/seed3_pw0/eval300_cp8.json
+outputs/precision_ft/seed4_pw50/checkpoints/rl_checkpoint_08.zip: 214/300 hits (71.3%), median miss 4.3 m -> outputs/precision_ft/seed4_pw50/eval300_cp8.json
+outputs/precision_ft/seed2_pw0/checkpoints/rl_checkpoint_08.zip: 222/300 hits (74.0%), median miss 4.2 m -> outputs/precision_ft/seed2_pw0/eval300_cp8.json
+outputs/precision_ft/seed5_pw50/checkpoints/rl_checkpoint_08.zip: 239/300 hits (79.7%), median miss 3.8 m -> outputs/precision_ft/seed5_pw50/eval300_cp8.json
+outputs/precision_ft/seed7_pw50/checkpoints/rl_checkpoint_08.zip: 229/300 hits (76.3%), median miss 4.0 m -> outputs/precision_ft/seed7_pw50/eval300_cp8.json
+outputs/precision_ft/seed4_pw0/checkpoints/rl_checkpoint_08.zip: 209/300 hits (69.7%), median miss 4.4 m -> outputs/precision_ft/seed4_pw0/eval300_cp8.json
+outputs/precision_ft/seed2_pw50/checkpoints/rl_checkpoint_08.zip: 203/300 hits (67.7%), median miss 4.3 m -> outputs/precision_ft/seed2_pw50/eval300_cp8.json
+ALL DONE

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "guidance-sim"
 version = "0.1.0"
-description = "2D missile guidance simulation: Proportional Navigation vs. a learned (PyTorch) approach"
+description = "3D missile guidance simulation: Proportional Navigation vs. a learned (PyTorch) approach"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]

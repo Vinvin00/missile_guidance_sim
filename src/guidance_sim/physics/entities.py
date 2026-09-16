@@ -25,7 +25,7 @@ from typing import Optional
 
 import numpy as np
 
-from guidance_sim.physics.aerodynamics import AeroDerivatives, wind_angles
+from guidance_sim.physics.aerodynamics import AeroDerivatives, MachAeroSchedule, wind_angles
 from guidance_sim.physics.controls import N_CONTROLS, ActuatorLimits, actuator_step
 from guidance_sim.physics.dynamics import (
     autopilot_deflection_command,
@@ -172,6 +172,24 @@ _SLUG_FT2 = 1.3558179  # kg·m² per slug·ft²
 _FT = 0.3048
 _DEG = np.pi / 180.0
 
+# Generic reduced-order schedules.  They encode the well-established shape
+# (drag rise near M=1 and reduced normal-force slope supersonically), not the
+# proprietary performance of a named vehicle.  NASA TM X-3070 and TN D-7122
+# are the public qualitative anchors; the multiplier values remain explicitly
+# illustrative and should be replaced by configuration-specific wind-tunnel or
+# CFD tables for quantitative work.
+_GENERIC_MISSILE_MACH_SCHEDULE = MachAeroSchedule(
+    mach=(0.0, 0.8, 0.95, 1.05, 1.4, 2.0, 3.0),
+    cd0_multiplier=(1.0, 1.0, 1.35, 2.0, 1.65, 1.45, 1.35),
+    normal_force_slope_multiplier=(1.0, 1.0, 0.95, 0.88, 0.80, 0.72, 0.65),
+)
+
+_GENERIC_FIGHTER_MACH_SCHEDULE = MachAeroSchedule(
+    mach=(0.0, 0.7, 0.9, 1.0, 1.2, 1.6, 2.0),
+    cd0_multiplier=(1.0, 1.0, 1.2, 2.1, 1.8, 1.5, 1.4),
+    normal_force_slope_multiplier=(1.0, 1.0, 0.98, 0.92, 0.84, 0.76, 0.70),
+)
+
 
 @dataclass(frozen=True)
 class RigidBodyParams:
@@ -239,6 +257,7 @@ F16_6DOF = RigidBodyParams(
         c_pitch_alpha=-0.18, c_pitch_q=-5.23, c_pitch_de=-0.65,
         c_roll_beta=-0.1, c_roll_p=-0.443, c_roll_da=0.117, c_roll_dr=0.019,
         c_yaw_beta=0.2, c_yaw_r=-0.378, c_yaw_dr=-0.069,
+        mach_schedule=_GENERIC_FIGHTER_MACH_SCHEDULE,
     ),
     actuators=ActuatorLimits(
         max_deflection=(25 * _DEG, 21.5 * _DEG, 30 * _DEG, 20 * _DEG, 20 * _DEG),
@@ -296,6 +315,7 @@ INTERCEPTOR_6DOF = RigidBodyParams(
         c_pitch_alpha=-35.0, c_pitch_q=-350.0, c_pitch_de=-36.0,
         c_roll_beta=0.0, c_roll_p=-20.0, c_roll_da=6.0, c_roll_dr=0.0,
         c_yaw_beta=35.0, c_yaw_r=-350.0, c_yaw_dr=-36.0,
+        mach_schedule=_GENERIC_MISSILE_MACH_SCHEDULE,
     ),
     actuators=ActuatorLimits(
         max_deflection=(25 * _DEG, 25 * _DEG, 25 * _DEG, 0.0, 0.0),

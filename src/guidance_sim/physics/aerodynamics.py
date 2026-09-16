@@ -26,6 +26,44 @@ CD_90 = 1.2  # flat plate normal to flow (Hoerner, Fluid-Dynamic Drag, ~1.17)
 ALPHA_STALL_RAD = np.deg2rad(15.0)
 STALL_BLEND_WIDTH_RAD = np.deg2rad(2.0)
 
+
+@dataclass(frozen=True)
+class MachAeroSchedule:
+    """Piecewise-linear Mach corrections for the attached airframe.
+
+    The schedule scales the vehicle's low-speed zero-lift drag and normal-
+    force slope.  Values outside the tabulated range use the nearest endpoint;
+    silent extrapolation is deliberately avoided because these reduced-order
+    tables are not valid outside their stated envelope.
+    """
+
+    mach: tuple[float, ...]
+    cd0_multiplier: tuple[float, ...]
+    normal_force_slope_multiplier: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        n = len(self.mach)
+        if (
+            n < 2
+            or len(self.cd0_multiplier) != n
+            or len(self.normal_force_slope_multiplier) != n
+        ):
+            raise ValueError("Mach schedule arrays must have the same length (at least two points)")
+        if not np.all(np.diff(self.mach) > 0.0):
+            raise ValueError("Mach breakpoints must be strictly increasing")
+        if min(self.mach) < 0.0:
+            raise ValueError("Mach breakpoints cannot be negative")
+        if min(self.cd0_multiplier) <= 0.0 or min(self.normal_force_slope_multiplier) <= 0.0:
+            raise ValueError("Mach coefficient multipliers must be positive")
+
+    def coefficients(self, mach: float) -> tuple[float, float]:
+        """Return ``(CD0 scale, normal-force-slope scale)`` at ``mach``."""
+        m = max(float(mach), 0.0)
+        cd_scale = np.interp(m, self.mach, self.cd0_multiplier)
+        cn_scale = np.interp(m, self.mach, self.normal_force_slope_multiplier)
+        return float(cd_scale), float(cn_scale)
+
+
 def dynamic_pressure(rho: float, speed: float) -> float:
     """q = 1/2 * rho * V^2 (Pa)."""
     return 0.5 * rho * speed ** 2
@@ -80,6 +118,8 @@ def post_stall_coefficients(
     cl_alpha: float = CL_ALPHA_PER_RAD,
     alpha_stall: float = ALPHA_STALL_RAD,
     k_induced: float = K_INDUCED,
+    mach: float = 0.0,
+    mach_schedule: MachAeroSchedule | None = None,
 ) -> tuple[float, float]:
     """
     (CL, CD) at any angle of attack (rad, wrapped to [-pi, pi]).
@@ -92,8 +132,11 @@ def post_stall_coefficients(
     """
     a = float(np.arctan2(np.sin(alpha), np.cos(alpha)))
     w = 1.0 / (1.0 + np.exp(-(abs(a) - alpha_stall) / STALL_BLEND_WIDTH_RAD))
-    cl_lin = cl_alpha * a
-    cd_lin = cd0 + k_induced * cl_lin ** 2
+    cd_scale, cn_scale = (1.0, 1.0)
+    if mach_schedule is not None:
+        cd_scale, cn_scale = mach_schedule.coefficients(mach)
+    cl_lin = cl_alpha * cn_scale * a
+    cd_lin = cd0 * cd_scale + k_induced * cl_lin ** 2
     cl_fp = CD_90 * np.sin(a) * np.cos(a)
     cd_fp = cd0 + CD_90 * np.sin(a) ** 2
     return float((1.0 - w) * cl_lin + w * cl_fp), float((1.0 - w) * cd_lin + w * cd_fp)
@@ -131,6 +174,7 @@ class AeroDerivatives:
     c_yaw_beta: float
     c_yaw_r: float
     c_yaw_dr: float
+    mach_schedule: MachAeroSchedule | None = None
 
 
 def wind_angles(v_body: np.ndarray) -> tuple[float, float, float]:
@@ -150,6 +194,7 @@ def body_aero_force(
     cd0: float,
     aero: AeroDerivatives,
     rudder: float = 0.0,
+    mach: float = 0.0,
 ) -> np.ndarray:
     """
     Aerodynamic force (N) in body FRD axes.
@@ -168,7 +213,15 @@ def body_aero_force(
     lift_dir = lift_dir / norm if norm > 1e-6 else np.array([0.0, 0.0, -1.0])
     side_dir = np.cross(v_hat, lift_dir)
 
-    cl, cd = post_stall_coefficients(alpha, cd0, aero.cl_alpha, aero.alpha_stall, aero.k_induced)
+    cl, cd = post_stall_coefficients(
+        alpha,
+        cd0,
+        aero.cl_alpha,
+        aero.alpha_stall,
+        aero.k_induced,
+        mach,
+        aero.mach_schedule,
+    )
     cy = aero.cy_beta * beta + aero.cy_dr * rudder
     cd += aero.k_induced * cy ** 2
     qs = dynamic_pressure(rho, speed) * reference_area
