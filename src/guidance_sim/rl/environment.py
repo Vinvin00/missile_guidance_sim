@@ -368,6 +368,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self.target_maneuver: ManeuverProfile | None = None
         self.time_s = 0.0
         self.min_range_m = np.inf
+        self.closest_approach_m = np.inf
         self._episode_done = True
         self._phi = 0.0
         self._episode_legacy_reward = 0.0
@@ -430,6 +431,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self.time_s = 0.0
         self.min_range_m = self._range()
+        self.closest_approach_m = self.min_range_m
         if self.min_range_m <= self.config.intercept_radius:
             raise ValueError("initial range must exceed config.intercept_radius")
         if self._ground_impact_reason() is not None:
@@ -476,6 +478,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         commanded, action_was_clipped = self._project_action(requested)
 
         previous_range = self._range()
+        previous_relative = self.target.state.position - self.pursuer.state.position
         cfg = self.config
 
         self.target_maneuver.update_engagement(
@@ -504,6 +507,10 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         self.min_range_m = min(self.min_range_m, current_range)
         hit = current_range <= cfg.intercept_radius
         ground_reason = self._ground_impact_reason()
+        self.closest_approach_m = min(
+            self.closest_approach_m,
+            self._segment_closest_approach(previous_relative, hit),
+        )
 
         terminated = bool(hit or ground_reason is not None)
         truncated = bool(
@@ -536,6 +543,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             dt=cfg.dt,
             outcome=outcome,
             config=self.reward_config,
+            closest_approach_m=self.closest_approach_m,
         )
         self._phi = breakdown.potential
         self._episode_legacy_reward += breakdown.legacy_total
@@ -561,6 +569,33 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             self.target.last_achieved_lateral_accel.copy()
         )
         return observation, breakdown.total, terminated, truncated, info
+
+    def _segment_closest_approach(
+        self, previous_relative: np.ndarray, hit: bool
+    ) -> float:
+        """True closest approach inside the step just taken (linear relative motion).
+
+        ``min_range_m`` samples range only at step ends, so at ~350 m/s closing
+        and dt=0.02 a dead-centre pass can read as several metres. On a hit the
+        episode stops at the first sample inside the radius, so the rest of the
+        pass is extrapolated along the current true relative velocity.
+        """
+
+        assert self.pursuer is not None and self.target is not None
+        current = self.target.state.position - self.pursuer.state.position
+        delta = current - previous_relative
+        denom = float(np.dot(delta, delta))
+        s = 0.0 if denom <= 1e-12 else float(
+            np.clip(-np.dot(previous_relative, delta) / denom, 0.0, 1.0)
+        )
+        best = float(np.linalg.norm(previous_relative + s * delta))
+        if hit:
+            velocity = self.target.state.velocity - self.pursuer.state.velocity
+            speed_sq = float(np.dot(velocity, velocity))
+            if speed_sq > 1e-12:
+                t_star = max(-float(np.dot(current, velocity)) / speed_sq, 0.0)
+                best = min(best, float(np.linalg.norm(current + t_star * velocity)))
+        return best
 
     def _advance_tracking(self) -> None:
         """Sample the seeker and run the estimator one step, if tracking is on."""
@@ -776,6 +811,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             **physical,
             "time_s": self.time_s,
             "min_range_m": self.min_range_m,
+            "closest_approach_m": self.closest_approach_m,
             "outcome": outcome,
             "termination_reason": termination_reason,
             "hit": outcome == "hit",

@@ -25,6 +25,7 @@ from typing import Any, Callable, Protocol, Sequence
 
 import gymnasium as gym
 import numpy as np
+import torch
 from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
@@ -117,6 +118,14 @@ class PPOTrainingConfig:
     # short, fixed cap keeps the lookahead near real terminal-guidance
     # timescales regardless of episode length.
     zem_t_go_max_s: float = 10.0
+    # Terminal closest-approach precision bonus (RewardConfig.precision_weight).
+    # 0 keeps every existing lineage's reward bit-identical.
+    precision_weight: float = 0.0
+    # Fine-tune knob: when set, a resumed checkpoint's action log-std is reset
+    # to this value and its learning_rate/ent_coef replaced by this config's.
+    # Trained policies sit at std ~0.7 (~175 m/s^2 of exploration noise),
+    # which swamps metre-scale terminal precision. None = resume unchanged.
+    finetune_log_std: float | None = None
 
     def __post_init__(self) -> None:
         if self.total_checkpoints != 5:
@@ -168,6 +177,7 @@ class PPOTrainingConfig:
             miss_tanh_scale_m=self.miss_tanh_scale_m,
             shaping_gamma=self.shaping_gamma,
             effort_weight=self.effort_weight,
+            precision_weight=self.precision_weight,
         )
 
 
@@ -1167,7 +1177,20 @@ def run_checkpoint(
         )
         reset_num_timesteps = True
     else:
-        model = RecurrentPPO.load(previous_path, env=vec_env, device="cpu")
+        custom_objects = None
+        if config.finetune_log_std is not None:
+            lr = config.learning_rate
+            custom_objects = {
+                "learning_rate": lr,
+                "lr_schedule": lambda _progress: lr,
+                "ent_coef": config.ent_coef,
+            }
+        model = RecurrentPPO.load(
+            previous_path, env=vec_env, device="cpu", custom_objects=custom_objects
+        )
+        if config.finetune_log_std is not None:
+            with torch.no_grad():
+                model.policy.log_std.fill_(config.finetune_log_std)
         model.set_random_seed(run_seed)
         reset_num_timesteps = False
 

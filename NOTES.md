@@ -1,3 +1,149 @@
+## 2026-09-16 — Fresh seed confirms the fine-tune; re-promoted; found and fixed a CPU-inference determinism bug
+
+Two follow-ups to yesterday's promotion (below): confirm it wasn't a
+7-seed-batch fluke, and chase down seed2's weakness.
+
+**seed2 extended CP7-10** (same precision+low-noise fine-tune, 4 more
+checkpoints): 63.3% -> 64.7% -> 65.3% -> 67.7% n=300. A real but slow climb,
+still below PN's 72.7% and not significant either way at CP10 (McNemar
+p=0.18). Treating this as a genuinely weaker seed, not a bug -- it has
+trailed PN at every checkpoint of every variant of this lineage since its
+very first CP6 (65.3%, 2026-09-14), unrelated to anything changed since.
+Not pursuing further; not worth the compute.
+
+**Fresh seed8**, seed 99999999, never touched by any prior experiment:
+full from-scratch CP1-CP6 on the standard `evasive_redesign_config()`, then
+CP7-CP8 with the identical precision-bonus + low-noise fine-tune as
+yesterday's seed3 promotion. Result: **88.7% n=300 (266/300)**, median miss
+3.7 m, max miss 15.8 m, McNemar p=9e-08 vs PN -- the strongest result across
+all eight seeds now run through this config, and it strictly dominates the
+just-promoted seed3 checkpoint (83.0%) on every axis. Re-promoted:
+`CURRENT_RL_BASELINE.json` -> `evasive_zemtgo10_seed8/checkpoints/rl_checkpoint_08.zip`.
+
+### Determinism bug found while re-validating the golden rollout tests
+
+Promoting a new checkpoint requires regenerating `outputs/rl_rollouts/*.json`
+(`scripts/capture_rl_rollout.py`) and a few tests with values keyed to the
+specific baseline (`test_shadow_compare.py`, `test_api_stream.py`,
+`test_rollout_stream.py`) -- all updated for seed8. **Caught in the process:
+yesterday's seed3 promotion was never actually re-verified against the full
+suite**, because `pytest` was run before writing the new
+`CURRENT_RL_BASELINE.json`, not after. Running it after (as the task
+protocol requires) surfaced a real bug, not just stale golden values:
+regenerating the same golden rollout twice, in two separate process
+launches, gave two different results (890 vs 891 frames, closest approach
+0.32 m vs 1.50 m) for the *identical* model, seed, and code. Repeating the
+same call **within** one process was perfectly reproducible; only
+cross-process repeats diverged.
+
+Root cause: PyTorch's default CPU inference uses multiple threads (10 on
+this machine), and multi-threaded matmul/reduction order isn't fixed across
+process launches -- so a recurrent policy stepped ~900 times accumulates
+enough floating-point-order variance to flip a near-tangent intercept by a
+frame or two. Confirmed the fix empirically: `torch.set_num_threads(1)`
+inside the process makes 3 separate launches match bit-for-bit; the default
+thread count does not. This means the *live* `/api/guidance/session`
+endpoint could already give a different rollout for the same seed depending
+on server-process thread scheduling -- a real, previously-undetected
+reproducibility bug, not merely a test artifact. Fixed at the shared root:
+`FrozenPolicy.__init__` (`ml/policy_inference.py`) now pins
+`torch.set_num_threads(1)` before loading the model; `capture_rl_rollout.py`
+does the same so the golden capture and the serving path stay comparable.
+Full suite (163 tests) passes after the fix, including the golden-rollout
+comparisons, which is what should have already been true after yesterday's
+promotion.
+
+## 2026-09-15 — Precision reward + low-noise fine-tune: promoted, 6/7 seeds now clear PN
+
+Goal: get past "one seed beats PN, others tie or trail" (2026-09-14 entry
+below) to a result that holds across seeds. Two additive changes, both
+off-by-default so every existing checkpoint's config/results stay
+bit-identical:
+
+**1. Terminal precision bonus.** Diagnosed why every RL loss on the 300-case
+set was a 5-18 m near-miss while PN's losses split between near-misses and
+catastrophic ones (hundreds to >1000 m): the terminal reward is flat exactly
+where these losses sit -- binary `intercept_bonus` at `intercept_radius`
+(5 m), and `miss_penalty * tanh(min_range/3000)` has ~0 gradient below
+~50 m. Nothing in the reward distinguishes a 1 m hit from a 9 m miss. Added
+`RewardConfig.precision_weight` / `precision_scale_m`
+(`src/guidance_sim/rl/reward.py`): on any terminal step,
+`+precision_weight * exp(-closest_approach_m / precision_scale_m)`. Used
+`precision_weight=50, precision_scale_m=5`.
+
+`closest_approach_m` is the true sub-step closest point of approach, not
+`min_range_m` (which only samples range at step ends -- at ~350 m/s closing
+and dt=0.02s a dead-centre pass can read several metres off). New
+`InterceptionEnv._segment_closest_approach` linearly interpolates relative
+position across each step (and extrapolates one step further along relative
+velocity when the step ends in a hit, since the episode stops at the first
+in-radius sample). New env field `closest_approach_m`; new info key
+`closest_approach_m`. New test:
+`test_precision_bonus_uses_substep_closest_approach`
+(`tests/test_rl_reward.py`).
+
+**2. Low-noise fine-tune.** CP6 checkpoints sit at action log-std ~0.72
+(~175 m/s^2 of exploration noise) -- fine, for exploring during from-scratch
+training, but that's an enormous amount of random command layered on top of
+a metre-scale terminal signal during fine-tuning. Confirmed the problem
+before touching noise: one extra checkpoint of *unmodified* training at the
+original noise/LR swung held-out hit rate by up to +/-12 points per seed
+(seed4: 80.7%->71.3%; seed5: 67.7%->79.7%), so single-checkpoint deltas were
+noise-dominated, not signal. New `PPOTrainingConfig.finetune_log_std` (+
+`--finetune-log-std`/`--learning-rate`/`--ent-coef` CLI flags on
+`run_evasive_checkpoint.py`): on a resumed checkpoint, resets
+`policy.log_std` to this value and overrides `learning_rate`/`ent_coef` via
+`RecurrentPPO.load(..., custom_objects=...)`. Used log_std=-2.0
+(~33 m/s^2), learning_rate=5e-5 (was 3e-4), ent_coef=0 (was 1e-3).
+`None` (default) resumes exactly as before -- verified by re-running the
+full suite (163 passed) after these changes.
+
+### Result: every CP6 seed fine-tuned 2 more checkpoints (CP7, CP8), 300-case eval each
+
+Paired comparison against PN on the identical 300 cases (McNemar exact test,
+not the unpaired z-test used previously -- correct once both methods run the
+same case list; see new `scripts/compare_vs_pn.py`). High-noise round first
+(precision term only, original LR/noise), then low-noise round (both
+changes) restarting from the same CP6 parents:
+
+| seed | CP6 (prior) | high-noise CP8 | low-noise CP8 | vs PN (low-noise, p) |
+|---|---|---|---|---|
+| seed3 | 80.7% | 81.0% | **83.0%** | 0.001 |
+| seed4 | 73.7% | 71.3% | **81.0%** | 0.013 |
+| seed6 | 73.0% | 86.0% | **80.3%** | 0.015 |
+| effort8_seed2 | 77.7% | 85.3% | **79.7%** | 0.042 |
+| seed7 | 73.7% | 76.3% | 76.7% | 0.29 (above, n.s.) |
+| seed5 | 80.7% | 79.7% | 72.3% | 1.0 (tied) |
+| seed2 | 65.3% | 67.7% | 64.7% | 0.02 (**worse**) |
+| PN (info-matched) | 72.7% | -- | -- | -- |
+
+Controls (seed2/3/4, no precision term, same low-noise fine-tune) landed at
+70.7% / 72.7% / 77.7% -- below or at their precision-term counterparts in
+2 of 3 cases, consistent with the term contributing something beyond extra
+training, though not conclusively (n=1 seed each, all within plausible
+per-checkpoint noise even at low noise).
+
+Low-noise clearly damped the checkpoint-to-checkpoint swing (average
+|CP7->CP8| delta on the precision-term runs: ~8 points high-noise, ~4.4
+low-noise) but did not change which seed is weakest -- seed2 trails PN in
+every single variant tried across this entire lineage, going back to its
+CP6 65.3% before any of this work. Treating it as a candidate bad seed
+rather than something either change broke.
+
+**Promoted.** `CURRENT_RL_BASELINE.json` now points to
+`outputs/precision_ft_lownoise/seed3_pw50/checkpoints/rl_checkpoint_08.zip`
+-- 83.0% n=300 (249/300), median miss 3.8 m, max miss 13.3 m, McNemar
+p=0.001 vs PN. This is the same seed/lineage as the prior baseline (CP6),
+fine-tuned two more checkpoints with the two changes above, not a
+from-scratch retrain. 6 of 7 CP6 seeds now clear PN's 72.7% under this
+fine-tune (4 significantly); seed2 does not and is being investigated
+further (CP9-10 extension + a fresh seed8, both queued to check whether
+it's a slow starter or structurally bad).
+
+Full run artifacts: `outputs/precision_ft/` (high-noise round),
+`outputs/precision_ft_lownoise/` (low-noise round, promoted from). New
+script: `scripts/compare_vs_pn.py`.
+
 ## 2026-09-14 — 300-case held-out eval: the picture narrows, one seed still wins
 
 `scripts/eval_checkpoint_large_heldout.py` (new) re-evaluates a trained

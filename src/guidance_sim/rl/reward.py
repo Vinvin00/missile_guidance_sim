@@ -9,7 +9,12 @@ New reward (undiscounted episode sum, γ_shape = 1 by default):
   ``−miss_penalty * tanh(closest_approach / miss_tanh_scale)`` using the
   episode-minimum range, never the final range;
 * effort: ``−effort_weight * dt * (||a_achieved|| / a_structural)²`` on the
-  post-clamp lateral acceleration.
+  post-clamp lateral acceleration;
+* precision (terminal, any outcome): ``+precision_weight * exp(−cpa /
+  precision_scale)`` on the true sub-step closest approach. Off by default.
+  The hit bonus is binary at ``intercept_radius`` and the tanh miss penalty is
+  flat below ~50 m, so without this nothing separates a 1 m hit from a 9 m
+  near-miss -- which is where every evasive-lineage loss actually sits.
 
 The Phase-1 range-telescope / commanded-effort / ±100 terminal reward is
 computed in parallel as ``legacy_*`` so checkpoint 1–4 trends remain
@@ -42,6 +47,8 @@ class RewardConfig:
     terminal_weight: float = 1.0
     vc_min_m_s: float = 1.0
     t_go_max_s: float = 25.0
+    precision_weight: float = 0.0
+    precision_scale_m: float = 5.0
     # Unused by continuous t_go; retained so older config dumps remain valid.
     t_horizon_receding_s: float = 5.0
 
@@ -54,6 +61,7 @@ class RewardConfig:
             self.timeout_penalty,
             self.zem_scale_m,
             self.miss_tanh_scale_m,
+            self.precision_scale_m,
         )
         if not all(np.isfinite(value) and value > 0.0 for value in positive):
             raise ValueError("reward scales must be finite and positive")
@@ -64,6 +72,7 @@ class RewardConfig:
             self.vc_min_m_s,
             self.t_go_max_s,
             self.t_horizon_receding_s,
+            self.precision_weight,
         )
         if not all(np.isfinite(value) and value >= 0.0 for value in non_negative):
             raise ValueError("reward weights and ZEM caps must be finite and non-negative")
@@ -145,6 +154,7 @@ def compute_reward(
     dt: float,
     outcome: str,
     config: RewardConfig,
+    closest_approach_m: float | None = None,
 ) -> RewardBreakdown:
     """Evaluate new and legacy reward terms for a single transition."""
 
@@ -162,6 +172,11 @@ def compute_reward(
         * (achieved_norm / action_limit_m_s2) ** 2
     )
     terminal = _new_terminal(outcome, min_range_m, config)
+    if terminal_state and config.precision_weight > 0.0:
+        cpa = min_range_m if closest_approach_m is None else closest_approach_m
+        terminal += config.precision_weight * float(
+            np.exp(-float(cpa) / config.precision_scale_m)
+        )
 
     legacy_progress = (previous_range_m - current_range_m) / config.progress_scale_m
     legacy_command_norm = float(

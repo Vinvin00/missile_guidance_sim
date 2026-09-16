@@ -329,17 +329,17 @@ def test_g_limited_turn_scenario_pn_misses_augmented_laws_hit():
 
 
 def test_training_endpoint_serves_the_baseline_run_log():
-    """Promoted 2026-09-14: evasive_zemtgo10_seed3, CP1-CP6."""
+    """Promoted 2026-09-16: evasive_zemtgo10_seed8, CP1-CP8."""
 
     body = TestClient(app).get("/api/training").json()
 
     assert body["source"] == "training-run"
-    assert body["branch_name"] == "evasive_zemtgo10_seed3"
-    assert len(body["episodes"]) == 703
-    assert [e["episode"] for e in body["episodes"]] == list(range(1, 704))
-    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5, 6}
+    assert body["branch_name"] == "evasive_zemtgo10_seed8"
+    assert len(body["episodes"]) == 1096
+    assert [e["episode"] for e in body["episodes"]] == list(range(1, 1097))
+    assert {e["checkpoint"] for e in body["episodes"]} == {1, 2, 3, 4, 5, 6, 7, 8}
     final = body["checkpoints"][-1]
-    assert (final["checkpoint"], final["hits"], final["cases"]) == (6, 41, 50)
+    assert (final["checkpoint"], final["hits"], final["cases"]) == (8, 45, 50)
 
 
 @pytest.mark.parametrize(("guidance_law", "min_miss_m"), [("pn", 10.0), ("rl", 5.0)])

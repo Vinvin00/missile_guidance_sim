@@ -20,7 +20,15 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+import torch
 from sb3_contrib import RecurrentPPO
+
+# Must match guidance_sim.ml.policy_inference.FrozenPolicy: multi-threaded CPU
+# matmul reduction order isn't fixed across process launches, so this golden
+# capture and the live serving path must both pin 1 thread or they silently
+# diverge after enough recurrent steps (confirmed empirically -- see
+# NOTES.md 2026-09-16).
+torch.set_num_threads(1)
 
 from guidance_sim.rl.actions import ACTION_LAYOUT_LATERAL2, action_dimension
 from guidance_sim.rl.environment import InterceptionEnv, TrackingConfig

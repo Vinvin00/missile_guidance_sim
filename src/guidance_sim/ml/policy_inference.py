@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 from sb3_contrib import RecurrentPPO
 
 from guidance_sim.rl.actions import ActionLayout
@@ -83,6 +84,14 @@ class FrozenPolicy:
 
     def __init__(self, baseline: FrozenPolicyBaseline | None = None) -> None:
         self.baseline = baseline or load_baseline_pointer()
+        # Multi-threaded CPU matmul reduction order isn't fixed across
+        # process launches, so the same seed produced a different recurrent
+        # trajectory (and eventually a different hit/miss) from one process
+        # to the next -- confirmed: 3 separate process launches of the same
+        # rollout matched bit-for-bit at 1 thread, diverged at the default
+        # (10). A live session must reproduce the same seed's outcome every
+        # time regardless of thread count, so pin it here at load time.
+        torch.set_num_threads(1)
         self._model = RecurrentPPO.load(str(self.baseline.model_path), device="cpu")
 
     def predict(

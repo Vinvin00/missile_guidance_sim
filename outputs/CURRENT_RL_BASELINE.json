@@ -1,40 +1,40 @@
 {
   "status": "current_baseline",
-  "promoted_at": "2026-09-14",
-  "branch_name": "evasive_zemtgo10_seed3",
-  "description": "Recurrent PPO, 12-D observation (10-D LOS kinematics + tracking staleness/uncertainty; no privileged target turn-rate). Trained against the v1 evasion maneuver library (break_turn, vertical_jink, random_jink, bounded_weave) under a delayed/estimated alpha-beta tracking chain (seeker rates feed the velocity channel; see estimation/alpha_beta.py), not ground-truth target state. This supersedes observation_target_turn_rate below on a different, harder, more realistic problem -- that lineage saw exact target turn-rate and a single non-evasive maneuver family; this one sees only estimated tracking and four evasion kinds. Root-cause chain that made this lineage trainable: RewardConfig.t_go_max_s was decoupled from max_time (was leaking a farmable heading-wobble reward via the ZEM shaping potential's lookahead, see NOTES.md 2026-09-14 'Root cause of the shaping_gamma / effort_weight failures'), then extended to CP6 (config nominally caps at 5 checkpoints; run_checkpoint()'s upper bound was relaxed for this experiment, PPOTrainingConfig.total_checkpoints itself is unchanged).",
-  "model_path": "outputs/evasive_zemtgo10_seed3/checkpoints/rl_checkpoint_06.zip",
-  "metadata_path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06.json",
-  "eval_path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06_eval.json",
-  "progress_path": "outputs/evasive_zemtgo10_seed3/training_progress.md",
+  "promoted_at": "2026-09-16",
+  "branch_name": "evasive_zemtgo10_seed8",
+  "description": "Recurrent PPO, 12-D observation (10-D LOS kinematics + tracking staleness/uncertainty; no privileged target turn-rate). Same observation contract, maneuver library, and tracking chain as the prior two baselines. Fresh from-scratch seed (99999999, never touched by any prior experiment) trained CP1-CP6 with the standard evasive_redesign_config() (zem_t_go_max_s=10, everything else default), then fine-tuned two more checkpoints (CP7-CP8) with the same two additive changes validated on the seed3_pw50 promotion this superseded: (1) RewardConfig.precision_weight=50, precision_scale_m=5 -- a terminal bonus of +50*exp(-closest_approach_m/5) using the true sub-step closest point of approach, added because the existing terminal reward is flat between a 1 m hit and a 9 m near-miss and that flatness is where this lineage's remaining losses to PN concentrate; (2) low-noise fine-tune -- policy action log-std reset to -2.0 (~33 m/s^2 of exploration, down from ~175), learning_rate 5e-5, ent_coef 0 -- to damp the checkpoint-to-checkpoint held-out-eval swing (+/-12 points per seed at the original noise/LR for one checkpoint of training alone). This is the strongest of eight seeds now run through the zem_t_go_max_s=10 config to a precision-term+low-noise CP7/CP8 (see NOTES.md 2026-09-15 and 2026-09-16): promoting it over the immediately-prior seed3_pw50 baseline because it strictly dominates on every metric (higher hit rate, tighter worst-case, larger significance) and was trained as an independent confirmation run, not selected from the same batch the prior promotion came from.",
+  "model_path": "outputs/evasive_zemtgo10_seed8/checkpoints/rl_checkpoint_08.zip",
+  "metadata_path": "outputs/evasive_zemtgo10_seed8/rl_checkpoint_08.json",
+  "eval_path": "outputs/evasive_zemtgo10_seed8/rl_checkpoint_08_eval.json",
+  "progress_path": "outputs/evasive_zemtgo10_seed8/training_progress.md",
   "observation_dim": 12,
   "use_target_turn_rate_obs": false,
   "tracking_enabled": true,
   "max_time_s": 45.0,
   "action_layout": "lateral2",
-  "cumulative_timesteps": 1228800,
-  "seed": 43500777,
+  "cumulative_timesteps": 1638400,
+  "seed": 99999999,
   "reward_config_deltas_from_default": {
     "zem_t_go_max_s": 10.0,
-    "note": "shaping_gamma=1.0, effort_weight=5.0, miss_tanh_scale_m=3000.0 all left at evasive_redesign_config() lineage defaults; zem_t_go_max_s is the only deliberate change from the pre-fix lineage."
+    "precision_weight": 50.0,
+    "precision_scale_m": 5.0,
+    "note": "shaping_gamma=1.0, effort_weight=5.0, miss_tanh_scale_m=3000.0 unchanged from evasive_redesign_config() lineage defaults. Fine-tune-only knobs (finetune_log_std=-2.0, learning_rate=5e-5, ent_coef=0.0) affect training dynamics for CP7-CP8 only, not the reward function; full config dump at metadata_path."
   },
   "held_out_eval_50_case": {
-    "path": "outputs/evasive_zemtgo10_seed3/rl_checkpoint_06_eval.json",
-    "hits": "41/50",
-    "hit_rate": 0.82,
-    "median_miss_m": 3.9,
-    "p90_miss_m": 7.1,
-    "max_miss_m": 7.9
+    "path": "outputs/evasive_zemtgo10_seed8/rl_checkpoint_08_eval.json",
+    "hits": "45/50",
+    "hit_rate": 0.90,
+    "median_miss_m": 3.5
   },
   "held_out_eval_300_case": {
-    "path": "outputs/evasive_largeeval_300/seed3_cp6.json",
-    "hits": "242/300",
-    "hit_rate": 0.807,
-    "median_miss_m": 4.2,
-    "p90_miss_m": 6.7,
-    "p99_miss_m": 13.7,
-    "max_miss_m": 15.4,
-    "note": "This is the statistically load-bearing number, not the 50-case figure above -- it was run specifically to check whether the 50-case result was noise. It wasn't: hit rate held at 80.7%."
+    "path": "outputs/evasive_zemtgo10_seed8/eval300_cp8.json",
+    "hits": "266/300",
+    "hit_rate": 0.887,
+    "median_miss_m": 3.7,
+    "p90_miss_m": 5.4,
+    "p99_miss_m": 8.3,
+    "max_miss_m": 15.8,
+    "note": "Same 300-case held-out set (build_held_out_cases), same seed stream, as every other eval in this file -- directly comparable case by case."
   },
   "classical_pn_reference_300_case": {
     "path": "outputs/evasive_largeeval_300/pn_baseline.json",
@@ -47,14 +47,15 @@
     "note": "PN consumes the same estimator output the policy sees (information-matched), not ground truth. Fails structurally on break_turn (41/75) and random_jink (41/75); when it fails, it fails by hundreds to >1000 m."
   },
   "significance": {
-    "z_vs_pn_hit_rate_n300": 2.32,
-    "approx_p_two_tailed": 0.02,
-    "note": "Two other seeds pushed through the same config to CP6 did not replicate this hit-rate margin at n=300 (seed4: 73.7%, z=0.28 vs PN, a tie; seed2: 65.3%, z=-1.94, marginally below PN). This is a promotion of one specific checkpoint, not a claim that the zem_t_go_max_s config reliably beats PN on hit rate -- see NOTES.md 2026-09-14 for the full three-seed comparison. What IS consistent across all three seeds, unexceptioned, at both n=50 and n=300: every RL checkpoint's worst miss stayed under 18 m, categorically better than PN's catastrophic-loss tail."
+    "method": "McNemar exact test on the paired per-case outcomes (same 300 cases, same seeds, for both this checkpoint and PN) -- scripts/compare_vs_pn.py.",
+    "discordant_pairs": "65 cases this checkpoint hits and PN misses; 17 cases PN hits and this checkpoint misses",
+    "p_two_sided": 9e-08,
+    "note": "Strongest result across all eight seeds run through this lineage. Immediately-prior promotion (seed3_pw50 CP8, this file's previous version) scored 83.0% n=300, p=0.001 -- this checkpoint beats it on every axis. Not every seed clears PN under the same treatment: seed2, extended to CP10 with the identical precision+low-noise fine-tune, still trails at 67.7% (p=0.18, not significant either way) -- see NOTES.md 2026-09-16. Unexceptioned across every seed at n=300, before and after this promotion: every RL checkpoint's worst miss stays under 25 m, categorically better than PN's catastrophic-loss tail (up to 1347 m)."
   },
   "supersedes": {
-    "lineage": "observation_target_turn_rate",
-    "previous_best_note": "Prior baseline used privileged ground-truth target turn-rate and a single fixed target path (no evasion, no sensor delay/noise) -- this was the original bug report that started the evasive-tracking redesign (docs/evasive-tracking-redesign-spec.md). Kept for comparison; not deleted.",
-    "previous_model_path": "outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip",
-    "previous_metadata_path": "outputs/observation_target_turn_rate/rl_checkpoint_05.json"
+    "lineage": "precision_ft_lownoise/seed3_pw50",
+    "previous_best_note": "Prior baseline (promoted 2026-09-15) was seed3's CP6 fine-tuned to CP8 with the same precision-bonus + low-noise treatment used here: 83.0% n=300, p=0.001 vs PN. Kept for comparison; not deleted.",
+    "previous_model_path": "outputs/precision_ft_lownoise/seed3_pw50/checkpoints/rl_checkpoint_08.zip",
+    "previous_metadata_path": "outputs/precision_ft_lownoise/seed3_pw50/rl_checkpoint_08.json"
   }
 }
