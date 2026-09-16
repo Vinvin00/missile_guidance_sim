@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from guidance_sim.physics.aerodynamics import AeroDerivatives, wind_angles
+from guidance_sim.physics.aerodynamics import AeroDerivatives, stall_blend, wind_angles
 from guidance_sim.physics.controls import AILERON, ELEVATOR, N_CONTROLS, RUDDER, TV_PITCH, TV_YAW
 
 
@@ -37,11 +37,23 @@ def body_aero_moment(
     damp = 0.25 * rho * speed * s
     de, da, dr = deflection[ELEVATOR], deflection[AILERON], deflection[RUDDER]
 
+    # Post-stall departure susceptibility: weathercock (yaw) stability and
+    # roll damping are only valid for attached flow. Past alpha_stall,
+    # separated flow lets them collapse -- c_yaw_beta can go destabilizing
+    # and roll damping weakens -- which is the actual mechanism behind a
+    # post-stall maneuver (e.g. a Cobra) departing into a spin instead of
+    # recovering on command. Same stall sigmoid as the CL/CD blend, so it
+    # engages smoothly with alpha. Magnitudes are illustrative (PLACEHOLDER,
+    # no sourced departure derivatives; see AGENTS.md §3).
+    departure = stall_blend(alpha, aero.alpha_stall)
+    yaw_beta_eff = aero.c_yaw_beta * (1.0 - 1.5 * departure)
+    roll_p_eff = aero.c_roll_p * (1.0 - 0.8 * departure)
+
     roll = qbar_s * b * (aero.c_roll_beta * beta + aero.c_roll_da * da + aero.c_roll_dr * dr) \
-        + damp * b * b * aero.c_roll_p * p
+        + damp * b * b * roll_p_eff * p
     pitch = qbar_s * c * (aero.c_pitch_alpha * np.sin(alpha) + aero.c_pitch_de * de) \
         + damp * c * c * aero.c_pitch_q * q
-    yaw = qbar_s * b * (aero.c_yaw_beta * beta + aero.c_yaw_dr * dr) \
+    yaw = qbar_s * b * (yaw_beta_eff * beta + aero.c_yaw_dr * dr) \
         + damp * b * b * aero.c_yaw_r * r
     return np.array([roll, pitch, yaw])
 

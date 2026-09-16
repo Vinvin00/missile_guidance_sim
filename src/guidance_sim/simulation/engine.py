@@ -119,6 +119,7 @@ class Simulation:
                 accel_achieved.append(np.zeros(3))
                 break
 
+            self.target_maneuver.update_engagement(t, self.target.state, self.pursuer.state)
             target_accel_cmd = self.target_maneuver.lateral_accel(t, self.target.state)
             self.target.step(
                 cfg.dt,

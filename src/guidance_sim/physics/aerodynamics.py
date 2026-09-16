@@ -112,6 +112,15 @@ def available_lateral_accel(
     return min(aero_limit, structural_limit)
 
 
+def stall_blend(alpha: float, alpha_stall: float, width: float = STALL_BLEND_WIDTH_RAD) -> float:
+    """0 in the attached-flow regime, -> 1 deep post-stall. Same sigmoid used to
+    blend CL/CD through stall in `post_stall_coefficients`; also used by
+    `aero_moments.body_aero_moment` to degrade lateral-directional stability
+    and roll damping post-stall (the actual departure/spin mechanism)."""
+    a = float(np.arctan2(np.sin(alpha), np.cos(alpha)))
+    return 1.0 / (1.0 + np.exp(-(abs(a) - alpha_stall) / width))
+
+
 def post_stall_coefficients(
     alpha: float,
     cd0: float,
@@ -131,7 +140,7 @@ def post_stall_coefficients(
     flat-plate drag at 90 deg.
     """
     a = float(np.arctan2(np.sin(alpha), np.cos(alpha)))
-    w = 1.0 / (1.0 + np.exp(-(abs(a) - alpha_stall) / STALL_BLEND_WIDTH_RAD))
+    w = stall_blend(a, alpha_stall)
     cd_scale, cn_scale = (1.0, 1.0)
     if mach_schedule is not None:
         cd_scale, cn_scale = mach_schedule.coefficients(mach)

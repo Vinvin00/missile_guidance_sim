@@ -474,6 +474,14 @@ class CobraManeuver(ManeuverProfile):
     come out of forces and moments. In the hang the aero surfaces have no
     q, so pitch authority there is thrust vectoring.
 
+    `gust_speed_m_s` is the one deliberate exception to "nothing sets
+    velocity": a one-shot crosswind impulse applied directly to the body
+    velocity the instant the vehicle enters the hang, modelling an external
+    disturbance rather than a pilot input. Whether it's shrugged off or
+    grows into a departure depends entirely on the post-stall stability
+    degradation in `aero_moments.body_aero_moment`, not on anything scripted
+    here.
+
     `hold_level_until_trigger` flies the armed phase as an ordinary
     guidance-style lateral command (lift = weight, plus sink-rate feedback)
     with throttle trimmed to drag. The same accel autopilot as every other
@@ -502,10 +510,11 @@ class CobraManeuver(ManeuverProfile):
         spiral_bank_deg: float = 60.0,
         spiral_alpha_deg: float = 10.0,
         spiral_throttle: float = 0.5,
-        recovery_q_pa: float = 3_000.0,
-        recovery_altitude_loss_m: float = 100.0,
+        recovery_q_pa: float = 2_000.0,
+        recovery_altitude_loss_m: float = 40.0,
         hold_level_until_trigger: bool = False,
         pitch_up_throttle: Optional[float] = None,
+        gust_speed_m_s: float = 0.0,
     ):
         if not isinstance(entity, RigidBodyEntity):
             raise TypeError("CobraManeuver needs a RigidBodyEntity")
@@ -525,6 +534,18 @@ class CobraManeuver(ManeuverProfile):
         # A value keeps thrust on the upturned nose, which adds vertical
         # displacement to the zoom.
         self.pitch_up_throttle = pitch_up_throttle
+        # A one-shot crosswind impulse (body-frame side velocity, m/s) injected
+        # the instant the vehicle enters the hang. This is an *environmental*
+        # disturbance, not a pilot/FCS command -- the standard discrete-gust
+        # model is exactly a velocity increment on the wind axes -- so unlike
+        # every other input here it's applied directly to entity.x, not
+        # through rate_cmd/throttle. 0.0 (default) reproduces the old
+        # disturbance-free behaviour exactly. The hang is the worst possible
+        # moment for it: q ~ 0 so aero control authority is gone, and the
+        # deep-stall yaw/roll stability degradation in aero_moments.body_aero_moment
+        # means the resulting sideslip is no longer guaranteed to damp out.
+        self.gust_speed_m_s = float(gust_speed_m_s)
+        self._gust_applied = False
         self.phase = "armed"
         self.phase_history: list[tuple[float, str]] = [(0.0, "armed")]
         self._time_to_go_s: Optional[float] = None
@@ -581,6 +602,9 @@ class CobraManeuver(ManeuverProfile):
             ])
             if self.phase == "pitch_up" and state.speed() < self.hang_speed_m_s:
                 self._enter(t, "hang")
+            if self.phase == "hang" and not self._gust_applied and self.gust_speed_m_s != 0.0:
+                e.x[4] += self.gust_speed_m_s
+                self._gust_applied = True
             pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
             if pitch_done and state.velocity[2] < 0.0:
                 self._spiral_start_altitude_m = state.altitude()

@@ -170,6 +170,15 @@ CATALOG = CatalogResponse(
             5.0, "g", 0.0, 9.0, "illustrative",
             live_control=True, control_step=0.5,
         ),
+        # Cobra only: one-shot crosswind impulse (guidance_sim.physics.maneuvers.
+        # CobraManeuver, applied at hang onset). 0.0 = disturbance-free hang
+        # (the original scripted recovery). Past ~20 m/s the post-stall
+        # yaw/roll stability degradation in aero_moments.body_aero_moment
+        # can overwhelm the recovery entirely -- see NOTES.md 2026-09-17.
+        "gust_speed": _parameter(
+            0.0, "m/s", 0.0, 30.0, "illustrative",
+            live_control=True, control_step=1.0,
+        ),
     },
     vehicle_profiles=[
         VehicleProfile(
