@@ -267,30 +267,45 @@ a:hover {
   color: var(--text);
 }
 
+.projection-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projection-group-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
 .projection-toggle {
   display: flex;
   align-items: center;
   gap: 0;
-  border: 1px solid var(--line);
-  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .projection-toggle button {
   border: 0;
   background: transparent;
-  padding: 6px 13px;
-  color: var(--text-3);
+  padding: 7px 15px;
+  color: var(--text-2);
   font-family: var(--mono);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
 
 .projection-toggle button.is-active {
-  background: var(--text);
-  color: #0a0a0a;
+  background: var(--accent);
+  color: var(--text);
 }
 
 .projection-toggle button:not(.is-active):hover {
@@ -301,7 +316,7 @@ a:hover {
 .projection-rule {
   width: 1px;
   height: 22px;
-  background: var(--line);
+  background: var(--line-strong);
 }
 
 @media (max-width: 640px) {

@@ -1,7 +1,10 @@
 import numpy as np
 
 from guidance_sim.physics.aerodynamics import (
+    AeroDerivatives,
+    MachAeroSchedule,
     available_lateral_accel,
+    body_aero_force,
     drag_deceleration,
     dynamic_pressure,
 )
@@ -52,3 +55,48 @@ def test_available_lateral_accel_increases_with_speed_until_structural_cap():
     ]
     # Non-decreasing (aero limit grows with q, then structural cap flattens it).
     assert all(accels[i] <= accels[i + 1] + 1e-9 for i in range(len(accels) - 1))
+
+
+def test_mach_schedule_interpolates_and_clamps_to_its_envelope():
+    schedule = MachAeroSchedule(
+        mach=(0.5, 1.0, 2.0),
+        cd0_multiplier=(1.0, 2.0, 1.5),
+        normal_force_slope_multiplier=(1.0, 0.8, 0.6),
+    )
+    assert schedule.coefficients(0.0) == (1.0, 1.0)
+    assert np.allclose(schedule.coefficients(0.75), (1.5, 0.9))
+    assert schedule.coefficients(3.0) == (1.5, 0.6)
+
+
+def test_mach_schedule_rejects_malformed_tables():
+    import pytest
+
+    with pytest.raises(ValueError, match="same length"):
+        MachAeroSchedule((0.0, 1.0), (1.0,), (1.0, 1.0))
+    with pytest.raises(ValueError, match="strictly increasing"):
+        MachAeroSchedule((0.0, 1.0, 1.0), (1.0, 2.0, 2.0), (1.0, 1.0, 1.0))
+
+
+def test_transonic_schedule_raises_drag_and_reduces_normal_force():
+    schedule = MachAeroSchedule(
+        mach=(0.0, 1.0, 2.0),
+        cd0_multiplier=(1.0, 2.0, 1.5),
+        normal_force_slope_multiplier=(1.0, 0.8, 0.7),
+    )
+    aero = AeroDerivatives(
+        span=1.0, chord=1.0, cl_alpha=4.0, alpha_stall=np.deg2rad(30.0), k_induced=0.0,
+        cy_beta=0.0, cy_dr=0.0, c_pitch_alpha=0.0, c_pitch_q=0.0, c_pitch_de=0.0,
+        c_roll_beta=0.0, c_roll_p=0.0, c_roll_da=0.0, c_roll_dr=0.0,
+        c_yaw_beta=0.0, c_yaw_r=0.0, c_yaw_dr=0.0, mach_schedule=schedule,
+    )
+    alpha = np.deg2rad(5.0)
+    velocity = 200.0 * np.array([np.cos(alpha), 0.0, np.sin(alpha)])
+    subsonic = body_aero_force(velocity, 1.0, 1.0, 0.1, aero, mach=0.0)
+    transonic = body_aero_force(velocity, 1.0, 1.0, 0.1, aero, mach=1.0)
+    v_hat = velocity / np.linalg.norm(velocity)
+    drag_sub = -float(np.dot(subsonic, v_hat))
+    drag_transonic = -float(np.dot(transonic, v_hat))
+    normal_sub = np.linalg.norm(subsonic + drag_sub * v_hat)
+    normal_transonic = np.linalg.norm(transonic + drag_transonic * v_hat)
+    assert np.isclose(drag_transonic, 2.0 * drag_sub)
+    assert np.isclose(normal_transonic, 0.8 * normal_sub)

@@ -18,7 +18,7 @@ from guidance_sim.physics.aerodynamics import (
     drag_deceleration,
     wind_angles,
 )
-from guidance_sim.physics.atmosphere import G0, isa_density
+from guidance_sim.physics.atmosphere import G0, isa_density, speed_of_sound
 from guidance_sim.physics.controls import RUDDER
 from guidance_sim.physics.rotational_dynamics import (
     C_WN,
@@ -133,10 +133,19 @@ def rigid_body_derivative(
     r_nb = quat_to_rotation_matrix(q)
     vp = params.vehicle
     rho = isa_density(x[2])
+    mach = float(np.linalg.norm(v_b)) / speed_of_sound(x[2])
 
     thrust_f, thrust_m = thrust_force_moment(thrust, params.tvc_arm_m, deflection)
     force = (
-        body_aero_force(v_b, rho, vp.reference_area, vp.drag_coefficient, params.aero, deflection[RUDDER])
+        body_aero_force(
+            v_b,
+            rho,
+            vp.reference_area,
+            vp.drag_coefficient,
+            params.aero,
+            deflection[RUDDER],
+            mach,
+        )
         + thrust_f
         + vp.mass * (r_nb.T @ GRAVITY_N)
     )
@@ -232,7 +241,16 @@ def specific_force_lateral_world(
         return np.zeros(3)
     vp = params.vehicle
     rho = isa_density(x[2])
-    force = body_aero_force(v_b, rho, vp.reference_area, vp.drag_coefficient, params.aero, deflection[RUDDER])
+    mach = speed / speed_of_sound(x[2])
+    force = body_aero_force(
+        v_b,
+        rho,
+        vp.reference_area,
+        vp.drag_coefficient,
+        params.aero,
+        deflection[RUDDER],
+        mach,
+    )
     force = force + thrust_force_moment(thrust, params.tvc_arm_m, deflection)[0]
     v_hat = v_b / speed
     lateral = (force - np.dot(force, v_hat) * v_hat) / vp.mass

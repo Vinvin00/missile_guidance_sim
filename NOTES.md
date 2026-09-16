@@ -1794,3 +1794,54 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   untouched, no conflicts with physics/API files.
 - Not verified: whether `9502c7b`'s own test suite state was green before
   this merge (assumed yes, not re-derived here).
+
+## 2026-09-16 — Generic numerical regression checks and software documentation
+
+- Reviewed the reusable Euler/RK4 implementation with an independent
+  numerical review; no implementation bug was found. Runtime physics
+  behavior is unchanged.
+- Added `tests/test_integrator.py`: harmonic-oscillator convergence for
+  both integrator interfaces (first-order Euler, fourth-order RK4), plus
+  analytic free-fall and input-immutability checks. All examples are
+  independent of vehicle, guidance, and training code.
+- README now points to baseline metadata instead of duplicating an obsolete
+  promotion, identifies actual dashboard/overlay data sources, and documents
+  package-root verification commands. Package description corrected to 3D.
+- Baseline: 176 tests passed. New focused suite: 6 tests passed.
+- Final verification: 182 Python tests passed (two existing dependency
+  deprecation warnings), 21 frontend tests passed, production build passed
+  (existing large-bundle warning), and `git diff --check` passed. Independent
+  review found no blocking issues with the new tests.
+- Environment gotcha: `rtk` and global `pytest` are unavailable on PATH;
+  verification uses the existing `.venv` directly.
+- Existing frontend edits and experiment artifacts were preserved. No new
+  training, benchmark evaluations, dependency installation, browser review,
+  or clean-environment installation was performed in this pass.
+
+## 2026-09-16 — Mach-scheduled 6-DOF aerodynamics
+
+- Added an optional, validated `MachAeroSchedule` to the rigid-body force
+  model. It linearly interpolates zero-lift-drag and normal-force-slope
+  multipliers and clamps outside the table instead of extrapolating an
+  unvalidated trend.
+- The production generic fighter and interceptor now include illustrative
+  schedules with a drag rise around Mach 1 and declining supersonic
+  normal-force slope. The qualitative anchors are public NASA generic-airframe
+  data (NASA TM X-3070 and NASA TN D-7122); the multiplier values are not
+  claimed as measurements of a real vehicle.
+- Mach is computed from body-relative speed and the existing ISA local speed
+  of sound at every RK4 stage, so altitude and evolving speed both affect the
+  coefficient lookup.
+- Kept the point-mass-superset regressions meaningful by using an explicit
+  constant-aero 6-DOF fixture there. A separate production-path regression
+  verifies that the transonic schedule increases axial deceleration.
+- Gotcha: the existing point-mass path intentionally remains constant-Cd.
+  Therefore point-mass and production 6-DOF trajectories now diverge around
+  Mach 1 for a physical reason; exact comparison requires disabling the
+  optional schedule.
+- Verification: focused aerodynamic/rigid-body suite 22 passed; full Python
+  suite 186 passed with two existing dependency deprecation warnings;
+  `git diff --check` passed.
+- Not verified: re-running the frozen 300-case 6-DOF transfer benchmark,
+  retuning guidance/autopilot gains, or replacing the illustrative schedule
+  with configuration-specific wind-tunnel/CFD data.

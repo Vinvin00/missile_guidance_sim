@@ -20,20 +20,10 @@ paper.
 
 ## Status
 
-**Current RL baseline (promoted 2026-09-11):** recurrent PPO with a
-**13-D** observation (`use_target_turn_rate_obs=True`) — base LOS
-kinematics plus target turn-rate channels. Checkpoint:
-
-`outputs/observation_target_turn_rate/checkpoints/rl_checkpoint_05.zip`
-
-Pointer file: [`outputs/CURRENT_RL_BASELINE.json`](outputs/CURRENT_RL_BASELINE.json).
-
-Fixed-eval at promotion: **5/9 hits** (Group A NoManeuver+Weave **5/6**;
-Group B ConstantTurn **0/3**, miss plateau near classical PN under the
-25 s budget). Shadow comparison vs PN/APN/OGL:
-[`outputs/shadow_comparison/shadow_comparison_report.md`](outputs/shadow_comparison/shadow_comparison_report.md).
-The prior **10-D** reward-redesign lineage remains under
-`outputs/checkpoints/` for comparison (see that directory's README).
+**Baseline metadata:** [`outputs/CURRENT_RL_BASELINE.json`](outputs/CURRENT_RL_BASELINE.json)
+is the source of truth for the selected checkpoint, observation contract,
+promotion date, and recorded evaluation artifacts. Older experiment reports
+refer to their own checkpoints and should not be read as current results.
 
 **Phase 1: 3D physics core + PN baseline — done.**
 Built directly in 3D with realistic dynamics from the start (gravity,
@@ -44,8 +34,8 @@ rather than as a 2D kinematic scaffold to be retrofitted later.
 captured RL baseline evaluation rollouts (`data_source=rollout`) into a
 Vite + React Three Fiber viewer with orbit controls, scenario/guidance
 selection, live parameter sliders, telemetry, and local playback.
-Target B is fighter-class grounded at **240 m/s**. Trial-overlay and
-training-dashboard surfaces still use isolated mock loaders.
+Target B is fighter-class grounded at **240 m/s**. The training dashboard
+and trial overlay use API data; saved-session replay includes a mock sample.
 
 ## Architecture
 
@@ -126,6 +116,9 @@ form — standard GNC coursework material.
 
 ## Setup
 
+Run these commands from `missile_guidance_sim/`. Python 3.11 or newer is
+required by the package metadata.
+
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
@@ -151,6 +144,15 @@ npm install
 npm run dev
 ```
 
+For local verification, run `.venv/bin/python -m pytest -q` from the package
+root (no shell activation needed). The neutral integrator checks can be run
+alone with `.venv/bin/python -m pytest -q tests/test_integrator.py`.
+
+From `frontend/`, run `npm ci` to install the committed dependency lockfile,
+then `npm test` and `npm run build`. `npm run lint` is available separately.
+The development viewer runs on port 5173 and proxies `/api` and `/ws` to
+the backend on `127.0.0.1:8000`.
+
 ## Roadmap
 
 1. ~~3D physics core (gravity + drag + atmosphere + airframe limits) + PN baseline, tested~~ ✅
@@ -161,20 +163,20 @@ npm run dev
 5. ~~Interactive R3F visualization with orbit/playback controls~~ ✅
 6. Results and benchmarks written up in this README
 
-## Visualization mock data
+## Visualization data sources
 
 The live stream uses captured RL rollout sources:
 
 - `/api/catalog` plus `/ws/trajectory` — live rollout preview, including
   catalog-bounded interceptor/target speed overrides
 - `frontend/public/mock/last-session.json` — saved-session replay sample
-- `frontend/public/mock/training-log.json` — `{episode, reward, success}`
-  training dashboard sample
-- `loadTrialSet()` — seeded mock overlay of 20–50 PN-like trials
+- `/api/training` — dashboard episode logs and checkpoint metadata loaded
+  from the run referenced by `outputs/CURRENT_RL_BASELINE.json`
+- `/api/trials` — trial-overlay data requested by `loadTrialSet()`
 
-Swap `loadTrajectoryLog()`, `loadTrialSet()`, or `loadTrainingLog()` when a
-real RL episode log exists. Do not treat overlay colors or dashboard
-curves as trained-policy results.
+`loadTrajectoryLog()` defaults to the saved-session sample;
+`loadTrainingLog()` and `loadTrialSet()` request backend data. The saved
+sample is for replay demonstration, not a new evaluation result.
 
 ### 6-DOF rigid-body core (supersedes the point-mass core and the old "6-DOF deferred" note)
 

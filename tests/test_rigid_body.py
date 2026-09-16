@@ -3,9 +3,12 @@ the regression proving the 6-DOF model is a superset of the point mass."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
+from guidance_sim.physics.atmosphere import speed_of_sound
 from guidance_sim.physics.controls import ActuatorLimits, actuator_step
 from guidance_sim.physics.dynamics import rigid_body_derivative
 from guidance_sim.physics.entities import (
@@ -149,6 +152,10 @@ def test_actuator_respects_rate_and_position_limits():
 # --- Regression: 6-DOF is a superset of the old point-mass behaviour ----------
 
 _PM_PURSUER = INTERCEPTOR_6DOF.vehicle
+_CONSTANT_AERO_INTERCEPTOR = replace(
+    INTERCEPTOR_6DOF,
+    aero=replace(INTERCEPTOR_6DOF.aero, mach_schedule=None),
+)
 _PM_TARGET = VehicleParams(mass=40.0, reference_area=0.06, drag_coefficient=0.35,
                            max_normal_force_coefficient=10.0, max_load_factor=9.0)
 
@@ -156,7 +163,7 @@ _PM_TARGET = VehicleParams(mass=40.0, reference_area=0.06, drag_coefficient=0.35
 def test_regression_zero_command_flight_matches_point_mass_ballistic():
     """Trimmed (alpha = beta = 0, zero rates/deflections), no command: the old ballistic arc."""
     start = State([0.0, 0.0, 3_000.0], [350.0, 0.0, 0.0])
-    rigid = RigidBodyEntity.from_state(start, INTERCEPTOR_6DOF)
+    rigid = RigidBodyEntity.from_state(start, _CONSTANT_AERO_INTERCEPTOR)
     point = PointMassEntity("pm", start.copy(), _PM_PURSUER)
     for _ in range(1_000):  # 10 s, ~490 m of gravity drop
         rigid.step(0.01, np.zeros(3))
@@ -180,13 +187,25 @@ def test_regression_pn_intercept_matches_point_mass_demo_case():
 
         start = State([0.0, 0.0, 3_000.0], [350.0, 0.0, 0.0])
         old = run(PointMassEntity("p", start.copy(), _PM_PURSUER))
-        new = run(RigidBodyEntity.from_state(start, INTERCEPTOR_6DOF, "p"))
+        new = run(RigidBodyEntity.from_state(start, _CONSTANT_AERO_INTERCEPTOR, "p"))
 
         assert old.hit and new.hit, dt
         assert abs(new.time_to_intercept - old.time_to_intercept) < 0.1
         n = min(len(old.times), len(new.times))
         deviation = np.linalg.norm(old.pursuer_trajectory[:n] - new.pursuer_trajectory[:n], axis=1)
         assert deviation.max() < 10.0, dt  # metres, over a ~7 km engagement
+
+
+def test_production_rigid_body_applies_transonic_drag_schedule():
+    altitude = 3_000.0
+    speed = 1.05 * speed_of_sound(altitude)
+    state = State([0.0, 0.0, altitude], [speed, 0.0, 0.0])
+    scheduled = RigidBodyEntity.from_state(state, INTERCEPTOR_6DOF)
+    constant = RigidBodyEntity.from_state(state, _CONSTANT_AERO_INTERCEPTOR)
+    zero = np.zeros(5)
+    scheduled_dx = rigid_body_derivative(scheduled.x, scheduled.params, zero, 0.0)
+    constant_dx = rigid_body_derivative(constant.x, constant.params, zero, 0.0)
+    assert scheduled_dx[3] < constant_dx[3]
 
 
 def test_rigid_body_telemetry_world_velocity_is_body_velocity_rotated():
