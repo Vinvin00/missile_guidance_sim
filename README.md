@@ -306,3 +306,29 @@ nine fixed-eval cases — report at
 most Group A weave/miss-distance cells; RL beats PN on ConstantTurn
 3 g (832 vs 975 m) but all modes still miss Group B inside 25 s;
 APN/OGL degrade on ConstantTurn vs PN (rotating `a_T`).
+
+
+## Production deployment
+
+`main` is the single integration and production branch. Push verified changes
+there; GitHub triggers the existing Vercel project `physics-sim`.
+The public viewer is https://physics-sim-green.vercel.app.
+
+Vercel builds from the **repository root**, with the explicit commands in
+`vercel.json`: `cd frontend && npm ci`, then `cd frontend && npm run build`,
+serving `frontend/dist`. Keep the dashboard settings identical. Do not use
+Vite autodetection at the Python repository root: it installs Python dependencies
+and fails because Vite is not installed there.
+
+`frontend/.env.production` is tracked and contains public service URLs only.
+Vite embeds these URLs at build time. The live API and WebSocket service remain
+at `missile-guidance-sim.onrender.com`; spec grounding remains at
+`aero-spec-rag.onrender.com`. The RAG component reads `VITE_AERO_RAG_API_URL`.
+The Render blueprint also tracks `main`. Hosting the viewer does not replace
+these backend services; verify both after a production deployment.
+
+Before pushing, run `.venv/bin/python -m pytest -q` from the repository root,
+and `npm test` and `npm run build` from `frontend/`. The deployment configuration
+tests check the frontend build directory, production URL wiring, and CORS for
+all three production aliases. A successful Vercel build alone does not prove
+the API or WebSocket connection works.

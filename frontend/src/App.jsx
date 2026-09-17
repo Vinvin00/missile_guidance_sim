@@ -4,10 +4,10 @@ import { AppHeader } from './components/AppHeader'
 import { AppNav } from './components/AppNav'
 import { HudOverlay } from './components/HudOverlay'
 import { PlaybackControls } from './components/PlaybackControls'
-import { RagPanel } from './components/RagPanel'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
 import { SimulationScene } from './components/SimulationScene'
+import { SpecGroundingPanel } from './components/SpecGroundingPanel'
 import { TrainingDashboard } from './components/TrainingDashboard'
 import { TrialsOverlay } from './components/TrialsOverlay'
 import { loadTrajectoryLog } from './data/trajectoryData'
@@ -107,7 +107,7 @@ export default function App() {
         {screen === 'replay' && (
           <SessionReplayPanel onReplay={handleReplay} />
         )}
-        {screen === 'rag' && <RagPanel />}
+        {screen === 'spec' && <SpecGroundingPanel />}
         <PlaybackControls />
       </div>
     </div>

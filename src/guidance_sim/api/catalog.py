@@ -90,10 +90,13 @@ CATALOG = CatalogResponse(
             description=(
                 "Tail chase: the interceptor closes from behind on a target "
                 "cruising level at 240 m/s. At 2.0 s time-to-go the target "
-                "snaps its nose to near-vertical with thrust held; lift and "
-                "thrust zoom it up while drag bleeds airspeed, and the slowed "
-                "interceptor overshoots. It then falls into a banked spiral. "
-                "6-DOF rigid body: elevator, then thrust vectoring in the hang."
+                "abruptly pitches to (and slightly past) vertical under full "
+                "thrust -- a full-body airbrake that bleeds speed from "
+                "~200 m/s to ~100 m/s in under 2 seconds -- holds momentarily, "
+                "then pitches back down to resume forward flight, altitude "
+                "barely changing throughout. The abrupt deceleration is what "
+                "forces the interceptor to overshoot. 6-DOF rigid body: "
+                "elevator, then thrust vectoring where aero authority is thin."
             ),
             initial_range_m=3_000.0,
             altitude_m=3_000.0,

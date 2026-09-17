@@ -4,7 +4,7 @@ export const SCREENS = [
   { id: 'trials', code: 'TRL', label: 'Trials', title: 'All trials overlay' },
   { id: 'train', code: 'TRN', label: 'Training', title: 'Training' },
   { id: 'replay', code: 'RPL', label: 'Replay', title: 'Session replay' },
-  { id: 'rag', code: 'RAG', label: 'Spec RAG', title: 'Spec grounding' },
+  { id: 'spec', code: 'RAG', label: 'Spec RAG', title: 'Ask the spec-grounding RAG' },
 ]
 
 export function AppNav({ screen, onSelect }) {

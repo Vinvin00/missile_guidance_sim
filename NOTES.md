@@ -2007,6 +2007,26 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   untouched, no conflicts with physics/API files.
 - Not verified: whether `9502c7b`'s own test suite state was green before
   this merge (assumed yes, not re-derived here).
+## 2026-09-16 — Main/Cobra integration
+
+Merged `main` into the Cobra line on `integration/cobra-main` so the
+viewer/deployment work and Cobra scenario can be evaluated together.
+The only content conflicts were the app screen switch and navigation list.
+Both existing RAG surfaces were retained as separate `rag` and `spec`
+screens; dropping either one would have silently discarded branch behavior.
+## 2026-09-16 — Cobra completes the fall and triggers earlier
+
+The live Cobra held `pitch_up_throttle=1.0` indefinitely after reaching
+its 88-degree pitch target. That made upward thrust exceed gravity, so the
+target never reached an apex and the state machine could never enter the
+spiral. `pitch_up_throttle` now applies only through the pull; at the pitch
+target the maneuver returns to idle, allowing the hang/fall to emerge from
+the 6-DOF forces. The viewer now triggers at a deterministic 2.0 seconds
+after launch: raw range/closing-speed time-to-go was non-monotonic in the
+tail chase and could postpone the pull until the engagement was nearly over.
+The demo separation is 7 km rather than 3 km; at 3 km the 700 m/s pursuer
+terminated the run before the target reached its apex, whereas 7 km preserves
+the full 25-second climb–apex–spiral playback and a clear descent.
 
 ## 2026-09-16 — Generic numerical regression checks and software documentation
 
@@ -2148,3 +2168,39 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
   876×719 layout put the run action several screens below the scenario list.
 - Added component coverage for the clean empty scene and persistent Setup
   action/error. Verified the repaired layout at 876×719 in the browser.
+
+
+## 2026-09-17 — Consolidate branches and repair production deployment
+
+- User explicitly requested one branch, all features preserved, and a Vercel
+  production deployment. Baseline: 204 Python tests and 32 frontend tests passed;
+  frontend production build passed. `rtk` is unavailable; used direct commands
+  and the existing project virtualenv.
+- Confirmed failed Vercel deployment `physics-kviuewy9x` cloned the Cobra branch
+  at `a85725c`, installed Python/Torch/CUDA dependencies at repository root,
+  then failed with `vite: command not found` (exit 127). Other historical fixes
+  were split between branches: missing tracked Vite URLs caused same-origin
+  catalog 404s; missing production/preview CORS aliases caused browser failures.
+- Saved every original branch tip and complete Git history in a verified bundle
+  at `../deployment-backup-2026-09-17/all-branches.bundle`, plus an uncommitted
+  patch. Committed the existing Setup/scene UI edits before merging. Active
+  training outputs and their script changes remain untouched in the working tree.
+- Merged main's deployment/CORS/Docker/RAG changes with the latest Cobra branch.
+  Kept the newer existing Cobra implementation, catalog, tests, and documentation
+  rather than reintroducing the older climb/spiral implementation. Retained main's
+  closest-approach precision and zero-valued limit fixes. Physics/RL source is
+  unchanged from the pre-merge feature branch; no new tuning or model changes.
+- Preserved the Alpine viewer and Setup visibility changes while using main's
+  single tested SpecGroundingPanel and its matching VITE_AERO_RAG_API_URL.
+  Kept the feature branch's rollout fixture and strict expectations: main's
+  older fixture mismatched the newer action-basis implementation (caught by
+  the live-session regression test). No tolerances were weakened.
+- Vercel install is now reproducible with npm ci; framework and build/output
+  paths are explicit in both vercel.json and project settings. Render tracks main.
+  Added deployment tests for directory selection, public URL wiring, and CORS.
+- Existing frontend lint findings remain in AppNav.jsx (mixed exports) and
+  SimulationScene.jsx (state reset in effect); neither blocks the Vite build.
+- Final local verification: 207 Python tests passed (two dependency deprecation
+  warnings); 36 frontend tests passed after a clean npm ci; production build
+  passed (existing large vendor bundle warning). A concurrent catalog description
+  correction was preserved; simulation parameters remained unchanged.
