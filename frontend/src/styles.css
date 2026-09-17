@@ -1834,7 +1834,7 @@ input:disabled,
   --rail-w: 84px;
 }
 
-.app-rail, .hud-header { background: #122120; }
+.app-rail, .hud-header { background: #050606; }
 .hud-shell { height: 100dvh; }
 .hud-header { gap: 12px; padding: 0 24px; }
 .brand-name { letter-spacing: 0.15em; white-space: nowrap; }
@@ -1905,8 +1905,8 @@ input:disabled,
 .hud-stage:has(.scene-shell[data-telemetry='false']) .hud-overlay,
 .hud-stage:has(.scene-shell[data-has-frames='false']) .hud-overlay { display: none; }
 .empty-scene {
-  inset: 0; justify-items: start; text-align: left; padding: 32px 7%;
-  background: linear-gradient(90deg, #122e2fe0, #183a3440 65%, transparent);
+  inset: 0; justify-items: center; text-align: center; padding: 32px 7%;
+  background: transparent;
 }
 .empty-scene > span { color: #c4ddcf; font-size: 11px; letter-spacing: 0.18em; }
 .empty-scene h1 {
@@ -1997,7 +1997,70 @@ input:disabled,
   .rate-group { justify-content: center; }
 }
 .projection-toggle button.is-active { color: #17382a; }
-.empty-scene { justify-content: start; align-content: center; }
+.empty-scene { justify-content: center; align-content: center; }
+
+/* Keep the primary Setup action available while its configuration scrolls. */
+.setup-actions {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 30px;
+  border-top: 1px solid var(--line-strong);
+  background: rgba(5, 6, 6, 0.96);
+  backdrop-filter: blur(12px);
+}
+
+.setup-actions .error-message {
+  flex: 1;
+  margin: 0;
+  padding-block: 9px;
+}
+
+.setup-actions .run-preview {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 701px) and (max-width: 980px) {
+  .setup-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(250px, 0.75fr);
+  }
+
+  .setup-main {
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .scenario-row {
+    padding-block: 10px;
+  }
+
+  .scenario-row:not(.is-active) .scenario-desc {
+    display: none;
+  }
+
+  .law-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .setup-actions {
+    padding: 10px 14px;
+  }
+
+  .setup-actions .error-message {
+    display: none;
+  }
+
+  .setup-actions .run-preview {
+    width: 100%;
+  }
+}
 .vehicle-label::after { bottom: calc(-1 * var(--label-stem)); height: var(--label-stem); }
 .scene-shell[data-projection='2d'] .scene-legend span:last-child { display: flex; }
 @media (max-width: 700px) {

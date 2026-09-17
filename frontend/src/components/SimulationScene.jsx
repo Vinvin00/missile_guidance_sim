@@ -627,8 +627,6 @@ export function SimulationScene({ projection = '3d' }) {
   const catalog = useSimulationStore((state) => state.catalog)
   const streamStatus = useSimulationStore((state) => state.streamStatus)
   const error = useSimulationStore((state) => state.error)
-  const scenarioId = useSimulationStore((state) => state.selectedScenarioId)
-  const scenario = catalog?.scenarios.find((item) => item.id === scenarioId)
   const hasFrames = useSimulationStore((state) =>
     state.viewMode === 'trials' || state.viewMode === 'training'
       ? (state.trialSet?.trials.length ?? 0) > 0
@@ -670,18 +668,10 @@ export function SimulationScene({ projection = '3d' }) {
       {hasFrames && <div className="scene-legend" aria-label="Object legend"><span><i /> Interceptor</span><span><i /> Target</span><span>{projection === '3d' ? 'Drag to orbit · Scroll to zoom' : 'Top view · Grid 500 m'}</span></div>}
       {!hasFrames && (
         <div className="empty-scene">
-          <span>THE SIMULATION LAB / 01</span>
-          <h1>Perspective changes everything.</h1>
-          <p>
-            {viewMode === 'trials' || viewMode === 'training'
-              ? 'Run a preview to overlay RL trials'
-              : 'Follow two objects through a forested mountain valley. Explore every approach, from above or alongside.'}
-          </p>
           {viewMode === 'single' && <>
             <button className="scene-start" type="button" disabled={!catalog || streamStatus === 'connecting' || streamStatus === 'streaming'} onClick={startStream}>
               {streamStatus === 'connecting' || streamStatus === 'streaming' ? 'Preparing simulation…' : 'Run simulation'} <span aria-hidden="true">↗</span>
             </button>
-            <small>{scenario?.label ?? 'Loading scenarios…'} · Adjust parameters in Setup</small>
             {error && <p role="alert" className="error-message">{error}</p>}
           </>}
         </div>

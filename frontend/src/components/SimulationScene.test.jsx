@@ -61,6 +61,8 @@ describe('scene controls', () => {
   it('starts a real run from the empty scene and prevents duplicate starts while connecting', () => {
     useSimulationStore.setState({ catalog: { scenarios: [{ id: 'evasive-climb', label: 'Valley run' }] } })
     const { rerender } = render(<SimulationScene />)
+    expect(screen.queryByText('Perspective changes everything.')).toBeNull()
+    expect(screen.queryByText('THE SIMULATION LAB / 01')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Run simulation/ }))
     expect(startStream).toHaveBeenCalledOnce()
     useSimulationStore.setState({ streamStatus: 'connecting' })

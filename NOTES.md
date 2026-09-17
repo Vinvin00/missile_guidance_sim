@@ -2136,3 +2136,15 @@ envelope, PN hit rate > APN/OGL (truth a_T + lag can hurt at envelope edges).
 - Not verified: GPU performance across physical mobile devices, every possible
   user-authored trajectory, or deployment. Existing unrelated work in the
   shared tree was preserved.
+
+## 2026-09-17 — Setup visibility follow-up
+
+- Removed the promotional heading and description from the empty simulation
+  canvas, leaving the landscape and the direct Run simulation control.
+- Restored the top navigation and sidebar to black.
+- Fixed Setup at mid-size windows: it keeps two columns down to 700 px,
+  collapses inactive scenario descriptions for scanning, and pins the run
+  action plus any connection error above the playback bar. The previous
+  876×719 layout put the run action several screens below the scenario list.
+- Added component coverage for the clean empty scene and persistent Setup
+  action/error. Verified the repaired layout at 876×719 in the browser.

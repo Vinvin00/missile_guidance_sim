@@ -99,15 +99,6 @@ export function SetupScreen({ onRun }) {
 
           <LiveParameterControls />
 
-          <button
-            className="run-preview"
-            type="button"
-            onClick={onRun}
-            disabled={!catalog || busy}
-          >
-            {busy ? 'RECEIVING…' : 'RUN LIVE ENGAGEMENT'}
-          </button>
-          {error && <p className="error-message">{error}</p>}
         </div>
 
         <div className="setup-side">
@@ -136,6 +127,17 @@ export function SetupScreen({ onRun }) {
             sliders set the initial geometry.
           </p>
         </div>
+      </div>
+      <div className="setup-actions">
+        {error && <p className="error-message">{error}</p>}
+        <button
+          className="run-preview"
+          type="button"
+          onClick={onRun}
+          disabled={!catalog || busy}
+        >
+          {busy ? 'RECEIVING…' : 'RUN LIVE ENGAGEMENT'}
+        </button>
       </div>
     </div>
   )
