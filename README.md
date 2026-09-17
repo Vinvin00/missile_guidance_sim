@@ -211,26 +211,49 @@ sample is for replay demonstration, not a new evaluation result.
   trajectory deviation over 7 km (`tests/test_rigid_body.py`).
 - **Cost.** About 0.6 ms per step, against 0.03 ms for a point mass.
 
-**Cobra, now genuinely 6-DOF.** `CobraManeuver` commands only throttle
-and body rates. The pull-up saturates the elevator. In the hang
-(~30 m/s, no q) pitch authority comes from thrust vectoring. The spiral
-is flown on aileron and rudder. Climb → hang → spiral → recovery is
-checked end to end (`tests/test_cobra_maneuver.py`).
+**Cobra, genuinely 6-DOF and the actual maneuver.** `CobraManeuver`
+commands only throttle and body pitch rate. Re-derived from first
+principles (see NOTES.md 2026-09-17) after an earlier version drifted into
+a zoom-climb-then-dive: the real Pugachev's Cobra is an abrupt pitch to
+(and slightly past) vertical angle of attack, held only momentarily as a
+full-body airbrake, then pitched back down — near-constant altitude,
+thrust held high throughout, done in a handful of seconds. Phases:
+`armed → pitch_up → stall_hold → pitch_down → recovered`. The pull-up uses
+real elevator authority; thrust vectoring contributes at `stall_hold`,
+where aero pitch authority is thinnest. Checked end to end
+(`tests/test_cobra_maneuver.py`), including near-constant altitude and a
+"momentary" (<10 s) total duration.
 
-Viewer scenario, re-tuned for the 6-DOF airframe: full thrust through the
-pull (`pitch_up_throttle=1.0`), triggered at 2.0 s time-to-go — later than
-the old model's 0.9 s, because a finite pitch-up rate needs more warning
-to open the same separation. At catalog defaults PN misses by ≈56 m, APN
-by ≈15 m, OGL by ≈6.5 m (OGL plans against the predicted intercept rather
-than reacting to LOS rate, so it closes the gap furthest). The frozen RL
-policy, still flying the same point-mass interceptor it was trained on
-against this target, is **not** reliably dodged: it hits 8–9 of 12 seeds.
-The old attitude-rate shortcut's *instantaneous* nose-snap fooled RL too
-(21/24 seeds missed); the 6-DOF model's actuator/inertia-rate-limited
-climb is slower and more realistic, and a fast-reacting policy tracks
-through it. Classical guidance, reacting to LOS geometry rather than
-learned patterns, still misses. Locked in
+Feedback throughout targets angle of attack (`alpha`, from wind axes), not
+world-frame pitch — `rotational_dynamics.quat_to_euler`'s Euler `theta` is
+singular exactly at the Cobra's regime (±90°), so a `theta`-referenced
+target above ~85° makes that P-loop chase an unrepresentable angle and
+loop continuously instead of holding near vertical.
+
+The evasion mechanism is the maneuver's abrupt, extreme deceleration
+(~200 m/s → ~100 m/s in under 2 s), which forces a trailing interceptor to
+overshoot — not an altitude change. At catalog defaults PN misses by ≈52 m,
+APN by ≈14 m, OGL by ≈6.5 m (OGL plans against the predicted intercept
+rather than reacting to LOS rate, so it closes the gap furthest). The
+frozen RL policy, still flying the same point-mass interceptor it was
+trained on against this target, is **not** reliably dodged: it hits 11 of
+12 seeds — a fast-reacting policy tracks the abrupt pitch-up well enough to
+still catch it most of the time. Classical guidance, reacting to LOS
+geometry rather than learned patterns, still misses. Locked in
 [`tests/test_api_stream.py`](tests/test_api_stream.py).
+
+An optional `gust_speed_m_s` (wired into the API as `engagement.gust_speed`,
+0–30 m/s) injects a one-shot crosswind impulse at `stall_hold`, the moment
+of thinnest control authority, to exercise the post-stall lateral/
+directional stability degradation in `aero_moments.body_aero_moment`
+(weathercock stability and roll damping weaken past `alpha_stall` — the
+actual departure/spin mechanism). With this maneuver's correct shape,
+meaningful airspeed and control authority persist throughout, so a
+well-equipped airframe (aero + thrust vectoring, like `F16_6DOF`) recovers
+even from a gust several times its own airspeed — demonstrating a genuine
+failure needs an airframe that actually lacks the maneuver's real-world
+prerequisites (adequate thrust, alpha stability), not just a big gust; see
+`tests/test_cobra_maneuver.py`.
 
 **Reference data and placeholders** (full citations inline in
 `physics/entities.py`):

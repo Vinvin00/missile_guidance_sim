@@ -73,28 +73,15 @@ _SCENARIO_MANEUVER: dict[ScenarioId, str] = {
 # The env's default target is a 40 kg drone; a Cobra needs a fighter-class
 # 6-DOF airframe (F-16 mass/inertia/aero, with thrust vectoring for the hang).
 _COBRA_TARGET_VEHICLE = F16_6DOF.vehicle
-# Re-tuned for the 6-DOF airframe (see NOTES.md 2026-09-16). The old
-# instant-rate shortcut's nose-snap dodged PN/APN/OGL at 0.9 s time-to-go;
-# the 6-DOF model's finite pitch-up rate needs 2.0 s to open the same
-# separation. Partial thrust through the pull adds vertical displacement to
-# the zoom without ever exceeding it: full afterburner (1.0 = 129 kN) beats
-# the F-16's ~91 kN weight outright, so with the nose near vertical thrust
-# alone out-climbs gravity and the aircraft never falls into the spiral.
-# 0.65 stays under that (thrust*sin(88deg) < weight) so it still comes down,
-# while keeping enough zoom to open the miss margin against PN/APN/OGL.
+# CobraManeuver's own defaults (near-full thrust, ~5 s total) are the real
+# maneuver -- see NOTES.md 2026-09-17 for the from-first-principles
+# redesign that replaced the old zoom-climb-then-dive model. The real
+# maneuver's evasion mechanism is the abrupt, extreme deceleration
+# (~200 m/s -> ~100 m/s in under 2 s), which can force a trailing pursuer
+# to overshoot -- not an altitude change. Trigger timing against that
+# mechanism has not been re-swept since the redesign (was tuned for the
+# old zoom-climb model); left at the old value pending a fresh sweep.
 _COBRA_TRIGGER_TIME_TO_GO_S = 2.0
-_COBRA_PITCH_UP_THROTTLE = 0.65
-# The env default 25 s (PPOTrainingConfig.max_time) truncates the Cobra
-# mid pitch-up: this level-entry, partial-throttle profile doesn't trigger
-# until ~15 s in, then takes another ~35 s to bleed down into the hang
-# (measured: hang at t=50.5 s). 90 s is comfortable headroom past that --
-# in practice the episode still ends sooner than 90 s regardless, because
-# the interceptor (not the Cobra target) eventually runs out of energy
-# chasing a target that zoomed to ~5 km and levelled off, and hits the
-# ground first (~t=63 s, outcome "miss"/pursuer_ground_impact -- unrelated
-# to the Cobra maneuver or the gust). Classical guidance laws only; the RL
-# branch below still sets its own budget unconditionally.
-_COBRA_MAX_TIME_S = 90.0
 # Scenarios that cap the interceptor's structural g below the env default.
 _SCENARIO_PURSUER_G_LIMIT: dict[ScenarioId, float] = {
     s.id: s.pursuer_g_limit for s in CATALOG.scenarios if s.pursuer_g_limit is not None
@@ -226,8 +213,6 @@ def build_live_trajectory(
     action_layout = ACTION_LAYOUT_LATERAL2
     tracking = TrackingConfig()
     max_time_s = PPOTrainingConfig().max_time
-    if maneuver == "cobra":
-        max_time_s = _COBRA_MAX_TIME_S
     if guidance_law == "rl":
         from guidance_sim.ml.policy_inference import get_shared_policy
 
@@ -275,7 +260,6 @@ def build_live_trajectory(
             env.target,
             trigger_time_to_go_s=_COBRA_TRIGGER_TIME_TO_GO_S,
             hold_level_until_trigger=True,
-            pitch_up_throttle=_COBRA_PITCH_UP_THROTTLE,
             gust_speed_m_s=applied_parameters["engagement.gust_speed"],
         )
     if policy is not None:

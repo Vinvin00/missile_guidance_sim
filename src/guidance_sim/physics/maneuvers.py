@@ -18,9 +18,9 @@ from typing import Optional, Sequence
 import numpy as np
 
 from guidance_sim.physics.atmosphere import G0, isa_density
-from guidance_sim.physics.aerodynamics import body_aero_force, dynamic_pressure
+from guidance_sim.physics.aerodynamics import body_aero_force
 from guidance_sim.physics.controls import RUDDER
-from guidance_sim.physics.dynamics import MAX_PITCH_RATE_RAD_S, MAX_ROLL_RATE_RAD_S
+from guidance_sim.physics.dynamics import MAX_PITCH_RATE_RAD_S
 from guidance_sim.physics.entities import RigidBodyEntity, State
 
 UP = np.array([0.0, 0.0, 1.0])
@@ -463,57 +463,67 @@ class ManeuverSequence(ManeuverProfile):
 
 class CobraManeuver(ManeuverProfile):
     """
-    Post-stall "Cobra" evasion for a 6-DOF `RigidBodyEntity` target.
+    Pugachev's Cobra: an abrupt pitch-up to (and slightly past) vertical,
+    held only *momentarily* as a full-body airbrake, then pitched back
+    down to resume forward flight -- thrust stays high throughout so
+    altitude changes little. This is the actual maneuver (a few seconds,
+    near-constant altitude, moderate entry speed), not a zoom-climb, a
+    near-zero-airspeed hang, or a scripted dive to rebuild airspeed.
 
     The profile only commands what a pilot commands: throttle and body
-    rates (`entity.rate_cmd`), each bounded by the FCS command limits. The
-    autopilot turns those into elevator/aileron/rudder/thrust-vector
-    deflections through rate-limited actuators, and Euler's equations do
-    the rest. Nothing sets attitude, position or velocity. The pitch-up
-    rate, the deceleration, the near-zero-airspeed hang and the fall all
-    come out of forces and moments. In the hang the aero surfaces have no
-    q, so pitch authority there is thrust vectoring.
+    pitch rate (`entity.rate_cmd`), bounded by the FCS command limits. The
+    autopilot turns those into elevator/thrust-vector deflections through
+    rate-limited actuators, and Euler's equations do the rest. Whether
+    altitude actually holds, whether alpha actually sheds fast enough to
+    recover, and whether a disturbance (`gust_speed_m_s`) grows into a
+    genuine departure instead of damping out, all come out of forces and
+    moments -- including the post-stall stability degradation in
+    `aero_moments.body_aero_moment` -- not from anything scripted here.
 
     `gust_speed_m_s` is the one deliberate exception to "nothing sets
     velocity": a one-shot crosswind impulse applied directly to the body
-    velocity the instant the vehicle enters the hang, modelling an external
-    disturbance rather than a pilot input. Whether it's shrugged off or
-    grows into a departure depends entirely on the post-stall stability
-    degradation in `aero_moments.body_aero_moment`, not on anything scripted
-    here.
+    velocity the instant the vehicle enters `stall_hold` -- the moment of
+    minimal aero control authority -- modelling an external disturbance
+    rather than a pilot input.
 
     `hold_level_until_trigger` flies the armed phase as an ordinary
     guidance-style lateral command (lift = weight, plus sink-rate feedback)
     with throttle trimmed to drag. The same accel autopilot as every other
     maneuver tracks it.
 
-    Phases: armed -> throttle_cut -> pitch_up -> hang -> spiral -> recovered.
-    `hang` is telemetry only (airspeed < `hang_speed_m_s`) and may be skipped
-    if the vehicle starts falling before bleeding that far. `recovered`
-    returns the entity to the accel autopilot with a zero command.
+    Phases: armed -> pitch_up -> stall_hold -> pitch_down -> recovered.
+    `pitch_down` drives alpha back toward zero (the nose "falling through"
+    as a pilot releases back-stick pressure, not a scripted attitude);
+    `recovered` re-trims throttle to cruise and returns the entity to the
+    accel autopilot with a zero command.
+
+    Pitch-rate feedback throughout targets *alpha* (from `wind_angles`),
+    not the world-frame Euler pitch `theta` -- `rotational_dynamics.
+    quat_to_euler` documents `theta` as singular exactly at the Cobra's
+    regime (+-90 deg), so a `theta`-referenced target above ~85 deg makes
+    the P-loop chase an angle the Euler decomposition can't represent,
+    which showed up as the vehicle looping continuously instead of holding
+    near vertical. `alpha` has no such singularity (`arctan2`-based) and is
+    the physically apt quantity anyway -- the maneuver is defined by angle
+    of attack, not world-frame attitude.
 
     Trigger mirrors `BreakTurn`: `trigger_time_to_go_s` against engagement
     geometry, else absolute `trigger_time_s`.
     """
 
-    PHASES = ("armed", "throttle_cut", "pitch_up", "hang", "spiral", "recovered")
-    _GAIN = 3.0  # 1/s, attitude error -> body-rate command (then clipped to FCS limits)
+    PHASES = ("armed", "pitch_up", "stall_hold", "pitch_down", "recovered")
+    _GAIN = 3.0  # 1/s, attitude/alpha error -> body-rate command (then clipped to FCS limits)
 
     def __init__(
         self,
         entity: RigidBodyEntity,
         trigger_time_to_go_s: Optional[float] = None,
         trigger_time_s: float = 0.0,
-        pitch_target_deg: float = 88.0,
-        idle_throttle: float = 0.02,
-        hang_speed_m_s: float = 40.0,
-        spiral_bank_deg: float = 60.0,
-        spiral_alpha_deg: float = 10.0,
-        spiral_throttle: float = 0.5,
-        recovery_q_pa: float = 2_000.0,
-        recovery_altitude_loss_m: float = 40.0,
+        alpha_target_deg: float = 100.0,  # past vertical, per the real maneuver
+        cobra_throttle: float = 1.0,  # high thrust throughout -- holds altitude, not a zoom or a glide
+        hold_time_s: float = 1.0,  # momentary dwell at peak pitch before pitching back down
+        recovery_alpha_deg: float = 15.0,  # below this, aero control is back; hand off to the accel autopilot
         hold_level_until_trigger: bool = False,
-        pitch_up_throttle: Optional[float] = None,
         gust_speed_m_s: float = 0.0,
     ):
         if not isinstance(entity, RigidBodyEntity):
@@ -521,35 +531,28 @@ class CobraManeuver(ManeuverProfile):
         self.entity = entity
         self.trigger_time_to_go_s = trigger_time_to_go_s
         self.trigger_time_s = float(trigger_time_s)
-        self.pitch_target = float(np.deg2rad(pitch_target_deg))
-        self.idle_throttle = float(idle_throttle)
-        self.hang_speed_m_s = float(hang_speed_m_s)
-        self.spiral_bank = float(np.deg2rad(spiral_bank_deg))
-        self.spiral_alpha = float(np.deg2rad(spiral_alpha_deg))
-        self.spiral_throttle = float(spiral_throttle)
-        self.recovery_q_pa = float(recovery_q_pa)
-        self.recovery_altitude_loss_m = float(recovery_altitude_loss_m)
+        self.alpha_target = float(np.deg2rad(alpha_target_deg))
+        self.cobra_throttle = float(cobra_throttle)
+        self.hold_time_s = float(hold_time_s)
+        self.recovery_alpha = float(np.deg2rad(recovery_alpha_deg))
         self.hold_level_until_trigger = bool(hold_level_until_trigger)
-        # None = stay at idle through the pull (the classic throttle-cut Cobra).
-        # A value keeps thrust on the upturned nose, which adds vertical
-        # displacement to the zoom.
-        self.pitch_up_throttle = pitch_up_throttle
         # A one-shot crosswind impulse (body-frame side velocity, m/s) injected
-        # the instant the vehicle enters the hang. This is an *environmental*
-        # disturbance, not a pilot/FCS command -- the standard discrete-gust
-        # model is exactly a velocity increment on the wind axes -- so unlike
-        # every other input here it's applied directly to entity.x, not
-        # through rate_cmd/throttle. 0.0 (default) reproduces the old
-        # disturbance-free behaviour exactly. The hang is the worst possible
-        # moment for it: q ~ 0 so aero control authority is gone, and the
-        # deep-stall yaw/roll stability degradation in aero_moments.body_aero_moment
-        # means the resulting sideslip is no longer guaranteed to damp out.
+        # the instant the vehicle enters `stall_hold`. This is an
+        # *environmental* disturbance, not a pilot/FCS command -- the standard
+        # discrete-gust model is exactly a velocity increment on the wind axes
+        # -- so unlike every other input here it's applied directly to
+        # entity.x, not through rate_cmd/throttle. 0.0 (default) reproduces
+        # the disturbance-free maneuver exactly. `stall_hold` is the worst
+        # possible moment for it: minimal aero control authority, and the
+        # deep-stall yaw/roll stability degradation in
+        # aero_moments.body_aero_moment means the resulting sideslip is no
+        # longer guaranteed to damp out.
         self.gust_speed_m_s = float(gust_speed_m_s)
         self._gust_applied = False
         self.phase = "armed"
         self.phase_history: list[tuple[float, str]] = [(0.0, "armed")]
         self._time_to_go_s: Optional[float] = None
-        self._spiral_start_altitude_m = 0.0
+        self._stall_hold_start_s: Optional[float] = None
 
     def update_engagement(self, t: float, target_state: State, pursuer_state: Optional[State]) -> None:
         self._time_to_go_s = None if pursuer_state is None else _time_to_go(target_state, pursuer_state)
@@ -565,15 +568,26 @@ class CobraManeuver(ManeuverProfile):
             return np.zeros(3)
         up = _vertical_direction(state.velocity)
         cos_gamma = float(np.dot(UP, up))
+        e.throttle = self._trim_throttle(state)
+        # Lift = weight·cos(gamma), plus 1/s sink-rate feedback.
+        return (G0 * cos_gamma - 1.0 * float(state.velocity[2])) * up
+
+    def _trim_throttle(self, state: State) -> float:
+        """Throttle that balances drag at the current speed/altitude -- used
+        both pre-trigger (`_hold_level`) and on `recovered`, so the target
+        resumes an ordinary trimmed cruise rather than gliding at whatever
+        throttle the pull left behind."""
+        e = self.entity
+        speed = state.speed()
+        if speed < 1.0 or e.params.max_thrust <= 0.0:
+            return 0.0
         v = e.vehicle
         drag = -float(np.dot(
             body_aero_force(e.x[3:6], isa_density(state.altitude()), v.reference_area,
                             v.drag_coefficient, e.params.aero, e.deflection[RUDDER]),
             e.x[3:6] / speed,
         ))
-        e.throttle = float(np.clip(drag / e.params.max_thrust, 0.0, 1.0)) if e.params.max_thrust > 0 else 0.0
-        # Lift = weight·cos(gamma), plus 1/s sink-rate feedback.
-        return (G0 * cos_gamma - 1.0 * float(state.velocity[2])) * up
+        return float(np.clip(drag / e.params.max_thrust, 0.0, 1.0))
 
     def lateral_accel(self, t: float, state: State) -> np.ndarray:
         e = self.entity
@@ -584,46 +598,46 @@ class CobraManeuver(ManeuverProfile):
                 triggered = t >= self.trigger_time_s
             if not triggered:
                 return self._hold_level(state) if self.hold_level_until_trigger else np.zeros(3)
-            e.throttle = self.idle_throttle if self.pitch_up_throttle is None else float(self.pitch_up_throttle)
-            e.rate_cmd = np.zeros(3)
-            self._enter(t, "throttle_cut")
-            return np.zeros(3)
-
-        if self.phase == "throttle_cut":  # one control tick, then pull
             self._enter(t, "pitch_up")
 
-        phi, theta, _psi = e.euler_angles()
-        _speed, alpha, beta = e.wind_angles()
-        if self.phase in ("pitch_up", "hang"):
+        _speed, alpha, _beta = e.wind_angles()
+
+        if self.phase == "pitch_up":
+            e.throttle = self.cobra_throttle
             e.rate_cmd = np.array([
                 0.0,
-                np.clip(self._GAIN * (self.pitch_target - theta), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                np.clip(self._GAIN * (self.alpha_target - alpha), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
                 0.0,
             ])
-            if self.phase == "pitch_up" and state.speed() < self.hang_speed_m_s:
-                self._enter(t, "hang")
-            if self.phase == "hang" and not self._gust_applied and self.gust_speed_m_s != 0.0:
+            if alpha >= self.alpha_target - np.deg2rad(2.0):
+                self._stall_hold_start_s = t
+                self._enter(t, "stall_hold")
+
+        if self.phase == "stall_hold":
+            e.throttle = self.cobra_throttle
+            e.rate_cmd = np.array([
+                0.0,
+                np.clip(self._GAIN * (self.alpha_target - alpha), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                0.0,
+            ])
+            if not self._gust_applied and self.gust_speed_m_s != 0.0:
                 e.x[4] += self.gust_speed_m_s
                 self._gust_applied = True
-            pitch_done = theta >= self.pitch_target - np.deg2rad(2.0)
-            if pitch_done and state.velocity[2] < 0.0:
-                self._spiral_start_altitude_m = state.altitude()
-                self._enter(t, "spiral")
+            if t - self._stall_hold_start_s >= self.hold_time_s:
+                self._enter(t, "pitch_down")
 
-        if self.phase == "spiral":
-            e.throttle = self.spiral_throttle
-            # Nose back onto the velocity vector at a small alpha while banked, so
-            # the tilted lift (not a scripted path) winds the descent into a spiral.
+        if self.phase == "pitch_down":
+            e.throttle = self.cobra_throttle
+            # Drive alpha back toward zero -- the nose "falls through" as a
+            # pilot releases back-stick pressure, not a scripted attitude.
             e.rate_cmd = np.array([
-                np.clip(self._GAIN * (self.spiral_bank - phi), -MAX_ROLL_RATE_RAD_S, MAX_ROLL_RATE_RAD_S),
-                np.clip(self._GAIN * (self.spiral_alpha - alpha), -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
-                np.clip(self._GAIN * beta, -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                0.0,
+                np.clip(-self._GAIN * alpha, -MAX_PITCH_RATE_RAD_S, MAX_PITCH_RATE_RAD_S),
+                0.0,
             ])
-            q = dynamic_pressure(isa_density(state.altitude()), state.speed())
-            lost = self._spiral_start_altitude_m - state.altitude()
-            if q >= self.recovery_q_pa and lost >= self.recovery_altitude_loss_m:
+            if abs(alpha) <= self.recovery_alpha:
                 e.rate_cmd = None
-                e.throttle = 0.0
+                e.throttle = self._trim_throttle(state)
                 self._enter(t, "recovered")
 
         return np.zeros(3)

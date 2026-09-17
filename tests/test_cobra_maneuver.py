@@ -89,12 +89,18 @@ def test_cobra_time_to_go_trigger():
     assert maneuver.phase == "armed"
     maneuver.update_engagement(1.0, target, near)
     maneuver.lateral_accel(1.0, target)
-    assert maneuver.phase == "throttle_cut"
+    assert maneuver.phase == "pitch_up"
 
 
-def test_cobra_end_to_end_6dof_climb_hang_spiral_recovery_from_real_control_inputs():
-    """Integration: full Cobra through Simulation, both vehicles 6-DOF."""
-    target = _cobra_target(_zoom_climb_velocity(speed=160.0, gamma_deg=45.0))
+def test_cobra_end_to_end_6dof_near_constant_altitude_recovery_from_real_control_inputs():
+    """Integration: full Cobra through Simulation, both vehicles 6-DOF.
+
+    This is the real Pugachev's Cobra shape: abrupt pitch to past-vertical
+    alpha, a momentary hold, pitch back down, all in a handful of seconds
+    with altitude changing little -- not a zoom-climb, a near-zero-airspeed
+    hang, or a scripted dive. Level entry at a moderate cruise speed (no
+    zoom-climb needed, unlike the old model)."""
+    target = _cobra_target([200.0, 0.0, 0.0])
     # Proximity trigger: the pull only starts once the pursuer is actually
     # close (t_go <= 5 s), not at a fixed wall-clock time. hold_level_until_trigger
     # flies the armed phase level (as the live demo does) instead of ballistic
@@ -105,17 +111,17 @@ def test_cobra_end_to_end_6dof_climb_hang_spiral_recovery_from_real_control_inpu
         State(position=[-20_000.0, 0.0, 3_000.0], velocity=[300.0, 0.0, 0.0]), INTERCEPTOR_6DOF, "pursuer"
     )
 
-    samples = []  # (phase, altitude, speed, pitch, elevator, tv_pitch)
+    samples = []  # (phase, altitude, speed, alpha, elevator, tv_pitch)
     original = maneuver.lateral_accel
 
     def recording_lateral_accel(t, state):
         command = original(t, state)
-        samples.append((maneuver.phase, state.altitude(), state.speed(), target.euler_angles()[1],
+        samples.append((maneuver.phase, state.altitude(), state.speed(), target.wind_angles()[1],
                         target.deflection[ELEVATOR], target.deflection[TV_PITCH]))
         return command
 
     maneuver.lateral_accel = recording_lateral_accel
-    max_time = 40.0
+    max_time = 30.0
     Simulation(
         pursuer=pursuer,
         target=target,
@@ -126,71 +132,72 @@ def test_cobra_end_to_end_6dof_climb_hang_spiral_recovery_from_real_control_inpu
         config=SimulationConfig(dt=_DT, max_time=max_time, intercept_radius=0.0),
     ).run()
 
-    # "hang" is telemetry-only and may be skipped (see CobraManeuver docstring)
-    # if the vehicle is still fast enough to fall through apex before bleeding
-    # down to hang_speed_m_s -- triggering off real engagement geometry, rather
-    # than an early fixed time, means the target carries more energy into the
-    # pull, so this run legitimately skips it.
-    phases = [name for _t, name in maneuver.phase_history]
-    required = [p for p in CobraManeuver.PHASES if p != "hang"]
-    assert phases == required or phases == list(CobraManeuver.PHASES)
-    assert maneuver.phase_history[-1][0] < max_time
+    assert [name for _t, name in maneuver.phase_history] == list(CobraManeuver.PHASES)
+    trigger_t = maneuver.phase_history[1][0]
+    recovered_t = maneuver.phase_history[-1][0]
+    assert recovered_t < max_time
+    assert recovered_t - trigger_t < 10.0  # momentary, not a multi-second float
     assert target.rate_cmd is None  # handed back to the accel autopilot
 
     by_phase = {p: [s for s in samples if s[0] == p] for p in CobraManeuver.PHASES}
-    start_alt = samples[0][1]
-    # Climb: altitude gained during pitch-up, and the nose really got near vertical.
-    assert max(s[1] for s in by_phase["pitch_up"]) > start_alt + 200.0
-    assert max(s[3] for s in by_phase["pitch_up"] + by_phase["hang"]) > np.deg2rad(85.0)
-    # The pitch-up was flown on the elevator (saturating), not a rate shortcut.
-    assert min(s[4] for s in by_phase["pitch_up"]) < -0.5 * F16_6DOF.actuators.max_deflection[ELEVATOR]
-    if by_phase["hang"]:
-        # Hang: slow, and thrust vectoring is doing the pitch work where q is gone.
-        assert min(s[2] for s in by_phase["hang"]) < 40.0
-        assert max(abs(s[5]) for s in by_phase["hang"]) > np.deg2rad(1.0)
-    # Spiral: altitude lost, airspeed rebuilt. Recovery thresholds are tight
-    # (CobraManeuver defaults) so the whole maneuver stays quick once triggered.
-    spiral = by_phase["spiral"]
-    assert spiral[-1][1] < spiral[0][1] - 30.0
-    assert spiral[-1][2] > spiral[0][2] + 5.0
+    start_alt = by_phase["pitch_up"][0][1]
+    all_alts = [s[1] for s in samples if s[0] != "armed"]
+    # Near-constant altitude throughout: this is the maneuver's defining
+    # property (thrust holds it up, not a zoom or a fall), not incidental.
+    assert max(abs(a - start_alt) for a in all_alts) < 350.0
+    # Alpha really got near/past vertical.
+    assert max(s[3] for s in by_phase["pitch_up"] + by_phase["stall_hold"]) > np.deg2rad(90.0)
+    # The pitch-up used real elevator authority, not a rate shortcut.
+    assert min(s[4] for s in by_phase["pitch_up"]) < -0.2 * F16_6DOF.actuators.max_deflection[ELEVATOR]
+    # stall_hold: thrust vectoring contributes where aero pitch authority is thin.
+    assert max(abs(s[5]) for s in by_phase["stall_hold"]) > np.deg2rad(1.0)
+    # pitch_down: alpha actually comes back down before recovery is declared.
+    assert abs(by_phase["pitch_down"][-1][3]) < abs(by_phase["stall_hold"][0][3])
+    # Airspeed dropped a lot (the airbrake effect) but recovery still hands
+    # back a flyable speed, not a stall.
+    assert by_phase["recovered"][0][2] < 0.7 * 200.0
+    assert by_phase["recovered"][0][2] > 20.0
 
 
-def test_gust_disturbs_hang_but_default_is_a_no_op():
-    """gust_speed_m_s=0.0 (default) must reproduce the disturbance-free hang
-    exactly -- it's a one-shot crosswind impulse applied to entity.x, so an
-    off-by-default bug would silently perturb every existing Cobra run."""
-    quiet = _cobra_target(_zoom_climb_velocity())
-    disturbed = _cobra_target(_zoom_climb_velocity())
+def test_gust_disturbs_stall_hold_but_default_is_a_no_op():
+    """gust_speed_m_s=0.0 (default) must reproduce the disturbance-free
+    maneuver exactly -- it's a one-shot crosswind impulse applied to
+    entity.x, so an off-by-default bug would silently perturb every
+    existing Cobra run."""
+    quiet = _cobra_target([200.0, 0.0, 0.0])
+    disturbed = _cobra_target([200.0, 0.0, 0.0])
     m1 = CobraManeuver(quiet, trigger_time_s=0.0)
     m2 = CobraManeuver(disturbed, trigger_time_s=0.0, gust_speed_m_s=0.0)
-    for i in range(2_000):  # 20 s, well past the hang
+    for i in range(1_000):  # 10 s, well past recovery
         t = i * _DT
         quiet.step(_DT, m1.lateral_accel(t, quiet.state))
         disturbed.step(_DT, m2.lateral_accel(t, disturbed.state))
     assert np.allclose(quiet.x, disturbed.x)
 
 
-def test_strong_gust_during_hang_departs_instead_of_recovering():
-    """A big enough crosswind impulse right at the hang -- q ~ 0, deep
-    stall, minimal control authority -- should overwhelm the post-stall
-    yaw/roll stability degradation (aero_moments.body_aero_moment) badly
-    enough that the scripted spiral recovery never gets a chance to engage:
-    the vehicle stays stuck in 'hang', sideslip stays large, and altitude
-    just keeps bleeding instead of the airframe re-establishing controlled
-    flight. This is what "the Cobra can crash" should look like."""
-    target = _cobra_target(_zoom_climb_velocity(), altitude_m=8_000.0)
-    maneuver = CobraManeuver(target, trigger_time_s=0.0, gust_speed_m_s=25.0)
-    start_altitude = target.state.altitude()
+def test_gust_during_stall_hold_perturbs_but_a_well_configured_cobra_still_recovers():
+    """A crosswind impulse at stall_hold -- the moment of minimal aero
+    control authority -- measurably perturbs beta and roll rate (proof the
+    post-stall stability degradation in aero_moments.body_aero_moment is
+    live, not a no-op). But with this maneuver's *correct* shape (thrust
+    sustains meaningful airspeed/dynamic-pressure throughout, unlike the
+    retired near-zero-airspeed hang model), a well-configured airframe
+    like F16_6DOF (aero + thrust vectoring) has enough control authority to
+    recover anyway, even from a gust several times its own airspeed --
+    this is deliberately not a "does it crash" test; see NOTES.md
+    2026-09-17 for why a crash needs a genuinely under-equipped airframe,
+    not just a big gust, once the maneuver models the real thing."""
+    target = _cobra_target([200.0, 0.0, 0.0])
+    maneuver = CobraManeuver(target, trigger_time_s=0.0, gust_speed_m_s=150.0)
     max_beta = 0.0
-    for i in range(9_000):  # 90 s
+    for i in range(3_000):  # 30 s
         t = i * _DT
         target.step(_DT, maneuver.lateral_accel(t, target.state))
         max_beta = max(max_beta, abs(target.wind_angles()[2]))
         if maneuver.phase == "recovered":
             break
-    assert maneuver.phase == "hang"  # never reached spiral/recovered
-    assert max_beta > np.deg2rad(30.0)  # a real departure, not a wobble
-    assert target.state.altitude() < start_altitude - 5_000.0  # still falling, uncorrected
+    assert maneuver.phase == "recovered"
+    assert max_beta > np.deg2rad(30.0)  # a real, measured perturbation
 
 
 def test_hold_level_until_trigger_cruises_instead_of_sinking():

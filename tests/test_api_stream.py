@@ -343,19 +343,19 @@ def test_training_endpoint_serves_the_baseline_run_log():
 
 
 @pytest.mark.parametrize(
-    ("guidance_law", "min_miss_m"), [("pn", 20.0), ("apn", 7.0)]
+    ("guidance_law", "min_miss_m"), [("pn", 40.0), ("apn", 10.0), ("ogl", 5.0)]
 )
 def test_cobra_default_scenario_dodges_classical_guidance(guidance_law, min_miss_m):
-    """Locks the demo: at catalog defaults (6-DOF target, 2.0 s trigger,
-    full thrust through the pull) the Cobra opens a real miss against PN and
-    APN -- PN by the widest margin. Thresholds were lowered (30/8 -> 20/7)
-    after adding post-stall departure susceptibility (weathercock stability
-    and roll damping degrade past alpha_stall -- see aero_moments.body_aero_moment):
-    the Cobra's spiral recovery is no longer a free, guaranteed escape, so
-    both margins shrank (PN ~56 m -> ~27 m, APN ~15 m -> ~8.4 m). OGL, which
-    plans against the predicted intercept rather than reacting to LOS rate,
-    moved from a narrow miss to a consistent hit; see the dedicated test
-    below instead of asserting a now-false "dodges everyone" claim."""
+    """Locks the demo: at catalog defaults, the real Pugachev's Cobra shape
+    (see NOTES.md 2026-09-17 for the from-first-principles redesign -- an
+    abrupt pitch past vertical, a momentary hold, pitch back down, near-
+    constant altitude, ~5 s total) opens a real miss against all three
+    classical laws -- PN by the widest margin, OGL by the narrowest, since
+    OGL plans against the predicted intercept rather than reacting to LOS
+    rate. The evasion mechanism here is the abrupt, extreme deceleration
+    (~200 m/s -> ~100 m/s in under 2 s) forcing the interceptor to
+    overshoot, not an altitude change -- measured PN ~52 m, APN ~14 m,
+    OGL ~6.5 m."""
     from guidance_sim.api.catalog import CATALOG
 
     scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
@@ -369,41 +369,15 @@ def test_cobra_default_scenario_dodges_classical_guidance(guidance_law, min_miss
     assert run.frames[0].target.body_up is not None
 
 
-def test_cobra_default_scenario_no_longer_reliably_dodges_ogl():
-    """OGL plans against the predicted intercept point rather than reacting
-    to LOS rate, so it was already the narrowest miss of the three classical
-    laws (see test_cobra_default_scenario_dodges_classical_guidance). Adding
-    post-stall departure susceptibility to the 6-DOF aero moments (real risk
-    of the Cobra not recovering cleanly) shrank that margin from ~6.5 m to
-    right at the intercept radius (~5 m): measured 4.6-5.1 m across seeds
-    1-5, flipping between "hit" and a razor-thin "timeout" miss run to run.
-    That knife-edge margin -- not a clean dodge -- is the honest finding, so
-    this asserts the collapsed distance rather than a flaky categorical
-    outcome."""
-    from guidance_sim.api.catalog import CATALOG
-
-    scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
-    closest = [
-        build_live_trajectory(
-            "cobra-evasion", "ogl", "cobra-test", scenario.parameter_defaults, seed=seed
-        ).closest_approach_m
-        for seed in range(1, 6)
-    ]
-    assert max(closest) < 8.0  # collapsed from the old ~6.5 m miss margin
-
-
 def test_cobra_default_scenario_does_not_reliably_dodge_rl():
-    """The retired rate-commanded attitude shortcut's *instantaneous*
-    nose-snap fooled the reactive RL policy too (pre-6-DOF: 21/24 seeds
-    missed). The 6-DOF model's actuator/inertia-rate-limited climb is
-    slower and more realistic, and that alone is enough for a fast-reacting
-    policy to track and hit most of the time -- even though PN/APN/OGL
-    still miss (see test_cobra_default_scenario_dodges_classical_guidance).
-    The interceptor here is the point-mass entity InterceptionEnv builds
-    for every guidance law; only the Cobra target is 6-DOF, so this is not
-    the pursuer-transfer collapse in docs/rl-interface-6dof.md. Locks the
-    honest finding instead of a false "dodges everyone" claim: measured
-    8-9/12 hits at these settings."""
+    """A fast-reacting policy tracks the abrupt pitch-up well enough to
+    still catch the target most of the time, even though PN/APN/OGL all
+    miss (see test_cobra_default_scenario_dodges_classical_guidance). The
+    interceptor here is the point-mass entity InterceptionEnv builds for
+    every guidance law; only the Cobra target is 6-DOF, so this is not the
+    pursuer-transfer collapse in docs/rl-interface-6dof.md. Locks the
+    honest finding instead of a "dodges everyone" claim: measured 11/12
+    hits at these settings."""
     from guidance_sim.api.catalog import CATALOG
 
     scenario = next(s for s in CATALOG.scenarios if s.id == "cobra-evasion")
@@ -414,4 +388,4 @@ def test_cobra_default_scenario_does_not_reliably_dodge_rl():
         == "hit"
         for seed in range(1, 13)
     )
-    assert hits >= 6  # majority, not the old "RL mostly misses" claim
+    assert hits >= 6  # majority, not "RL mostly misses"

@@ -1,3 +1,84 @@
+## 2026-09-17 — CobraManeuver: from-first-principles redesign
+
+- User pushback (quoting the real maneuver's description) on everything
+  above this entry: what this codebase called a "Cobra" -- throttle-cut,
+  climb, near-zero-airspeed hang, thousands of meters and tens of seconds
+  of fall, scripted banked-spiral dive to rebuild airspeed -- is not the
+  actual Pugachev's Cobra. The real thing: sufficient thrust to hold
+  *near-constant altitude* throughout, a *momentary* (a few seconds) hold
+  at (and slightly past) vertical alpha as a full-body airbrake, then nose
+  back down to resume forward flight. Full rewrite, not a retune (user's
+  explicit choice over "keep old phases, shrink the numbers").
+- New phases: `armed -> pitch_up -> stall_hold -> pitch_down -> recovered`.
+  `pitch_up`/`stall_hold` command pitch rate toward `alpha_target_deg`
+  (default 100 -- past vertical); `stall_hold` is a fixed `hold_time_s`
+  dwell (default 1.0 s), not a speed threshold; `pitch_down` drives alpha
+  back toward 0 (nose "falling through", not a scripted attitude);
+  `recovered` re-trims throttle to cruise (`_trim_throttle`, shared with
+  `_hold_level`) instead of leaving 0 thrust. `cobra_throttle` defaults to
+  1.0 (near-full) and stays on throughout the powered phases -- no more
+  idle-throttle free-fall.
+- **Bug found and fixed during the rewrite:** first attempt used the
+  Euler-angle `theta` (world-frame pitch) for the rate-feedback target,
+  same as the old code. `rotational_dynamics.quat_to_euler` already
+  documents `theta` as singular exactly at ±90 deg ("the Cobra's regime").
+  Targeting `theta=100°` made the P-loop chase an angle that
+  representation cannot report, and the vehicle looped continuously
+  (alpha cycling through all 360°) instead of holding near vertical.
+  Fixed by feeding back on `alpha` (`wind_angles`, `arctan2`-based, no
+  singularity) instead -- also the physically correct quantity, since the
+  maneuver is defined by angle of attack, not world-frame attitude.
+- Measured (level entry, 200 m/s, F16_6DOF, defaults): pitch_up 0->2.23 s,
+  stall_hold 2.23->3.23 s, pitch_down 3.23->4.84 s. Total 4.84 s. Altitude
+  3000 -> 3140 m (near-constant, as required). Speed 200 -> 104 m/s (the
+  airbrake effect). This is the actual maneuver now, not an approximation.
+- **Re-tested the gust_speed_m_s disturbance (2026-09-17, earlier today)
+  against the new model: it no longer produces a departure.** At the old
+  near-zero-airspeed "hang", q was ~0 so aero control was gone and a
+  15-30 m/s gust could overwhelm it. At the new `stall_hold`, meaningful
+  airspeed (~130-150 m/s) and therefore q persist throughout (that's the
+  point of holding thrust up), so F16_6DOF's aero+TVC authority recovers
+  from gusts up to at least 300 m/s (!) -- swept 10 through 300 m/s, all
+  recovered cleanly; also swept cobra_throttle 0.0-1.0 and entry speed
+  60-200 m/s, all recovered. This is not a bug: it's the honest
+  consequence of modelling the maneuver correctly instead of artificially
+  starving it of control authority. A real, well-equipped aircraft (F-16
+  VISTA/X-31-style TVC, adequate thrust) performing a correctly-executed
+  Cobra genuinely is that robust -- that's the substance of
+  "supermaneuverability." Rewrote the gust test to assert the honest
+  finding: a big gust measurably perturbs beta/roll (proof the post-stall
+  stability degradation from the earlier 2026-09-17 entry is live) but a
+  well-configured airframe still recovers. Demonstrating an actual failure
+  now needs an airframe that genuinely lacks one of the maneuver's
+  real-world prerequisites (inadequate thrust, poor alpha stability/
+  control power), not just a bigger gust -- not done here.
+- Live API (`live_stream.py`): removed `_COBRA_PITCH_UP_THROTTLE` (class
+  default 1.0 now applies) and the `_COBRA_MAX_TIME_S=90.0` override (no
+  longer needed -- the maneuver completes in ~5 s, comfortably inside the
+  default 25 s budget; the earlier entry's pursuer_ground_impact issue
+  doesn't recur either, since the target no longer zooms to ~5 km).
+  `_COBRA_TRIGGER_TIME_TO_GO_S=2.0` left unchanged, not re-swept against
+  the new mechanism (deceleration-forces-overshoot, not altitude change).
+- Re-measured `cobra-evasion` catalog defaults against classical guidance:
+  PN misses by ~52 m (was ~56 m pre-departure-fix, ~27 m mid-fix), APN by
+  ~14 m (was ~15 m / ~8.4 m), OGL by ~6.5 m consistently across seeds 1-5
+  (was ~6.5 m / knife-edge ~5 m) -- OGL's knife-edge is gone; it's a clean
+  miss again. RL: 11/12 hits (was ~8-9/12). Folded OGL back into the main
+  parametrized dodge test (thresholds pn=40/apn=10/ogl=5, comfortable
+  margins under the measured values) and removed the now-obsolete
+  "no_longer_reliably_dodges_ogl" knife-edge test. Rewrote
+  `test_cobra_maneuver.py`'s Cobra-specific tests for the new phases;
+  `test_high_pitch_low_thrust_...` / `test_fall_emerges_after_hang_...`
+  are generic rigid-body post-stall physics checks (not CobraManeuver
+  itself, target theta=88° which stays under the singularity) and were
+  untouched.
+- Not verified: whether `_COBRA_TRIGGER_TIME_TO_GO_S` is still well-chosen
+  for the new deceleration-based evasion mechanism (inherited from the old
+  zoom-climb tuning, not re-swept); an actual failure/departure scenario
+  for the new model (needs an under-equipped airframe, not attempted);
+  frontend rendering of the shorter, near-level trajectory (no zoom-climb
+  visual anymore).
+
 ## 2026-09-17 — Retuned cobra-evasion to actually reach hang
 
 - Follow-up to the gust-wiring entry (below): the API path's own 25 s
