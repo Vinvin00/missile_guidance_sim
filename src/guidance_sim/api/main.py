@@ -47,6 +47,9 @@ _DEFAULT_ALLOWED_ORIGINS = [
     # frontend, different hostname, so they need the same CORS grant.
     "https://physics-sim-vincenzos-projects-d7ceae2a.vercel.app",
     "https://physics-sim-git-main-vincenzos-projects-d7ceae2a.vercel.app",
+    # Per-branch preview alias for feature/cobra-maneuver, to preview the
+    # Cobra redesign live before it merges to main.
+    "https://physics-sim-git-feature-cobr-7be020-vincenzos-projects-d7ceae2a.vercel.app",
 ]
 _allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
 allowed_origins = (
