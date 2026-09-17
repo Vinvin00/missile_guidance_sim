@@ -17,9 +17,7 @@ from guidance_sim.physics.atmosphere import G0
 from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import (
     BreakTurn,
-    ConstantTurn,
     ManeuverProfile,
-    ManeuverSequence,
     NoManeuver,
     SinusoidalWeave,
     SplitS,
@@ -293,35 +291,3 @@ def test_jink_lateral_accel_is_a_pure_function_of_time():
     maneuver.lateral_accel(9.0, state)
     maneuver.lateral_accel(1.0, state)
     assert np.allclose(maneuver.lateral_accel(4.0, state), first)
-
-
-def test_maneuver_sequence_runs_segments_in_their_windows():
-    sequence = ManeuverSequence(
-        [
-            (0.0, 5.0, ConstantTurn(accel=5.0 * G0)),
-            (5.0, None, VerticalJink(pullup_accel=5.0 * G0, ramp_time_s=0.0)),
-        ]
-    )
-    state = State(position=[0.0, 0.0, 3_300.0], velocity=[-240.0, 0.0, 0.0])
-
-    early = sequence.lateral_accel(1.0, state)
-    late = sequence.lateral_accel(6.0, state)
-
-    # First segment is a level turn (no vertical component); second is a pure
-    # pull-up (no horizontal component).
-    assert abs(early[2]) < 1e-6
-    assert np.linalg.norm(early[:2]) > 0.0
-    assert late[2] > 0.0
-
-
-def test_maneuver_sequence_composition_displaces_more_than_either_alone():
-    turn_only = _max_separation_from_baseline(BreakTurn(turn_accel=5.0 * G0))
-    sequence = ManeuverSequence(
-        [
-            (0.0, None, BreakTurn(turn_accel=5.0 * G0)),
-            (4.0, None, VerticalJink(pullup_accel=4.0 * G0, ramp_time_s=0.5)),
-        ]
-    )
-    combined = _max_separation_from_baseline(sequence)
-
-    assert combined > turn_only

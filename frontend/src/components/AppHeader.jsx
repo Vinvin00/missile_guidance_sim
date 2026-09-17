@@ -14,6 +14,8 @@ export function AppHeader({ screen, projection, onProjection }) {
   const isPlaying = useSimulationStore((state) => state.isPlaying)
   const cameraMode = useSimulationStore((state) => state.cameraMode)
   const setCameraMode = useSimulationStore((state) => state.setCameraMode)
+  const vehicleScale = useSimulationStore((state) => state.vehicleScale)
+  const setVehicleScale = useSimulationStore((state) => state.setVehicleScale)
   const title =
     (SCREENS.find((item) => item.id === screen) || SCREENS[0]).title.toUpperCase()
 
@@ -62,6 +64,26 @@ export function AppHeader({ screen, projection, onProjection }) {
               onClick={() => setCameraMode('target')}
             >
               TARGET
+            </button>
+          </div>
+        </div>
+        <div className="projection-group">
+          <span className="projection-group-label">Scale</span>
+          <div className="projection-toggle" role="group" aria-label="Vehicle scale">
+            <button
+              type="button"
+              className={vehicleScale === 'legible' ? 'is-active' : ''}
+              onClick={() => setVehicleScale('legible')}
+            >
+              LEGIBLE
+            </button>
+            <span className="projection-rule" aria-hidden="true" />
+            <button
+              type="button"
+              className={vehicleScale === 'true' ? 'is-active' : ''}
+              onClick={() => setVehicleScale('true')}
+            >
+              TRUE
             </button>
           </div>
         </div>

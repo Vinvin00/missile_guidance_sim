@@ -9,8 +9,7 @@ never uses LOS rate.  It returns a finite predicted-miss distance:
 
       t_go = min(range / max(|Vc|, vc_min), t_go_max)
 
-  so there is no closing/receding branch.  ``t_horizon_receding_s`` is retained
-  on :class:`ZemSafeguards` for config compatibility but is unused.
+  so there is no closing/receding branch.
 
 The potential is Φ = −ZEM / (ZEM + scale); callers zero Φ at every terminal.
 """
@@ -28,8 +27,6 @@ _RANGE_EPS = 1e-9
 class ZemSafeguards:
     vc_min_m_s: float = 1.0
     t_go_max_s: float = 25.0
-    # Unused by the continuous horizon; kept so older RewardConfig dumps remain valid.
-    t_horizon_receding_s: float = 5.0
 
 
 def closing_velocity_m_s(
@@ -47,19 +44,16 @@ def closing_velocity_m_s(
 def time_to_go_s(
     range_m: float,
     closing_velocity: float,
-    remaining_time_s: float = np.inf,
     safeguards: ZemSafeguards | None = None,
 ) -> float:
     """Return a non-negative, capped prediction horizon.
 
     Continuous in ``closing_velocity``: the effective speed is
     ``max(|Vc|, vc_min)``, so the old jump from ``t_go_max`` (barely closing)
-    to a separate receding horizon cannot occur.  ``remaining_time_s`` is
-    accepted for call-site compatibility but does not cap ``t_go``.
+    to a separate receding horizon cannot occur.
     """
 
     cfg = safeguards or ZemSafeguards()
-    del remaining_time_s
     if range_m <= _RANGE_EPS:
         return 0.0
     vc_eff = max(abs(float(closing_velocity)), float(cfg.vc_min_m_s))
@@ -71,7 +65,6 @@ def time_to_go_s(
 def predicted_miss_m(
     relative_position_m: np.ndarray,
     relative_velocity_m_s: np.ndarray,
-    remaining_time_s: float,
     intercept_radius_m: float,
     safeguards: ZemSafeguards | None = None,
 ) -> float:
@@ -86,7 +79,7 @@ def predicted_miss_m(
     if range_m <= float(intercept_radius_m):
         return 0.0
     closing = closing_velocity_m_s(relative_position_m, relative_velocity_m_s)
-    t_go = time_to_go_s(range_m, closing, remaining_time_s, cfg)
+    t_go = time_to_go_s(range_m, closing, cfg)
     zem_vec = relative_position_m + relative_velocity_m_s * t_go
     zem = float(np.linalg.norm(zem_vec))
     if not np.isfinite(zem) or zem < 0.0:

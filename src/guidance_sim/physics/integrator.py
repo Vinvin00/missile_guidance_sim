@@ -12,8 +12,6 @@ the step. The commanded lateral acceleration is expected to be
 that's the standard zero-order-hold assumption for a guidance command
 that's recomputed once per control-loop tick, not a limitation of the
 integrator itself.
-
-An Euler stepper is also provided for comparison/debugging.
 """
 
 from __future__ import annotations
@@ -27,15 +25,7 @@ AccelFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 
 class IntegratorType(str, Enum):
-    EULER = "euler"
     RK4 = "rk4"
-
-
-def euler_step(position: np.ndarray, velocity: np.ndarray, accel_fn: AccelFn, dt: float):
-    accel = accel_fn(position, velocity)
-    new_position = position + velocity * dt
-    new_velocity = velocity + accel * dt
-    return new_position, new_velocity
 
 
 def rk4_step(position: np.ndarray, velocity: np.ndarray, accel_fn: AccelFn, dt: float):
@@ -63,9 +53,7 @@ def integrate(
     dt: float,
     method: IntegratorType = IntegratorType.RK4,
 ):
-    if method == IntegratorType.EULER:
-        return euler_step(position, velocity, accel_fn, dt)
-    elif method == IntegratorType.RK4:
+    if method == IntegratorType.RK4:
         return rk4_step(position, velocity, accel_fn, dt)
     raise ValueError(f"Unknown integrator method: {method}")
 
@@ -80,14 +68,12 @@ def integrate_state(
     method: IntegratorType = IntegratorType.RK4,
 ) -> np.ndarray:
     """
-    Euler/RK4 over a flat state vector with an entity-supplied derivative
+    RK4 over a flat state vector with an entity-supplied derivative
     (dy/dt = f(y)). Entities with extra integrated states (e.g. attitude)
     bring their own `f`; the integrator never inspects entity type. The
     position/velocity `integrate` above is left as-is so point-mass
     results stay bit-identical.
     """
-    if method == IntegratorType.EULER:
-        return y + dt * deriv_fn(y)
     if method == IntegratorType.RK4:
         k1 = deriv_fn(y)
         k2 = deriv_fn(y + 0.5 * dt * k1)

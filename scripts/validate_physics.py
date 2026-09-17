@@ -24,9 +24,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from guidance_sim.guidance.augmented_pn import AugmentedProportionalNavigation
 from guidance_sim.guidance.base import GuidanceLaw
-from guidance_sim.guidance.optimal_guidance import OptimalGuidance
+from guidance_sim.guidance.factories import classical_law_factories
 from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
 from guidance_sim.physics.entities import PointMassEntity, State, VehicleParams
 from guidance_sim.physics.maneuvers import ManeuverProfile, NoManeuver, SinusoidalWeave
@@ -301,22 +300,10 @@ def default_grid(n: int = 15) -> Tuple[np.ndarray, np.ndarray]:
     return lateral_offsets, initial_ranges
 
 
-def _pn_factory(_target: PointMassEntity) -> GuidanceLaw:
-    return ProportionalNavigation(NAV_CONSTANT)
-
-
-def _apn_factory(target: PointMassEntity) -> GuidanceLaw:
-    return AugmentedProportionalNavigation(
-        NAV_CONSTANT,
-        a_target_est=lambda: target.last_achieved_lateral_accel.copy(),
-    )
-
-
-def _ogl_factory(target: PointMassEntity) -> GuidanceLaw:
-    return OptimalGuidance(
-        NAV_CONSTANT,
-        a_target_est=lambda: target.last_achieved_lateral_accel.copy(),
-    )
+_CLASSICAL_FACTORIES = classical_law_factories(lambda target: target, pn_n=NAV_CONSTANT)
+_pn_factory = _CLASSICAL_FACTORIES["PN"]
+_apn_factory = _CLASSICAL_FACTORIES["APN"]
+_ogl_factory = _CLASSICAL_FACTORIES["OGL"]
 
 
 COMPARE_TAU = 0.2

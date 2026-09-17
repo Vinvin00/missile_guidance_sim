@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from guidance_sim.rl.zem import ZemSafeguards, potential_from_zem, predicted_miss_m
+from guidance_sim.rl.zem import ZemSafeguards, potential_from_zem
 
 
 @dataclass(frozen=True)
@@ -57,8 +57,6 @@ class RewardConfig:
     t_go_max_s: float = 25.0
     precision_weight: float = 0.0
     precision_scale_m: float = 5.0
-    # Unused by continuous t_go; retained so older config dumps remain valid.
-    t_horizon_receding_s: float = 5.0
 
     def __post_init__(self) -> None:
         positive = (
@@ -80,7 +78,6 @@ class RewardConfig:
             self.terminal_weight,
             self.vc_min_m_s,
             self.t_go_max_s,
-            self.t_horizon_receding_s,
             self.precision_weight,
         )
         if not all(np.isfinite(value) and value >= 0.0 for value in non_negative):
@@ -92,7 +89,6 @@ class RewardConfig:
         return ZemSafeguards(
             vc_min_m_s=self.vc_min_m_s,
             t_go_max_s=self.t_go_max_s,
-            t_horizon_receding_s=self.t_horizon_receding_s,
         )
 
 
@@ -124,30 +120,6 @@ class RewardBreakdown:
             "zem_m": self.zem_m,
             "potential": self.potential,
         }
-
-
-def predicted_miss_from_states(
-    pursuer_position: np.ndarray,
-    pursuer_velocity: np.ndarray,
-    target_position: np.ndarray,
-    target_velocity: np.ndarray,
-    remaining_time_s: float,
-    intercept_radius_m: float,
-    config: RewardConfig,
-) -> float:
-    relative_position = np.asarray(target_position, dtype=float) - np.asarray(
-        pursuer_position, dtype=float
-    )
-    relative_velocity = np.asarray(target_velocity, dtype=float) - np.asarray(
-        pursuer_velocity, dtype=float
-    )
-    return predicted_miss_m(
-        relative_position,
-        relative_velocity,
-        remaining_time_s,
-        intercept_radius_m,
-        config.zem_safeguards(),
-    )
 
 
 def compute_reward(

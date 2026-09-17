@@ -13,7 +13,7 @@ takes the current `State`, not just time.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Optional
 
 import numpy as np
 
@@ -414,51 +414,6 @@ class SplitS(ManeuverProfile):
         if norm < 1e-9:
             return np.zeros(3)
         return self.dive_accel * direction / norm
-
-
-class ManeuverSequence(ManeuverProfile):
-    """
-    Composes several profiles into one scripted sequence -- e.g. break turn at
-    t=trigger, then vertical jink at t=trigger+delta.
-
-    Segments are time-windowed and summed while active (the entity clamps the
-    total to what the airframe can achieve anyway), so overlapping segments
-    blend rather than one silently winning.
-    """
-
-    def __init__(
-        self,
-        segments: Sequence[tuple[float, Optional[float], ManeuverProfile]],
-    ):
-        if not segments:
-            raise ValueError("ManeuverSequence requires at least one segment")
-        for start_s, end_s, profile in segments:
-            if not isinstance(profile, ManeuverProfile):
-                raise TypeError("each segment must carry a ManeuverProfile")
-            if end_s is not None and end_s <= start_s:
-                raise ValueError("segment end_s must be greater than start_s")
-        self.segments = list(segments)
-
-    def update_engagement(
-        self,
-        t: float,
-        target_state: State,
-        pursuer_state: Optional[State],
-    ) -> None:
-        for _start_s, _end_s, profile in self.segments:
-            profile.update_engagement(t, target_state, pursuer_state)
-
-    def lateral_accel(self, t: float, state: State) -> np.ndarray:
-        total = np.zeros(3)
-        for start_s, end_s, profile in self.segments:
-            if t < start_s:
-                continue
-            if end_s is not None and t >= end_s:
-                continue
-            # Segment-local time, so a profile's own trigger/ramp offsets are
-            # relative to when its segment opens, not to episode start.
-            total = total + profile.lateral_accel(t - start_s, state)
-        return total
 
 
 class CobraManeuver(ManeuverProfile):

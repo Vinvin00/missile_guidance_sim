@@ -21,7 +21,6 @@ def test_receding_target_uses_speed_based_horizon_and_stays_finite():
     zem = predicted_miss_m(
         relative_position,
         relative_velocity,
-        remaining_time_s=20.0,
         intercept_radius_m=5.0,
         safeguards=safeguards,
     )
@@ -32,7 +31,7 @@ def test_receding_target_uses_speed_based_horizon_and_stays_finite():
     assert zem == pytest.approx(2_000.0)
     assert np.isfinite(zem)
     assert zem > 0.0
-    t_go = time_to_go_s(1_000.0, closing_velocity=-100.0, remaining_time_s=20.0)
+    t_go = time_to_go_s(1_000.0, closing_velocity=-100.0)
     assert t_go == pytest.approx(expected_t_go)
 
 
@@ -42,7 +41,6 @@ def test_near_zero_range_returns_zero_and_does_not_blow_up():
     zem = predicted_miss_m(
         relative_position,
         relative_velocity,
-        remaining_time_s=25.0,
         intercept_radius_m=5.0,
     )
     assert zem == 0.0
@@ -60,7 +58,6 @@ def test_closing_predicted_miss_is_the_kinematic_miss():
     zem = predicted_miss_m(
         relative_position,
         relative_velocity,
-        remaining_time_s=25.0,
         intercept_radius_m=5.0,
     )
     expected = float(np.linalg.norm(relative_position + relative_velocity * t_go))
@@ -105,7 +102,6 @@ def test_phi_is_continuous_across_closing_receding_vc_boundary():
             zem = predicted_miss_m(
                 relative_position,
                 relative_velocity,
-                remaining_time_s=25.0,
                 intercept_radius_m=5.0,
                 safeguards=safeguards,
             )

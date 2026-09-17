@@ -46,6 +46,7 @@ export function HudOverlay() {
 
   return (
     <div className="hud-overlay" aria-label="Engagement HUD">
+      <div className="hud-panel-stack">
       <section className="glass-panel mission-panel">
         <span className="panel-kicker">MISSION CLOCK</span>
         <span className="clock-readout">T{m.clock}</span>
@@ -159,6 +160,7 @@ export function HudOverlay() {
           </div>
         </div>
       </section>
+      </div>
 
       {m.alert && (
         <div className="hud-alert" style={{ borderColor: m.alert.color }}>

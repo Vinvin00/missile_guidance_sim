@@ -390,6 +390,32 @@ a:hover {
   pointer-events: none;
 }
 
+/* All four telemetry panels stack as one right-hand sidebar instead of
+   floating in separate corners. Scoped to its own scrollable strip (rather
+   than making .hud-overlay itself interactive) so it clears the scene
+   toolbar buttons above it and scrolls instead of overflowing when the
+   stack is taller than the viewport, without blocking drag-to-orbit
+   elsewhere on the scene. */
+.hud-panel-stack {
+  position: absolute;
+  top: 76px;
+  right: 20px;
+  bottom: 20px;
+  width: 268px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.hud-panel-stack .glass-panel {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
 .hud-overlay::before {
   content: '';
   position: absolute;
@@ -439,29 +465,10 @@ a:hover {
   margin: 0 16px;
 }
 
-.mission-panel {
-  top: 20px;
-  left: 20px;
-  width: 250px;
-}
-
-.guidance-panel,
-.solution-panel,
 .trials-dispersion {
   top: 20px;
   right: 20px;
   width: 258px;
-}
-
-.entities-panel {
-  bottom: 22px;
-  left: 20px;
-  width: 282px;
-}
-
-.solution-panel {
-  bottom: 22px;
-  top: auto;
 }
 
 .trials-summary {
@@ -508,11 +515,13 @@ a:hover {
 .pk-block {
   display: grid;
   gap: 11px;
+  min-width: 0;
 }
 
 .metric-row {
   display: flex;
   align-items: baseline;
+  min-width: 0;
   justify-content: space-between;
   gap: 12px;
 }
@@ -524,6 +533,8 @@ a:hover {
   letter-spacing: 0.08em;
   color: var(--text-3);
   text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .metric-row strong {
@@ -531,6 +542,11 @@ a:hover {
   font-size: 15px;
   font-weight: 500;
   color: var(--text);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .g-value {
@@ -1771,9 +1787,7 @@ input:disabled,
 .glass-panel > .panel-kicker:first-child { background: transparent; padding: 10px 14px; }
 .glass-panel > .panel-kicker:first-child::before { height: 6px; width: 6px; border-radius: 50%; }
 .glass-panel > *:not(.panel-kicker:first-child) { margin-inline: 14px; }
-.mission-panel, .guidance-panel { top: 76px; width: 210px; }
-.entities-panel { width: 238px; bottom: 64px; }
-.solution-panel { width: 210px; bottom: 64px; }
+.hud-panel-stack { width: 238px; }
 .clock-readout { font-size: 30px; }
 .metric-row > span { letter-spacing: 0.06em; }
 .hud-alert { top: 78px; padding: 9px 12px; }
@@ -1847,9 +1861,9 @@ input:disabled,
   .empty-scene h1 { font-size: 38px; }
   .empty-scene > p { font-size: 14px; }
   .empty-scene > small { max-width: 220px; line-height: 1.5; }
-  .hud-overlay {
-    inset: auto 0 var(--bar-h); height: 150px;
-    display: flex; flex-direction: row; align-items: stretch; overflow-x: auto;
+  .hud-panel-stack {
+    inset: auto 0 var(--bar-h); height: 150px; top: auto;
+    display: flex; flex-direction: row; align-items: stretch; overflow-x: auto; overflow-y: hidden;
     padding: 8px 12px; gap: 10px; pointer-events: auto;
   }
   .hud-overlay .glass-panel { position: relative; inset: auto; flex: 0 0 195px; width: 195px; gap: 6px; }

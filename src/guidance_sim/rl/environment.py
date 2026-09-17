@@ -467,7 +467,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             raise ValueError("initial states must be above ground_altitude_m")
         self._episode_done = False
         self._episode_legacy_reward = 0.0
-        zem_m = self._predicted_miss(self._remaining_time_s())
+        zem_m = self._predicted_miss()
         self._phi = potential_from_zem(
             zem_m, self.reward_config.zem_scale_m, terminal=False
         )
@@ -559,7 +559,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
             termination_reason = None
         self._episode_done = terminated or truncated
 
-        zem_m = self._predicted_miss(self._remaining_time_s())
+        zem_m = self._predicted_miss()
         breakdown = compute_reward(
             previous_potential=self._phi,
             zem_m=zem_m,
@@ -693,10 +693,7 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         )
         return staleness, uncertainty
 
-    def _remaining_time_s(self) -> float:
-        return max(self.config.max_time - self.time_s, 0.0)
-
-    def _predicted_miss(self, remaining_time_s: float) -> float:
+    def _predicted_miss(self) -> float:
         if self.pursuer is None or self.target is None:
             raise RuntimeError("environment has not been reset")
         # Shaping may use the same imperfect information the policy acts on;
@@ -709,7 +706,6 @@ class InterceptionEnv(gym.Env[np.ndarray, np.ndarray]):
         return predicted_miss_m(
             relative_position,
             relative_velocity,
-            remaining_time_s,
             self.config.intercept_radius,
             self.reward_config.zem_safeguards(),
         )

@@ -19,11 +19,7 @@ def advance(state, acceleration, dt, method, interface):
 
 
 @pytest.mark.parametrize("interface", ["flat", "position_velocity"])
-@pytest.mark.parametrize(
-    "method, ratio_bounds",
-    [(IntegratorType.EULER, (1.8, 2.2)), (IntegratorType.RK4, (14.0, 18.0))],
-)
-def test_harmonic_oscillator_convergence_order(interface, method, ratio_bounds):
+def test_harmonic_oscillator_convergence_order(interface):
     # Unit frequency: x(t) = x0*cos(t) + v0*sin(t), independently per axis.
     initial = np.array([1.0, -2.0, 0.5, 0.3, 0.7, -1.0])
     duration = 2.0
@@ -35,11 +31,11 @@ def test_harmonic_oscillator_convergence_order(interface, method, ratio_bounds):
     for dt in (0.1, 0.05):
         state = initial.copy()
         for _ in range(round(duration / dt)):
-            state = advance(state, lambda x, v: -x, dt, method, interface)
+            state = advance(state, lambda x, v: -x, dt, IntegratorType.RK4, interface)
         errors.append(np.linalg.norm(state - expected))
 
-    # Halving h should reduce global error by ~2 for Euler and ~16 for RK4.
-    assert ratio_bounds[0] < errors[0] / errors[1] < ratio_bounds[1]
+    # Halving h should reduce RK4's global error by ~16 (4th order).
+    assert 14.0 < errors[0] / errors[1] < 18.0
 
 
 @pytest.mark.parametrize("interface", ["flat", "position_velocity"])

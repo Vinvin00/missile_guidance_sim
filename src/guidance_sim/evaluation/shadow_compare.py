@@ -18,10 +18,8 @@ import gymnasium as gym
 import numpy as np
 from sb3_contrib import RecurrentPPO
 
-from guidance_sim.guidance.augmented_pn import AugmentedProportionalNavigation
 from guidance_sim.guidance.base import GuidanceLaw
-from guidance_sim.guidance.optimal_guidance import OptimalGuidance
-from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
+from guidance_sim.guidance.factories import classical_law_factories
 from guidance_sim.rl.actions import (
     ACTION_LAYOUT_LATERAL2,
     ActionLayout,
@@ -119,29 +117,11 @@ def _make_env(
     )
 
 
-def _pn_factory(_env: InterceptionEnv) -> GuidanceLaw:
-    return ProportionalNavigation(navigation_constant=_PN_N)
-
-
-def _apn_factory(env: InterceptionEnv) -> GuidanceLaw:
-    return AugmentedProportionalNavigation(
-        navigation_constant=_APN_N,
-        a_target_est=lambda: env.target.last_achieved_lateral_accel.copy(),
+_CLASSICAL_FACTORIES: dict[str, Callable[[InterceptionEnv], GuidanceLaw]] = (
+    classical_law_factories(
+        lambda env: env.target, pn_n=_PN_N, apn_n=_APN_N, ogl_n=_OGL_N
     )
-
-
-def _ogl_factory(env: InterceptionEnv) -> GuidanceLaw:
-    return OptimalGuidance(
-        navigation_constant=_OGL_N,
-        a_target_est=lambda: env.target.last_achieved_lateral_accel.copy(),
-    )
-
-
-_CLASSICAL_FACTORIES: dict[str, Callable[[InterceptionEnv], GuidanceLaw]] = {
-    "PN": _pn_factory,
-    "APN": _apn_factory,
-    "OGL": _ogl_factory,
-}
+)
 
 
 def _classical_action_policy(

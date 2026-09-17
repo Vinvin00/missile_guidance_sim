@@ -16,10 +16,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from guidance_sim.guidance.augmented_pn import AugmentedProportionalNavigation
 from guidance_sim.guidance.base import GuidanceLaw
-from guidance_sim.guidance.optimal_guidance import OptimalGuidance
-from guidance_sim.guidance.proportional_navigation import ProportionalNavigation
+from guidance_sim.guidance.factories import classical_law_factories
 from guidance_sim.physics.atmosphere import G0
 from guidance_sim.physics.maneuvers import ConstantTurn
 from guidance_sim.rl.actions import ACTION_LAYOUT_WORLD3, world_to_lateral
@@ -89,22 +87,12 @@ def _guidance_policy(law_factory: Callable[[InterceptionEnv], GuidanceLaw]):
     return policy
 
 
-def _pn_factory(_env: InterceptionEnv) -> GuidanceLaw:
-    return ProportionalNavigation(navigation_constant=4.0)
-
-
-def _apn_factory(env: InterceptionEnv) -> GuidanceLaw:
-    return AugmentedProportionalNavigation(
-        navigation_constant=4.0,
-        a_target_est=lambda: env.target.last_achieved_lateral_accel.copy(),
-    )
-
-
-def _ogl_factory(env: InterceptionEnv) -> GuidanceLaw:
-    return OptimalGuidance(
-        navigation_constant=3.0,
-        a_target_est=lambda: env.target.last_achieved_lateral_accel.copy(),
-    )
+_CLASSICAL_FACTORIES = classical_law_factories(
+    lambda env: env.target, pn_n=4.0, apn_n=4.0, ogl_n=3.0
+)
+_pn_factory = _CLASSICAL_FACTORIES["PN"]
+_apn_factory = _CLASSICAL_FACTORIES["APN"]
+_ogl_factory = _CLASSICAL_FACTORIES["OGL"]
 
 
 def _classical_cases() -> list[dict[str, object]]:

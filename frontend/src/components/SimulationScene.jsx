@@ -4,9 +4,17 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Box3, Color, Float32BufferAttribute, Matrix4, Object3D, PlaneGeometry, Quaternion, Vector3 } from 'three'
 
 import { engagementOrigin, toScenePoint, toSceneVector } from '../lib/coordinates'
-import { trialAppearance } from '../lib/trialAppearance'
 import { useSimulationStore } from '../store/useSimulationStore'
 import { useTrajectoryStream } from '../hooks/useTrajectoryStream'
+
+// Monte Carlo trials have no ordering, so only the outcome drives styling; misses stand out.
+function trialAppearance(trial) {
+  return {
+    color: trial.success ? '#f4f5f7' : '#ff5238',
+    opacity: trial.success ? 0.3 : 0.65,
+    lineWidth: trial.success ? 1.2 : 1.4,
+  }
+}
 
 // Decorative, deterministic scenery in scene kilometres; never feeds physics.
 // A low central valley keeps the initial engagement clear of the backdrop.
@@ -120,12 +128,16 @@ const JET_MODEL_URL = '/models/fighter-jet.glb'
 const JET_FORWARD = new Vector3(0, 0, 1)
 const JET_UP = new Vector3(0, 1, 0)
 const JET_SCALE = 0.0015
+// True-to-life: ~15m fighter jet / 130 native units.
+const JET_TRUE_SCALE = 15 / 1000 / 130
 
 const MISSILE_MODEL_URL = '/models/missile-jarlan.glb'
 const MISSILE_FORWARD = new Vector3(0, 1, 0)
 const MISSILE_SCALE = 0.04
+// True-to-life: ~3.7m air-to-air missile / 5 native units.
+const MISSILE_TRUE_SCALE = 3.7 / 1000 / 5
 
-function HeadingModel({ url, forward, modelUp, scale, position, heading, up }) {
+function HeadingModel({ url, forward, modelUp, scale, trueScale, position, heading, up }) {
   const markerRef = useRef(null)
   const { scene } = useGLTF(url)
   const clone = useMemo(() => scene.clone(), [scene])
@@ -146,8 +158,14 @@ function HeadingModel({ url, forward, modelUp, scale, position, heading, up }) {
     return new Quaternion().setFromRotationMatrix(world.multiply(model.transpose()))
   }, [forward, modelUp, heading, up])
 
+  const vehicleScale = useSimulationStore((state) => state.vehicleScale)
+
   useFrame(({ camera, size }) => {
     if (!markerRef.current) return
+    if (vehicleScale === 'true') {
+      markerRef.current.scale.setScalar(1)
+      return
+    }
     const distance = camera.position.distanceTo(markerRef.current.position)
     const unitsPerPixel = 2 * distance * Math.tan(camera.fov * Math.PI / 360) / Math.max(size.height, 1)
     // Presentation scale only: keep models legible at overview distances.
@@ -159,7 +177,7 @@ function HeadingModel({ url, forward, modelUp, scale, position, heading, up }) {
     <primitive
       object={clone}
       quaternion={quaternion}
-      scale={scale}
+      scale={vehicleScale === 'true' ? trueScale : scale}
     />
     </group>
   )
@@ -299,6 +317,7 @@ function SequentialTrialPlayback({ origin }) {
         url={MISSILE_MODEL_URL}
         forward={MISSILE_FORWARD}
         scale={MISSILE_SCALE}
+        trueScale={MISSILE_TRUE_SCALE}
         position={pursuerPosition}
         heading={toSceneVector(current.pursuer.velocity_m_s)}
       />
@@ -311,6 +330,7 @@ function SequentialTrialPlayback({ origin }) {
         forward={JET_FORWARD}
         modelUp={JET_UP}
         scale={JET_SCALE}
+        trueScale={JET_TRUE_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
         up={current.target.body_up && toSceneVector(current.target.body_up)}
@@ -404,6 +424,7 @@ function Trajectories() {
         url={MISSILE_MODEL_URL}
         forward={MISSILE_FORWARD}
         scale={MISSILE_SCALE}
+        trueScale={MISSILE_TRUE_SCALE}
         position={pursuerPosition}
         heading={toSceneVector(current.pursuer.velocity_m_s)}
       />
@@ -415,6 +436,7 @@ function Trajectories() {
         forward={JET_FORWARD}
         modelUp={JET_UP}
         scale={JET_SCALE}
+        trueScale={JET_TRUE_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
         up={current.target.body_up && toSceneVector(current.target.body_up)}
@@ -494,6 +516,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
   const controlsRef = useRef(null)
   const currentTarget = useRef(desiredTarget.clone())
   const [settledFor, setSettledFor] = useState(null)
+  const vehicleScale = useSimulationStore((state) => state.vehicleScale)
   const viewConfiguration = useMemo(
     () => ({ cameraMode, projection, viewMode, trialSet, frameAnchor, streamStatus, resetKey, aspect }),
     [cameraMode, projection, viewMode, trialSet, frameAnchor, streamStatus, resetKey, aspect],
@@ -556,7 +579,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
     }
   })
 
-  const maxDistance = Math.max(26, desiredPosition.distanceTo(desiredTarget) * 1.4)
+  const maxDistance = Math.max(80, desiredPosition.distanceTo(desiredTarget) * 6)
 
   return (
     <>
@@ -567,7 +590,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
           makeDefault
           enableDamping
           dampingFactor={0.07}
-          minDistance={2}
+          minDistance={vehicleScale === 'true' ? 0.05 : 0.5}
           maxDistance={maxDistance}
           maxPolarAngle={projection === '2d' ? 0.01 : Math.PI / 2.05}
           minPolarAngle={0}
