@@ -579,7 +579,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
     }
   })
 
-  const maxDistance = Math.max(80, desiredPosition.distanceTo(desiredTarget) * 6)
+  const maxDistance = Math.max(150, desiredPosition.distanceTo(desiredTarget) * 12)
 
   return (
     <>
@@ -590,7 +590,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
           makeDefault
           enableDamping
           dampingFactor={0.07}
-          minDistance={vehicleScale === 'true' ? 0.05 : 0.5}
+          minDistance={vehicleScale === 'true' ? 0.02 : 0.2}
           maxDistance={maxDistance}
           maxPolarAngle={projection === '2d' ? 0.01 : Math.PI / 2.05}
           minPolarAngle={0}
