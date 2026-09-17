@@ -129,6 +129,12 @@ export function SetupScreen({ onRun }) {
         </div>
       </div>
       <div className="setup-actions">
+        {!catalog && !error && (
+          <p className="setup-note">
+            Connecting to the simulation backend… the free-tier server can
+            take up to a minute to wake up after being idle.
+          </p>
+        )}
         {error && <p className="error-message">{error}</p>}
         <button
           className="run-preview"

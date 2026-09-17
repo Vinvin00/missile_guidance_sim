@@ -42,4 +42,10 @@ describe('SetupScreen', () => {
     expect(action.className).toBe('setup-actions')
     expect(action.textContent).toContain('Stream unavailable.')
   })
+
+  it('shows a connecting message instead of a blank screen while the catalog loads', () => {
+    useSimulationStore.setState({ catalog: null })
+    render(<SetupScreen onRun={() => {}} />)
+    expect(screen.getByText(/Connecting to the simulation backend/)).toBeTruthy()
+  })
 })
