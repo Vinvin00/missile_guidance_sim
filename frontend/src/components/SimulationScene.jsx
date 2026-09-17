@@ -480,10 +480,13 @@ function topDownDistance(halfHeight) {
 }
 
 // One persistent camera, driven imperatively so mode and projection switches
-// (and the chase cams following a moving vehicle) ease into place instead of
-// snapping. OrbitControls only takes over once overview has settled — while
-// it's mounted it fights any external repositioning, so we keep it out of
-// the tree entirely during a chase or an in-flight transition. Fog and the
+// ease into place instead of snapping. OrbitControls only takes over once
+// the current pose has settled — while it's mounted it fights any external
+// repositioning, so we keep it out of the tree during an in-flight
+// transition. Once a chase cam (pursuer/target lock) settles behind its
+// vehicle, orbit takes over there too: each frame we pan both the camera and
+// the orbit target by however far the vehicle moved, which keeps the user's
+// chosen orbit offset while still following the vehicle around. Fog and the
 // orbit dolly range are re-derived from the live camera distance every
 // frame since "2D" now sits hundreds of units back instead of a fixed 18.
 function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor, streamStatus, resetKey, aspect, desiredPosition, desiredTarget, desiredFov }) {
@@ -491,7 +494,6 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
   const controlsRef = useRef(null)
   const currentTarget = useRef(desiredTarget.clone())
   const [settledFor, setSettledFor] = useState(null)
-  const [orbitTarget, setOrbitTarget] = useState(() => desiredTarget.toArray())
   const viewConfiguration = useMemo(
     () => ({ cameraMode, projection, viewMode, trialSet, frameAnchor, streamStatus, resetKey, aspect }),
     [cameraMode, projection, viewMode, trialSet, frameAnchor, streamStatus, resetKey, aspect],
@@ -505,7 +507,17 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
   }, [])
 
   const chase = cameraMode !== 'overview'
-  const easing = chase || settledFor !== viewConfiguration
+  const easing = settledFor !== viewConfiguration
+
+  // OrbitControls just mounted (or re-mounted after a transition) — seed its
+  // target from the pose we just settled at instead of the control's own
+  // (0,0,0) default.
+  useEffect(() => {
+    if (!easing && controlsRef.current) {
+      controlsRef.current.target.copy(currentTarget.current)
+      controlsRef.current.update()
+    }
+  }, [easing])
 
   useFrame(({ scene }, delta) => {
     const cam = camRef.current
@@ -518,7 +530,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
       cam.fov += (desiredFov - cam.fov) * t
       cam.lookAt(currentTarget.current)
       cam.updateProjectionMatrix()
-      if (!chase && cam.position.distanceTo(desiredPosition) < SETTLE_DISTANCE) {
+      if (cam.position.distanceTo(desiredPosition) < SETTLE_DISTANCE) {
         // Finish exactly overhead in 2D; a tiny residual offset otherwise
         // produces an arbitrary map rotation near the lookAt singularity.
         cam.position.copy(desiredPosition)
@@ -526,8 +538,14 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
         cam.fov = desiredFov
         cam.lookAt(desiredTarget)
         cam.updateProjectionMatrix()
-        setOrbitTarget(currentTarget.current.toArray())
         setSettledFor(viewConfiguration)
+      }
+    } else if (chase && controlsRef.current) {
+      const trackDelta = desiredTarget.clone().sub(currentTarget.current)
+      if (trackDelta.lengthSq() > 1e-10) {
+        cam.position.add(trackDelta)
+        controlsRef.current.target.add(trackDelta)
+        currentTarget.current.copy(desiredTarget)
       }
     }
 
@@ -551,7 +569,6 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
           dampingFactor={0.07}
           minDistance={2}
           maxDistance={maxDistance}
-          target={orbitTarget}
           maxPolarAngle={projection === '2d' ? 0.01 : Math.PI / 2.05}
           minPolarAngle={0}
         />
@@ -636,7 +653,7 @@ export function SimulationScene({ projection = '3d' }) {
 
   return (
     <div className="scene-shell" data-telemetry={telemetry} data-projection={projection} data-has-frames={hasFrames}>
-      <Canvas dpr={[1, 1.5]} gl={{ antialias: true }}>
+      <Canvas dpr={[1, 1.5]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
         <CameraRig projection={projection} resetKey={resetKey} />
         <color attach="background" args={['#b5c9c9']} />
         <fog attach="fog" args={['#b5c9c9', 18, 70]} />
