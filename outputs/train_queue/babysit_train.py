@@ -42,11 +42,11 @@ EVAL_JOBS = [
 # largeeval_after: if True, run 300-case eval after each finished CP in this job
 # seed4/effort8_seed2/seed5 CP7-8 done; continue seed8 recipe with fresh seeds
 JOBS = [
-    # seed15/seed16 complete; continue seed8 recipe with fresh seeds
-    ("outputs/evasive_zemtgo10_seed17", 2236067977, 1, 6, BASE_EXTRA, False),
-    ("outputs/evasive_zemtgo10_seed17", 2236067977, 7, 8, PREC_EXTRA, True),
-    ("outputs/evasive_zemtgo10_seed18", 2645751311, 1, 6, BASE_EXTRA, False),
-    ("outputs/evasive_zemtgo10_seed18", 2645751311, 7, 8, PREC_EXTRA, True),
+    # seed17/seed18 complete; continue seed8 recipe with fresh seeds
+    ("outputs/evasive_zemtgo10_seed19", 3316624790, 1, 6, BASE_EXTRA, False),
+    ("outputs/evasive_zemtgo10_seed19", 3316624790, 7, 8, PREC_EXTRA, True),
+    ("outputs/evasive_zemtgo10_seed20", 3605551275, 1, 6, BASE_EXTRA, False),
+    ("outputs/evasive_zemtgo10_seed20", 3605551275, 7, 8, PREC_EXTRA, True),
 ]
 
 
@@ -242,7 +242,7 @@ def main() -> None:
     if "--foreground" not in sys.argv:
         daemonize()
     PIDFILE.write_text(str(os.getpid()))
-    log(f"babysit online pid={os.getpid()} queue=seed17+seed18_seed8_recipe")
+    log(f"babysit online pid={os.getpid()} queue=seed19+seed20_seed8_recipe")
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     while True:
         try:
