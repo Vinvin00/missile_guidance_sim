@@ -5,6 +5,7 @@ export function TrialsOverlay({ onTrialCountChange }) {
   const trialCount = useSimulationStore((state) => state.trialCount)
   const trialsLoading = useSimulationStore((state) => state.trialsLoading)
   const setTrialCount = useSimulationStore((state) => state.setTrialCount)
+  const loadTrials = useSimulationStore((state) => state.loadTrials)
   const trials = trialSet?.trials ?? []
   const successes = trials.filter((trial) => trial.success).length
   const misses = trials
@@ -31,9 +32,23 @@ export function TrialsOverlay({ onTrialCountChange }) {
           </span>
         </span>
         <span className="pk-label">
-          {trialsLoading ? 'RUNNING RL ROLLOUTS…' : 'RL POLICY INTERCEPTS'}
+          {trialsLoading ? (
+            <>
+              <span className="spinner" /> RUNNING RL ROLLOUTS…
+            </>
+          ) : (
+            'RL POLICY INTERCEPTS'
+          )}
         </span>
         <div className="panel-rule" />
+        <button
+          type="button"
+          className="rerun-button"
+          onClick={() => loadTrials()}
+          disabled={trialsLoading}
+        >
+          {trialsLoading ? 'RUNNING…' : 'RUN TRIALS'}
+        </button>
         <div className="trial-legend-list">
           <div>
             <span className="trial-line intercept" />

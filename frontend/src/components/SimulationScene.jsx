@@ -345,7 +345,6 @@ function Trajectories() {
   const viewMode = useSimulationStore((state) => state.viewMode)
   const trainingPlayMode = useSimulationStore((state) => state.trainingPlayMode)
   const origin = useMemo(() => engagementOrigin(frames[0]), [frames])
-
   const points = useMemo(
     () => ({
       pursuer: frames.map((frame) =>
@@ -357,14 +356,6 @@ function Trajectories() {
     }),
     [frames, origin],
   )
-
-  if (!frames.length) return null
-
-  const current = frames[Math.min(cursor, frames.length - 1)]
-  const pursuerPosition = toScenePoint(current.pursuer.position_m, origin)
-  const targetPosition = toScenePoint(current.target.position_m, origin)
-  const visiblePursuer = points.pursuer.slice(0, cursor + 1)
-  const visibleTarget = points.target.slice(0, cursor + 1)
 
   if (viewMode === 'trials') {
     return (
@@ -381,6 +372,14 @@ function Trajectories() {
       <TrialOverlay origin={origin} />
     )
   }
+
+  if (!frames.length) return null
+
+  const current = frames[Math.min(cursor, frames.length - 1)]
+  const pursuerPosition = toScenePoint(current.pursuer.position_m, origin)
+  const targetPosition = toScenePoint(current.target.position_m, origin)
+  const visiblePursuer = points.pursuer.slice(0, cursor + 1)
+  const visibleTarget = points.target.slice(0, cursor + 1)
 
   return (
     <>

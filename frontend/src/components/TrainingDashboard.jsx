@@ -31,6 +31,7 @@ export function TrainingDashboard() {
     (state) => state.setTrainingPlayMode,
   )
   const trialsLoading = useSimulationStore((state) => state.trialsLoading)
+  const loadTrials = useSimulationStore((state) => state.loadTrials)
 
   useEffect(() => {
     let cancelled = false
@@ -84,9 +85,25 @@ export function TrainingDashboard() {
         </div>
 
         <div className="reward-head">
-          <span className="panel-kicker">
-            {trialsLoading ? 'RUNNING RL ROLLOUTS…' : 'ROLLOUT VIEW'}
-          </span>
+          <div className="reward-head-left">
+            <span className="panel-kicker">
+              {trialsLoading ? (
+                <>
+                  <span className="spinner" /> RUNNING RL ROLLOUTS…
+                </>
+              ) : (
+                'ROLLOUT VIEW'
+              )}
+            </span>
+            <button
+              type="button"
+              className="rerun-button rerun-button-compact"
+              onClick={() => loadTrials()}
+              disabled={trialsLoading}
+            >
+              {trialsLoading ? 'RUNNING…' : 'RE-RUN ROLLOUTS'}
+            </button>
+          </div>
           <div className="projection-toggle" role="group" aria-label="Rollout view mode">
             <button
               type="button"
@@ -111,7 +128,13 @@ export function TrainingDashboard() {
           <div className="reward-head">
             <span className="panel-kicker">REWARD PER EPISODE</span>
             <span className="muted-mono">
-              {log ? log.branch_name.toUpperCase() : 'LOADING…'}
+              {log ? (
+                log.branch_name.toUpperCase()
+              ) : (
+                <>
+                  <span className="spinner" /> LOADING…
+                </>
+              )}
             </span>
           </div>
           <svg
