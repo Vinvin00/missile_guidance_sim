@@ -153,6 +153,23 @@ then `npm test` and `npm run build`. `npm run lint` is available separately.
 The development viewer runs on port 5173 and proxies `/api` and `/ws` to
 the backend on `127.0.0.1:8000`.
 
+## GitLab CI
+
+The root [`.gitlab-ci.yml`](.gitlab-ci.yml) runs two jobs in parallel on
+branches, tags, and merge requests:
+
+- `python-tests` installs the Python 3.11 dependencies and publishes the
+  full pytest suite as a GitLab JUnit test report.
+- `frontend-tests-and-build` performs a reproducible `npm ci`, runs the
+  Vitest suite, builds the Vite application, and keeps `frontend/dist/` as
+  a one-week pipeline artifact.
+
+Dependency downloads are cached from `requirements.txt` / `pyproject.toml`
+and `frontend/package-lock.json`. GitLab.com projects can use the hosted
+instance runners; a self-managed GitLab installation must provide an active
+runner. After importing or pushing this repository to GitLab, open
+**Build > Pipelines** to inspect the first run.
+
 ## Roadmap
 
 1. ~~3D physics core (gravity + drag + atmosphere + airframe limits) + PN baseline, tested~~ ✅

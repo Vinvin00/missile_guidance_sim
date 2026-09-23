@@ -20,6 +20,19 @@ def test_vercel_builds_the_frontend_from_the_repository_root():
     assert (ROOT / "frontend/package-lock.json").is_file()
 
 
+def test_gitlab_ci_runs_backend_and_frontend_checks():
+    config = (ROOT / ".gitlab-ci.yml").read_text()
+
+    assert "image: python:3.11-slim" in config
+    assert "python -m pytest -q --junitxml=reports/pytest.xml" in config
+    assert "junit: reports/pytest.xml" in config
+    assert "image: node:22-bookworm-slim" in config
+    assert "npm ci --prefer-offline" in config
+    assert "npm test" in config
+    assert "npm run build" in config
+    assert "frontend/dist/" in config
+
+
 def test_production_urls_match_the_frontend_consumers():
     env = dict(
         line.split("=", 1)
