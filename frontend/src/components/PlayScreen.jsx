@@ -166,7 +166,7 @@ export function PlayScreen() {
         <SimulationScene />
       </div>
       <header className="play-bar">
-        <a href="#">← Guidance Sim</a>
+        <a href="#">← Outfly</a>
         <span>You are the target</span>
         <a href="#lab">Open the lab</a>
       </header>

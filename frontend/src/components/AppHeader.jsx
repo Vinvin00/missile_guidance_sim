@@ -28,7 +28,7 @@ export function AppHeader({ screen, projection, onProjection }) {
   return (
     <header className="hud-header">
       <div className="hud-brand">
-        <span className="brand-name">GUIDANCE SIM</span>
+        <span className="brand-name">OUTFLY</span>
         <span className="brand-screen">{title}</span>
       </div>
       <div className="hud-header-right">

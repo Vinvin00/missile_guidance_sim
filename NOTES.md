@@ -2205,6 +2205,7 @@ the full 25-second climb–apex–spiral playback and a clear descent.
   passed (existing large vendor bundle warning). A concurrent catalog description
   correction was preserved; simulation parameters remained unchanged.
 
+
 ## 2026-11-15 — Play mode, landing page, saved human rounds
 
 - New `PlayerManeuver` (`physics/maneuvers.py`): stick `turn`/`pull` in [-1, 1] scaled to the target g-limit; with `trace` it replays a recorded round. Engine and env untouched.
@@ -2250,3 +2251,8 @@ the full 25-second climb–apex–spiral playback and a clear descent.
 - Layout: one 12-column grid; text on columns 1-5, proof on 7-12 in every row. The 2D proportional-navigation toy moved from the hero to its own section.
 - Entrances are CSS scroll timelines that only slide, never hide, so nothing can stay invisible if a script fails. The old IntersectionObserver reveal is gone.
 - Gotcha: regenerate `round.json` if the baseline model or play start geometry changes, or the caption numbers go stale.
+
+## 2026-11-16 — Name and jet attitude
+
+- The project is called Outfly (landing page, lab header, play screen, tab title). README keeps its technical title.
+- Jet/interceptor attitude (`frontend/src/lib/attitude.js`): point-mass vehicles were turned to face their velocity by the shortest arc, which rolls the model over when the heading passes near the model's opposite axis (play mode's evader flies near that). On the recorded hero round the old method tipped the jet to 171 deg from level. Now body "up" follows the lift vector (velocity change plus gravity), scaled 0.45 and capped at 1.4 g, so bank is at most about 62 deg and continuous through loops; the model eases toward each frame's attitude (rate 6/s). 6-DOF vehicles that stream `body_up` are unchanged.

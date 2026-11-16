@@ -1,9 +1,10 @@
 import { Grid, Html, Line, OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Box3, Color, Float32BufferAttribute, Matrix4, Object3D, PlaneGeometry, Quaternion, Vector3 } from 'three'
+import { Box3, Color, Float32BufferAttribute, Object3D, PlaneGeometry, Vector3 } from 'three'
 
 import { engagementOrigin, toScenePoint, toSceneVector } from '../lib/coordinates'
+import { attitudeQuaternion, liftFromFrames } from '../lib/attitude'
 import { useSimulationStore } from '../store/useSimulationStore'
 import { useTrajectoryStream } from '../hooks/useTrajectoryStream'
 
@@ -133,6 +134,7 @@ const JET_TRUE_SCALE = 15 / 1000 / 130
 
 const MISSILE_MODEL_URL = '/models/missile-jarlan.glb'
 const MISSILE_FORWARD = new Vector3(0, 1, 0)
+const MISSILE_UP = new Vector3(0, 0, 1) // any axis across the body: it is round, this just fixes its roll
 const MISSILE_SCALE = 0.04
 // True-to-life: ~3.7m air-to-air missile / 5 native units.
 const MISSILE_TRUE_SCALE = 3.7 / 1000 / 5
@@ -141,27 +143,23 @@ function HeadingModel({ url, forward, modelUp, scale, trueScale, position, headi
   const markerRef = useRef(null)
   const { scene } = useGLTF(url)
   const clone = useMemo(() => scene.clone(), [scene])
-  const quaternion = useMemo(() => {
-    const dir = new Vector3(...heading)
-    if (dir.lengthSq() < 1e-6) return new Quaternion()
-    dir.normalize()
-    if (!up || !modelUp) return new Quaternion().setFromUnitVectors(forward, dir)
-    // Full attitude: map the model's (forward, up, side) basis onto the
-    // streamed (nose, canopy, side) basis so bank shows as roll.
-    const worldUp = new Vector3(...up).normalize()
-    const model = new Matrix4().makeBasis(
-      forward, modelUp, new Vector3().crossVectors(forward, modelUp),
-    )
-    const world = new Matrix4().makeBasis(
-      dir, worldUp, new Vector3().crossVectors(dir, worldUp),
-    )
-    return new Quaternion().setFromRotationMatrix(world.multiply(model.transpose()))
-  }, [forward, modelUp, heading, up])
+  const goal = useMemo(
+    () => attitudeQuaternion(forward, modelUp, heading, up),
+    [forward, modelUp, heading, up],
+  )
+  const modelRef = useRef(null)
+  const started = useRef(false)
 
   const vehicleScale = useSimulationStore((state) => state.vehicleScale)
 
-  useFrame(({ camera, size }) => {
+  useFrame(({ camera, size }, delta) => {
     if (!markerRef.current) return
+    // Ease toward the streamed attitude (25 Hz frames) instead of snapping to each one.
+    if (modelRef.current) {
+      if (started.current) modelRef.current.quaternion.slerp(goal, 1 - Math.exp(-delta * 6))
+      else modelRef.current.quaternion.copy(goal)
+      started.current = true
+    }
     if (vehicleScale === 'true') {
       markerRef.current.scale.setScalar(1)
       return
@@ -175,8 +173,8 @@ function HeadingModel({ url, forward, modelUp, scale, trueScale, position, headi
   return (
     <group ref={markerRef} position={position}>
     <primitive
+      ref={modelRef}
       object={clone}
-      quaternion={quaternion}
       scale={vehicleScale === 'true' ? trueScale : scale}
     />
     </group>
@@ -320,6 +318,8 @@ function SequentialTrialPlayback({ origin }) {
         trueScale={MISSILE_TRUE_SCALE}
         position={pursuerPosition}
         heading={toSceneVector(current.pursuer.velocity_m_s)}
+        modelUp={MISSILE_UP}
+        up={liftFromFrames(frames, frameIndex, 'pursuer')}
       />
       <VehicleLabel position={pursuerPosition} color="#ffffff">
         EP{String(trial.episode).padStart(2, '0')} ·{' '}
@@ -333,7 +333,7 @@ function SequentialTrialPlayback({ origin }) {
         trueScale={JET_TRUE_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
-        up={current.target.body_up && toSceneVector(current.target.body_up)}
+        up={current.target.body_up ? toSceneVector(current.target.body_up) : liftFromFrames(frames, frameIndex, 'target')}
       />
     </group>
   )
@@ -426,6 +426,8 @@ function Trajectories() {
         trueScale={MISSILE_TRUE_SCALE}
         position={pursuerPosition}
         heading={toSceneVector(current.pursuer.velocity_m_s)}
+        modelUp={MISSILE_UP}
+        up={liftFromFrames(frames, cursor, 'pursuer')}
       />
       <VehicleLabel position={pursuerPosition} color="#ffffff">
         INTERCEPTOR
@@ -438,7 +440,7 @@ function Trajectories() {
         trueScale={JET_TRUE_SCALE}
         position={targetPosition}
         heading={toSceneVector(current.target.body_axis ?? current.target.velocity_m_s)}
-        up={current.target.body_up && toSceneVector(current.target.body_up)}
+        up={current.target.body_up ? toSceneVector(current.target.body_up) : liftFromFrames(frames, cursor, 'target')}
       />
       <VehicleLabel position={targetPosition} color="#ff5238" side="right">
         TARGET

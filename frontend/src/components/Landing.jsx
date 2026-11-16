@@ -233,7 +233,7 @@ export function Landing() {
     <div className="landing">
       <header className="l-hero">
         <nav className="l-bar" aria-label="Main">
-          <a className="l-mark" href="#">Guidance Sim</a>
+          <a className="l-mark" href="#">Outfly</a>
           <span>
             <a href="#play">Fly the target</a>
             <a href="#lab">Open the lab</a>
@@ -419,9 +419,9 @@ export function Landing() {
           <a href="#play">Fly the target</a>
           <a href="#lab">Open the lab</a>
         </nav>
-        <span>A 3D guidance study, 2026. 3D models: Poly by Google, Jarlan Perez (CC BY 3.0)</span>
-        <svg viewBox="0 0 640 96" role="img" aria-label="Guidance Sim">
-          <text x="0" y="80" textLength="640" lengthAdjust="spacingAndGlyphs">Guidance Sim</text>
+        <span>Outfly, a 3D guidance study, 2026. 3D models: Poly by Google, Jarlan Perez (CC BY 3.0)</span>
+        <svg viewBox="0 0 248 96" role="img" aria-label="Outfly">
+          <text x="0" y="80">Outfly</text>
         </svg>
       </footer>
     </div>
