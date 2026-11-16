@@ -2268,3 +2268,98 @@ input:disabled,
   letter-spacing: 0.02em;
   color: #565656;
 }
+
+/* ------------------------------------------------------------ play mode --- */
+
+.play-shell { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: var(--bg); }
+.play-scene { position: absolute; inset: 0; }
+.play-scene .scene-shell { width: 100%; height: 100%; }
+.play-shell .scene-toolbar,
+.play-shell .scene-legend,
+.play-shell .empty-scene { display: none; }
+
+.play-bar {
+  position: absolute; inset: 0 0 auto; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  height: var(--header-h); padding: 0 24px;
+  background: var(--panel-solid); font-size: 15px;
+}
+.play-bar span { font-weight: 600; }
+
+.play-readout {
+  position: absolute; z-index: 2; top: calc(var(--header-h) + 16px); left: 24px;
+  display: flex; gap: 28px; margin: 0; padding: 14px 18px;
+  background: var(--panel-solid); border-radius: 8px;
+}
+.play-readout dt { font-size: 13px; color: var(--text-3); }
+.play-readout dd { margin: 2px 0 0; font-size: 28px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.play-radar {
+  position: absolute; z-index: 2; top: calc(var(--header-h) + 16px); right: 24px;
+  width: 168px; margin: 0; padding: 12px;
+  background: var(--panel-solid); border-radius: 8px; text-align: center;
+}
+.play-radar figcaption { margin-top: 6px; font-size: 13px; color: var(--text-2); }
+.radar-field { fill: var(--bg-raised); }
+.radar-ring { fill: none; stroke: var(--line-strong); stroke-width: 0.6; }
+.radar-you { fill: var(--text); }
+.radar-threat { fill: var(--accent); }
+
+.play-count {
+  position: absolute; z-index: 2; inset: 0; margin: 0;
+  display: grid; place-items: center; pointer-events: none;
+  font-size: 180px; font-weight: 600; line-height: 1; color: var(--text);
+}
+
+.play-card {
+  position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 32px)); padding: 32px;
+  background: var(--panel-solid); border-radius: 12px;
+}
+.play-card h1 { margin: 0 0 12px; font-size: 40px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.play-card p { margin: 0 0 14px; font-size: 17px; line-height: 1.5; color: var(--text-2); }
+.play-card .play-stats { color: var(--text); }
+.play-card .play-error { color: var(--accent); }
+.play-card small { display: block; margin-top: 18px; font-size: 13px; line-height: 1.45; color: var(--text-3); }
+.play-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.play-actions button {
+  min-height: 48px; padding: 0 22px; border: 0; border-radius: 6px; cursor: pointer;
+  background: var(--bg-hover); font-size: 16px; font-weight: 600;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.play-actions button:hover:not(:disabled) { background: #2f4a48; }
+.play-actions button:active:not(:disabled) { transform: scale(0.97); }
+.play-actions .play-go { background: var(--accent); color: #0a0a0a; }
+.play-actions .play-go:hover:not(:disabled) { background: #d6f2e1; }
+.play-actions button:disabled { opacity: 0.6; cursor: progress; }
+
+.play-pad {
+  position: absolute; z-index: 3; right: 24px; bottom: 24px;
+  display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); gap: 6px;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.play-pad button {
+  border: 0; border-radius: 10px; background: var(--panel-solid);
+  font-size: 24px; cursor: pointer; touch-action: none;
+}
+.play-pad button:active { background: var(--accent); color: #0a0a0a; }
+.play-pad [data-key='ArrowUp'] { grid-area: 1 / 2; }
+.play-pad [data-key='ArrowLeft'] { grid-area: 2 / 1; }
+.play-pad [data-key='ArrowRight'] { grid-area: 2 / 3; }
+.play-pad [data-key='ArrowDown'] { grid-area: 3 / 2; }
+
+@media (max-width: 640px) {
+  .play-bar { padding: 0 16px; font-size: 14px; }
+  .play-bar span { display: none; }
+  .play-readout { left: 16px; gap: 18px; padding: 10px 14px; }
+  .play-readout dd { font-size: 20px; }
+  .play-radar { right: 16px; width: 112px; padding: 8px; }
+  .play-radar figcaption { font-size: 12px; }
+  .play-card { padding: 24px; }
+  .play-card h1 { font-size: 32px; }
+  .play-pad { right: 16px; bottom: 16px; }
+}
+.rail-mark { display: block; }
+/* After a round the card moves aside so the replay behind it is visible. */
+.play-shell[data-phase='done'] .play-card { left: 24px; top: auto; bottom: 24px; transform: none; }
+@media (max-width: 640px) { .play-shell[data-phase='done'] .play-card { left: 16px; bottom: 16px; } }

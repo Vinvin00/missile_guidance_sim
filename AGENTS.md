@@ -66,6 +66,8 @@ missile_guidance_sim/
   `a_cmd = N * Vc * (ω_LOS × R̂)`.
 - **Maneuvers:** `NoManeuver`, `ConstantTurn`, `SinusoidalWeave` —
   each takes `(t, state)` and a reference axis to pick the turn plane.
+  `PlayerManeuver` is steered by a person (live, or replayed from a saved
+  round) and backs the play mode in `api/play.py` (`/ws/play`).
 - **Engine:** `Simulation.run()` steps target maneuver then pursuer
   guidance until intercept radius or timeout; records trajectories plus
   pursuer command/achieved lateral accel histories.

@@ -416,6 +416,34 @@ class SplitS(ManeuverProfile):
         return self.dive_accel * direction / norm
 
 
+class PlayerManeuver(ManeuverProfile):
+    """Target steered by a person, live or replayed from a recorded round.
+
+    ``turn`` and ``pull`` are stick positions in [-1, 1]: ``turn`` > 0 is a
+    level turn to the left of the velocity, ``pull`` > 0 is a pull-up. Live
+    play sets them between steps. With ``trace`` (one ``(turn, pull)`` pair
+    per ``dt``), the recorded round is flown instead, so a saved human round
+    can be used as a training or evaluation maneuver.
+    """
+
+    def __init__(self, max_accel: float, trace=None, dt: float = 0.02) -> None:
+        self.max_accel = float(max_accel)
+        self.turn = 0.0
+        self.pull = 0.0
+        self.trace = None if trace is None else np.asarray(trace, dtype=float).reshape(-1, 2)
+        self.dt = float(dt)
+
+    def lateral_accel(self, t: float, state: State) -> np.ndarray:
+        if self.trace is not None and len(self.trace):
+            index = min(int(round(t / self.dt)), len(self.trace) - 1)
+            self.turn, self.pull = self.trace[index]
+        stick = np.clip([self.turn, self.pull], -1.0, 1.0)
+        return self.max_accel * (
+            stick[0] * _turn_direction(state.velocity, UP)
+            + stick[1] * _vertical_direction(state.velocity)
+        )
+
+
 class CobraManeuver(ManeuverProfile):
     """
     Pugachev's Cobra: an abrupt pitch-up to (and slightly past) vertical,

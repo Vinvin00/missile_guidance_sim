@@ -529,7 +529,9 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
   }, [])
 
   const chase = cameraMode !== 'overview'
-  const easing = settledFor !== viewConfiguration
+  // Play mode keeps easing every frame so the camera stays behind the jet as it turns.
+  const live = useSimulationStore((state) => state.liveFollow)
+  const easing = live || settledFor !== viewConfiguration
 
   // OrbitControls just mounted (or re-mounted after a transition) — seed its
   // target from the pose we just settled at instead of the control's own
@@ -560,7 +562,7 @@ function CameraDriver({ cameraMode, projection, viewMode, trialSet, frameAnchor,
         cam.fov = desiredFov
         cam.lookAt(desiredTarget)
         cam.updateProjectionMatrix()
-        setSettledFor(viewConfiguration)
+        if (!live) setSettledFor(viewConfiguration)
       }
     } else if (chase && controlsRef.current) {
       const trackDelta = desiredTarget.clone().sub(currentTarget.current)
@@ -610,6 +612,7 @@ function CameraRig({ projection, resetKey }) {
   const cursor = useSimulationStore((state) => state.cursor)
   const origin = useMemo(() => engagementOrigin(frames[0]), [frames])
   const { center, radius } = useSceneBounds()
+  const live = useSimulationStore((state) => state.liveFollow)
 
   const current = frames[Math.min(cursor, frames.length - 1)]
   const tracked =
@@ -634,7 +637,8 @@ function CameraRig({ projection, resetKey }) {
     desiredFov = FOV_3D
     const heading = new Vector3(...toSceneVector(tracked.velocity_m_s))
     const forward = heading.lengthSq() > 1e-6 ? heading.normalize() : new Vector3(0, 0, 1)
-    desiredPosition = desiredTarget.clone().addScaledVector(forward, -CHASE_BACK).add(new Vector3(0, CHASE_UP, 0))
+    const close = live ? 0.5 : 1
+    desiredPosition = desiredTarget.clone().addScaledVector(forward, -CHASE_BACK * close).add(new Vector3(0, CHASE_UP * close, 0))
   } else {
     desiredTarget = center
     desiredFov = FOV_3D

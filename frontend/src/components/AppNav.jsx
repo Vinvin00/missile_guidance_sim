@@ -10,7 +10,7 @@ export const SCREENS = [
 export function AppNav({ screen, onSelect }) {
   return (
     <nav className="app-rail" aria-label="Viewer screens">
-      <div className="rail-mark" aria-hidden="true" />
+      <a className="rail-mark" href="#" title="Back to the start page" aria-label="Back to the start page" />
       {SCREENS.map((item) => {
         const active = item.id === screen
         return (

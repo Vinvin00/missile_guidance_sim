@@ -1,0 +1,165 @@
+/* Landing page. Colours and type come from styles.css tokens.
+   One pair of margins (--m), one 12-column grid, square corners. */
+
+.landing {
+  --m: clamp(16px, 2.8vw, 40px);
+  --gap: clamp(16px, 1.7vw, 24px);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --on-accent: #0d1a18;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.5;
+}
+.landing h1, .landing h2, .landing h3, .landing p, .landing ol, .landing dl, .landing dd, .landing figure { margin: 0; }
+.landing h2 { font-size: clamp(30px, 3.4vw, 48px); font-weight: 500; line-height: 1.08; letter-spacing: -0.025em; }
+.landing h3 { font-size: clamp(22px, 2vw, 28px); font-weight: 500; line-height: 1.15; letter-spacing: -0.015em; }
+.landing img, .landing video { display: block; width: 100%; height: auto; }
+.landing figcaption, .landing small { display: block; font-size: 14px; color: var(--text-2); }
+.landing section { padding: 0 var(--m); margin-top: clamp(120px, 13vw, 190px); }
+.l-lead { font-size: clamp(19px, 1.6vw, 22px); line-height: 1.4; max-width: 46ch; }
+
+/* heading left, one supporting sentence right, on the same baseline */
+.l-split { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: var(--gap); align-items: end; margin-bottom: 40px; }
+.l-split > h2 { grid-column: 1 / 7; }
+.l-split > p { grid-column: 7 / 13; max-width: 52ch; color: var(--text-2); }
+
+.l-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.l-button {
+  display: inline-flex; align-items: center; min-height: 52px; padding: 0 28px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600;
+  transition: transform 160ms var(--ease), background 160ms;
+}
+.l-button:hover { background: #d6f2e1; color: var(--on-accent); transform: translateY(-2px); }
+.l-button:active { transform: translateY(0) scale(0.98); }
+.l-link { font-weight: 500; text-decoration: underline; text-underline-offset: 4px; transition: color 160ms; }
+
+/* ---- hero: the 3D scene, edge to edge, with the title on a solid sheet ---- */
+.l-hero { position: relative; display: grid; grid-template-rows: 56px minmax(0, 1fr); height: 100svh; min-height: 620px; }
+.l-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 var(--m); font-size: 16px; }
+.l-bar span { display: flex; gap: 24px; }
+.l-mark { font-weight: 600; }
+.l-stage { position: relative; min-height: 0; overflow: hidden; background: #b7cbc4; } /* the scene's fog colour */
+.l-scene { position: absolute; inset: 0; pointer-events: none; animation: l-fade 900ms var(--ease) both; }
+.landing .l-scene .scene-toolbar, .landing .l-scene .scene-legend, .landing .l-scene .empty-scene, .landing .l-scene .vehicle-label { display: none !important; }
+
+.l-sheet { position: absolute; left: 0; bottom: 0; width: min(100%, 600px); padding: clamp(24px, 2.8vw, 40px) var(--m) var(--m); background: var(--bg); }
+.l-sheet h1 { font-size: clamp(38px, 4.6vw, 68px); font-weight: 500; line-height: 1.02; letter-spacing: -0.035em; }
+.l-sheet h1 span { display: block; overflow: hidden; padding-bottom: 0.08em; }
+.l-sheet h1 i { display: block; font-style: normal; animation: l-rise 900ms var(--ease) both; }
+.l-sheet h1 span + span i { animation-delay: 110ms; }
+.l-sheet p { max-width: 46ch; margin: 16px 0 28px; color: var(--text-2); animation: l-fade 700ms 400ms var(--ease) both; }
+.l-sheet .l-actions { animation: l-fade 700ms 520ms var(--ease) both; }
+
+.l-live { position: absolute; right: var(--m); bottom: var(--m); display: grid; grid-template-columns: auto auto; gap: 4px 28px; padding: 16px 20px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.l-live dt { font-size: 14px; color: var(--text-3); }
+.l-live dd { font-size: 28px; font-weight: 500; line-height: 1.15; }
+.l-live p { grid-column: 1 / -1; margin-top: 6px; font-size: 14px; color: var(--text-2); }
+
+/* ---- scores: one picture, two figures ---- */
+.l-mosaic { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; margin-inline: calc(-1 * var(--m)); }
+.l-mosaic figure { grid-row: 1 / 3; aspect-ratio: 16 / 10; overflow: hidden; }
+.l-mosaic img { height: 100%; object-fit: cover; }
+.l-tile { padding: clamp(20px, 2vw, 28px); }
+.l-tile strong { display: block; font-size: clamp(56px, 6.4vw, 104px); font-weight: 600; line-height: 0.9; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+.l-tile p { margin-top: 12px; max-width: 30ch; }
+.l-tile-model { background: var(--accent); color: var(--on-accent); }
+.l-tile-classic { background: var(--bg-hover); }
+
+/* ---- training: bars standing on the bottom edge ---- */
+.landing .l-training { padding: 0; }
+.l-training .l-split { padding: 0 var(--m); }
+.l-bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; align-items: end; height: 38vh; padding: 0; list-style: none; }
+.l-bars li {
+  position: relative; height: calc(var(--h) * 100%); background: var(--bg-hover);
+  transform-origin: bottom; transition: background 160ms;
+  animation: l-grow linear both; animation-timeline: view(); animation-range: entry 0% entry 90%;
+}
+.l-bars li[data-final='true'] { background: var(--accent); }
+.l-bars li:hover, .l-bars li:focus-visible { background: #35534f; outline: 0; }
+.l-bars li[data-final='true']:hover, .l-bars li[data-final='true']:focus-visible { background: #d6f2e1; }
+.l-bars span { position: absolute; left: 0; bottom: 100%; padding: 0 0 8px 8px; font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---- how it works: words left, proof right, every row on the same two edges ---- */
+.l-step, .l-toy, .l-letter { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: var(--gap); align-items: center; }
+.l-step { margin-top: clamp(56px, 7vw, 104px); }
+.l-how > h2 + .l-step { margin-top: 40px; }
+.l-step > :first-child, .l-toy > :first-child, .l-letter > :first-child { grid-column: 1 / 6; }
+.l-step > :last-child, .l-toy > :last-child, .l-letter > :last-child { grid-column: 7 / 13; }
+.l-step p, .l-toy p { margin-top: 12px; }
+.l-step small, .l-toy small { margin-top: 12px; max-width: 52ch; }
+.l-readout { display: grid; gap: 8px; }
+.l-readout div { padding: 20px; background: var(--bg-raised); }
+.l-readout dt { font-size: 14px; color: var(--text-3); }
+.l-readout dd { margin-top: 4px; font-size: clamp(19px, 1.6vw, 22px); font-weight: 500; }
+
+/* ---- the classical law as a toy ---- */
+.chase canvas { display: block; width: 100%; aspect-ratio: 1; background: var(--bg-raised); cursor: crosshair; touch-action: none; }
+.chase p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 12px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.chase p span + span { color: var(--accent); }
+
+/* ---- two modes: picture plus working controls ---- */
+.l-panel { display: grid; grid-template-columns: 2fr 1fr; background: var(--bg-raised); }
+.l-panel figure { padding: 24px; }
+.l-panel figcaption { margin-top: 12px; }
+.l-controls { display: flex; flex-direction: column; padding: 24px; background: var(--bg-hover); }
+.l-controls button {
+  min-height: 52px; padding: 0 16px; border: 0; background: transparent; text-align: left; cursor: pointer;
+  font-size: 17px; color: var(--text-2); transition: background 160ms, color 160ms, padding 200ms var(--ease);
+}
+.l-controls button:hover { color: var(--text); padding-left: 22px; }
+.l-controls button[aria-pressed='true'] { background: var(--bg); color: var(--text); font-weight: 600; }
+.l-controls .l-actions { margin-top: auto; padding-top: 32px; }
+
+/* ---- what happens to your round ---- */
+.l-letter { align-items: start; }
+.l-letter .l-lead { margin-top: 20px; }
+.l-letter p + p { margin-top: 24px; }
+.l-letter mark { background: var(--accent); color: var(--on-accent); padding: 0 4px; }
+.l-tally { font-weight: 500; color: var(--accent); }
+
+/* ---- footer: the name returns at full width ---- */
+.l-footer { display: grid; grid-template-columns: 1fr auto; gap: 16px 24px; align-items: baseline; margin-top: clamp(120px, 13vw, 190px); padding: 0 var(--m) var(--m); font-size: 15px; color: var(--text-2); }
+.l-footer nav { display: flex; gap: 24px; }
+.l-footer svg { grid-column: 1 / -1; display: block; width: 100%; height: auto; margin-top: 24px; overflow: visible; }
+.l-footer text { fill: var(--text); font-size: 100px; font-weight: 600; letter-spacing: -0.03em; }
+
+/* ---- motion ---- */
+@keyframes l-rise { from { transform: translateY(105%); } }
+@keyframes l-fade { from { opacity: 0; transform: translateY(16px); } }
+@keyframes l-grow { from { transform: scaleY(0.35); } }
+/* Entrances are tied to scroll in CSS and only travel, never hide: content is
+   readable with no script, in a screenshot, and in browsers without scroll timelines. */
+@keyframes l-settle { from { transform: translateY(40px); } }
+@supports (animation-timeline: view()) {
+  .landing [data-reveal] { animation: l-settle linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+  .landing [data-reveal] + [data-reveal] { animation-range: entry 0% entry 90%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing * { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 900px) {
+  .l-hero { height: auto; min-height: 0; grid-template-rows: 56px 56svh auto; }
+  .l-sheet { position: static; width: auto; padding-top: 24px; }
+  .l-sheet h1 { font-size: min(9.4vw, 56px); }
+  .l-live { left: 0; right: auto; bottom: 0; gap: 2px 20px; padding: 12px var(--m); }
+  .l-live dd { font-size: 22px; }
+  .l-live p { display: none; }
+  .l-bar span a:first-child { display: none; }
+  .l-split { display: block; }
+  .l-split > p { margin-top: 12px; }
+  .l-mosaic { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+  .l-mosaic figure { grid-row: auto; grid-column: 1 / -1; aspect-ratio: 4 / 3; }
+  .l-tile p { font-size: 15px; }
+  .l-bars { grid-auto-flow: row; grid-auto-rows: 28px; gap: 6px; height: auto; padding: 0 var(--m); }
+  .l-bars li { height: 28px; width: calc(var(--h) * 100%); animation: none; }
+  .l-bars span { left: auto; right: 8px; bottom: 0; padding: 0; line-height: 28px; font-size: 15px; }
+  .l-bars li[data-final='true'] span { color: var(--on-accent); }
+  .l-step, .l-toy, .l-letter { display: block; }
+  .l-step > :last-child, .l-toy > :last-child, .l-letter > :last-child { margin-top: 24px; }
+  .l-panel { grid-template-columns: 1fr; }
+  .l-panel figure, .l-controls { padding: 16px; }
+  .l-footer { grid-template-columns: 1fr; }
+}

@@ -42,6 +42,7 @@ export const useSimulationStore = create((set, get) => ({
   parameterValues: {},
   viewMode: 'single',
   cameraMode: 'overview',
+  liveFollow: false,
   vehicleScale: 'legible',
   trialCount: 30,
   trialSet: null,
@@ -197,6 +198,26 @@ export const useSimulationStore = create((set, get) => ({
       isPlaying: false,
       error: null,
     }),
+
+  // Play mode: frames arrive in real time and the view stays on the newest one.
+  beginLiveRound: (firstFrame) => {
+    get().beginStream()
+    set({
+      viewMode: 'single',
+      cameraMode: 'target',
+      liveFollow: true,
+      streamStatus: 'streaming',
+      frames: [firstFrame],
+    })
+  },
+  appendLiveFrame: (frame) =>
+    set((state) => ({
+      frames: [...state.frames, frame],
+      cursor: state.frames.length,
+      playheadS: frame.time_s,
+    })),
+  endLiveRound: () =>
+    set({ liveFollow: false, cameraMode: 'overview', streamStatus: 'ready' }),
 
   failStream: (message) =>
     set({

@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
-from guidance_sim.api import live_guidance
+from guidance_sim.api import live_guidance, play
 from guidance_sim.api.catalog import get_catalog
 from guidance_sim.api.live_stream import build_live_trajectory, build_rl_trials
 from guidance_sim.api.schemas import (
@@ -273,3 +273,73 @@ async def trajectory_stream(websocket: WebSocket) -> None:
         await websocket.close(code=1000)
     except WebSocketDisconnect:
         return
+
+
+MAX_CONCURRENT_PLAY_ROUNDS = 8  # each round steps the policy at 50 Hz
+_active_play_rounds = 0
+
+
+@app.get("/api/play/stats")
+def play_stats() -> dict[str, object]:
+    """How the frozen policy has done against every saved visitor round."""
+
+    return play.stats()
+
+
+@app.websocket("/ws/play")
+async def play_round(websocket: WebSocket) -> None:
+    """One real-time round: the visitor steers the target, the policy chases.
+
+    Server -> ``play.ready`` (first frame), then ``trajectory.frame`` at
+    25 Hz once the client sends anything, then ``play.completed``.
+    Client -> ``{"turn": -1..1, "pull": -1..1}`` whenever the stick moves.
+    """
+
+    global _active_play_rounds
+    await websocket.accept()
+    if _active_play_rounds >= MAX_CONCURRENT_PLAY_ROUNDS:
+        await websocket.send_json(
+            {"type": "stream.error", "detail": "All seats are taken. Try again in a minute."}
+        )
+        await websocket.close(code=1013)
+        return
+    _active_play_rounds += 1
+    reader: asyncio.Task | None = None
+    try:
+        game = await asyncio.to_thread(play.PlayRound)
+        await websocket.send_json(
+            {"type": "play.ready", "max_g": play.PLAYER_MAX_G, "frame": game.frame()}
+        )
+
+        async def read_inputs() -> None:
+            while True:
+                try:
+                    message = json.loads(await websocket.receive_text())
+                except ValueError:
+                    continue
+                if isinstance(message, dict):
+                    game.set_input(message.get("turn"), message.get("pull"))
+
+        await websocket.receive_text()  # any first message starts the clock
+        reader = asyncio.create_task(read_inputs())
+        steps_per_frame = 2
+        frame_s = steps_per_frame * game.env.config.dt
+        loop = asyncio.get_running_loop()
+        deadline = loop.time()
+        while not game.done:
+            if reader.done():  # client went away
+                return
+            await websocket.send_json(await asyncio.to_thread(game.advance, steps_per_frame))
+            deadline += frame_s
+            await asyncio.sleep(max(0.0, deadline - loop.time()))
+        await asyncio.to_thread(game.save)
+        await websocket.send_json(
+            {"type": "play.completed", **game.result(), "stats": play.stats()}
+        )
+        await websocket.close(code=1000)
+    except WebSocketDisconnect:
+        return
+    finally:
+        _active_play_rounds -= 1
+        if reader is not None:
+            reader.cancel()

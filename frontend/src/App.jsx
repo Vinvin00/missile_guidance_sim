@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { AppHeader } from './components/AppHeader'
 import { AppNav } from './components/AppNav'
+import { Landing } from './components/Landing'
 import { HudOverlay } from './components/HudOverlay'
+import { PlayScreen } from './components/PlayScreen'
 import { PlaybackControls } from './components/PlaybackControls'
 import { SessionReplayPanel } from './components/SessionReplayPanel'
 import { SetupScreen } from './components/SetupScreen'
@@ -18,7 +20,25 @@ import { useSimulationStore } from './store/useSimulationStore'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
+function useHashRoute() {
+  const [route, setRoute] = useState(window.location.hash)
+  useEffect(() => {
+    const update = () => setRoute(window.location.hash)
+    window.addEventListener('hashchange', update)
+    return () => window.removeEventListener('hashchange', update)
+  }, [])
+  return route
+}
+
+// '' = landing page, #play = fly the target, #lab = the full viewer.
 export default function App() {
+  const route = useHashRoute()
+  if (route === '#play') return <PlayScreen />
+  if (route === '#lab') return <Lab />
+  return <Landing />
+}
+
+function Lab() {
   const [screen, setScreen] = useState('hud')
   const [projection, setProjection] = useState('3d')
   const setCatalog = useSimulationStore((state) => state.setCatalog)

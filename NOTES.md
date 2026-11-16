@@ -2204,3 +2204,49 @@ the full 25-second climb–apex–spiral playback and a clear descent.
   warnings); 36 frontend tests passed after a clean npm ci; production build
   passed (existing large vendor bundle warning). A concurrent catalog description
   correction was preserved; simulation parameters remained unchanged.
+
+## 2026-11-15 — Play mode, landing page, saved human rounds
+
+- New `PlayerManeuver` (`physics/maneuvers.py`): stick `turn`/`pull` in [-1, 1] scaled to the target g-limit; with `trace` it replays a recorded round. Engine and env untouched.
+- New `api/play.py` + `/ws/play` + `GET /api/play/stats`: one real-time round (50 Hz physics, 25 Hz frames) of the frozen baseline against a visitor-steered target. Finished rounds append to `outputs/player_rounds/rounds.jsonl` (override with `PLAYER_ROUNDS_PATH`): seed, stick trace, outcome. A saved round replays to the same closest approach (tested).
+- Start geometry is a front-quarter crossing (7 km, heading 120 deg). Checked against scripted pilots: straight, hard turns, 1 s / 2 s jinks, dive and late break are all caught in 13-20 s. A tail-chase start was rejected: flying straight outruns the unpowered interceptor (112 m miss), which says nothing about the policy.
+- A round ends as "escaped" after the range has opened for 3 s; otherwise a near miss ran on to the 45 s limit.
+- Gotcha: scripted last-second breaks produced closest approaches of 5.5-7.5 m, just outside the 5 m hit radius. Humans will find this. Those rounds are the ones worth retraining on.
+- The model does NOT learn online. Rounds are only recorded. Retraining on them (and gating promotion on the frozen 300-case eval) is not built yet.
+- Hosting gotcha: on Render free the disk is wiped on restart, so saved rounds do not persist there; max 8 concurrent rounds per process.
+- Frontend: hash routes (`''` landing, `#play`, `#lab`); `PlayScreen.jsx`, `Landing.jsx` + `landing.css`; store gained `liveFollow` so the chase camera stays behind the jet. Landing pictures in `frontend/public/landing/` are real screenshots of this app plus a 9 s cut of the existing Cobra PN-vs-RL replay.
+- Verified: 211 Python tests, 36 frontend tests, production build, a full round played in the browser preview. Not verified: deployed behaviour (nothing committed or deployed), touch controls on a real phone, latency against the hosted API.
+
+## 2026-11-15 — Retraining from saved play rounds (`scripts/retrain_from_rounds.py`)
+
+- Offline only. Visitors never change the live model; the script fine-tunes a
+  copy of the baseline (same CP7-CP8 low-noise recipe), 25% of training
+  episodes replay a saved round, the rest are the usual evasive episodes.
+- Saved rounds become `EvaluationCase`s (maneuver + IC builders), so scoring
+  reuses `evaluate_policy` unchanged. Every 4th round is held out.
+- Gate (fixed in `verdict`, do not tune to a result): frozen evasive hits not
+  below the baseline's, worst frozen miss under 25 m, and strictly more
+  held-out human rounds caught. It prints the verdict and never edits
+  `CURRENT_RL_BASELINE.json`; promotion stays a manual, logged step.
+- Gotchas: a replay is the recorded stick, not a pilot who reacts; seeker
+  delays are redrawn, and the eval has no "escaped after 3 s opening" rule, so
+  a replayed round can score differently from what the visitor saw.
+- Smoke test (12 scripted, non-human rounds, 20,480 steps, 12 frozen cases):
+  ran end to end in 32 s at ~1,160 steps/s on one thread; resume skips
+  finished blocks. Not yet run on real human rounds (none saved).
+- Refuses to train on fewer than 40 saved rounds (`--min-rounds`).
+
+## 2026-11-16 — Correction: the play-mode model is beatable; full retrain rejected
+
+- The 2026-11-15 line "late break ... all caught in 13-20 s" was too narrow. 120 scripted pilots (random 1 s jinks, then a hard turn held from a random 0.6-2.5 km) played live against the baseline: 78 caught, 42 escaped.
+- Full-length retrain on those rounds (204,800 steps, 25% replay mix, 300 frozen cases, one seed): baseline 265/300 frozen, 22.5 m worst, 22/30 held-out; candidate 257/300, 17.3 m, 22/30. Not promoted. Candidate deleted; report kept in `outputs/player_finetune/scripted-late-turn-full/`.
+- Open: `retrain_from_rounds.py` scored the baseline at 265/300 and 22.5 m, the frozen record says 266/300 and 15.8 m. Cause not found; both rows of a run are scored the same way, so the gate comparison still holds.
+- Landing page and play card now say the model can be beaten (42 of 120 scripted late turns) and no longer say a saved round "replays exactly".
+
+## 2026-11-16 — Landing page rework
+
+- Hero is now the real 3D scene (`SimulationScene`) replaying `frontend/public/landing/round.json`: one round of a scripted pilot (seed 3002, caught at 17.8 s, 2.1 m) against the frozen baseline, recorded with `PlayRound` at 25 Hz. It loops, follows the target, ignores the pointer, and is unmounted when scrolled out of view. With reduced motion it shows one still frame of the round; if the file fails to load the stage stays a flat sky colour.
+- Landing feeds the shared store and clears it on unmount, so `#play` and `#lab` start clean.
+- Layout: one 12-column grid; text on columns 1-5, proof on 7-12 in every row. The 2D proportional-navigation toy moved from the hero to its own section.
+- Entrances are CSS scroll timelines that only slide, never hide, so nothing can stay invisible if a script fails. The old IntersectionObserver reveal is gone.
+- Gotcha: regenerate `round.json` if the baseline model or play start geometry changes, or the caption numbers go stale.

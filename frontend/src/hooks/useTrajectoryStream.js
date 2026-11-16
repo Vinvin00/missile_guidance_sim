@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { useSimulationStore } from '../store/useSimulationStore'
 
-function websocketUrl() {
-  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
+export function websocketUrl(path = '/ws/trajectory') {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL.replace(/\/ws\/trajectory$/, path)
+  }
   const apiBase = import.meta.env.VITE_API_BASE_URL
-  if (apiBase) return `${apiBase.replace(/^http/, 'ws').replace(/\/$/, '')}/ws/trajectory`
+  if (apiBase) return `${apiBase.replace(/^http/, 'ws').replace(/\/$/, '')}${path}`
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/trajectory`
+  return `${protocol}//${window.location.host}${path}`
 }
 
 export function useTrajectoryStream() {
